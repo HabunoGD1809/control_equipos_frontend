@@ -3,7 +3,7 @@ import { EquipoForm } from "@/components/features/equipos/EquipoForm";
 import { EstadoEquipo, Proveedor } from "@/types/api";
 
 // Helper genérico para obtener catálogos
-async function fetchCatalog(endpoint: string): Promise<any[]> {
+async function fetchCatalog<T>(endpoint: string): Promise<T[]> {
    const accessToken = (await cookies()).get('access_token')?.value;
    if (!accessToken) return [];
    try {
@@ -21,8 +21,8 @@ async function fetchCatalog(endpoint: string): Promise<any[]> {
 
 export default async function NuevoEquipoPage() {
    const [estados, proveedores] = await Promise.all([
-      fetchCatalog('/catalogos/estados-equipo/') as Promise<EstadoEquipo[]>,
-      fetchCatalog('/proveedores/') as Promise<Proveedor[]>,
+      fetchCatalog<EstadoEquipo>('/catalogos/estados-equipo/'),
+      fetchCatalog<Proveedor>('/proveedores/'),
    ]);
 
    return (

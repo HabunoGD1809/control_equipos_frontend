@@ -17,7 +17,7 @@ import { genericCatalogSchema } from "@/lib/zod"
 import api from "@/lib/api"
 
 interface GenericCatalogFormProps {
-   initialData?: { [key: string]: any } | null;
+   initialData?: FormValues & { id: string }
    apiEndpoint: string;
    formFields: string[];
    onSuccess: () => void;

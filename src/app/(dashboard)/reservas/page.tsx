@@ -3,7 +3,7 @@ import { ReservasClient } from "./components/ReservasClient";
 import { ReservaEquipo, EquipoSimple } from "@/types/api";
 
 async function getReservasData() {
-   const accessToken = cookies().get('access_token')?.value;
+   const accessToken = await (await cookies()).get('access_token')?.value;
    if (!accessToken) return null;
 
    const headers = { 'Authorization': `Bearer ${accessToken}` };
@@ -11,16 +11,20 @@ async function getReservasData() {
 
    try {
       const [reservasRes, equiposRes] = await Promise.all([
-         fetch(`${baseUrl}/reservas/?limit=1000`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/equipos/?limit=1000`, { headers, cache: 'no-store' }), // Idealmente, filtrar por equipos 'reservables'
+         fetch(`${baseUrl}/reservas/?limit=200`, { headers, cache: 'no-store' }),
+         fetch(`${baseUrl}/equipos/?limit=1000`, { headers, cache: 'no-store' }),
       ]);
 
-      if (!reservasRes.ok) return null;
+      if (!reservasRes.ok) {
+         console.error("Error al obtener reservas:", reservasRes.status, reservasRes.statusText);
+         return null;
+      }
 
-      return {
-         reservas: await reservasRes.json() as ReservaEquipo[],
-         equipos: equiposRes.ok ? await equiposRes.json() as EquipoSimple[] : [],
-      };
+      const reservas = await reservasRes.json() as ReservaEquipo[];
+      const equipos = equiposRes.ok ? await equiposRes.json() as EquipoSimple[] : [];
+
+      return { reservas, equipos };
+
    } catch (error) {
       console.error("[GET_RESERVAS_DATA_ERROR]", error);
       return null;
@@ -31,7 +35,7 @@ export default async function ReservasPage() {
    const data = await getReservasData();
 
    if (!data) {
-      return <div className="p-8">Error al cargar los datos de reservas.</div>;
+      return <div className="p-8 text-center text-destructive">Error al cargar los datos de reservas. Por favor, verifica tu conexión o permisos.</div>;
    }
 
    return (

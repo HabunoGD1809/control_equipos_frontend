@@ -3,7 +3,6 @@
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
-import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { CalendarIcon, Loader2 } from "lucide-react"
 import { format, setHours, setMinutes } from "date-fns"
@@ -19,7 +18,7 @@ import { Textarea } from "@/components/ui/Textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { reservaSchema } from "@/lib/zod"
 import api from "@/lib/api"
-import { EquipoSimple } from "@/types/api"
+import { EquipoSimple, ReservaEquipo } from "@/types/api"
 import { cn } from "@/lib/utils"
 
 const timeOptions = Array.from({ length: 24 * 2 }, (_, i) => {
@@ -30,7 +29,7 @@ const timeOptions = Array.from({ length: 24 * 2 }, (_, i) => {
 
 interface ReservaFormProps {
    equipos: EquipoSimple[];
-   onSuccess: () => void;
+   onSuccess: (newReserva: ReservaEquipo) => void;
 }
 
 type FormValues = z.infer<typeof reservaSchema>;
@@ -40,12 +39,15 @@ interface ApiError {
 }
 
 export function ReservaForm({ equipos, onSuccess }: ReservaFormProps) {
-   const router = useRouter();
    const { toast } = useToast();
    const [isLoading, setIsLoading] = useState(false);
 
    const form = useForm<FormValues>({
       resolver: zodResolver(reservaSchema),
+      defaultValues: {
+         fecha_inicio: new Date(),
+         fecha_fin: new Date(),
+      }
    });
 
    const onSubmit = async (data: FormValues) => {
@@ -65,10 +67,10 @@ export function ReservaForm({ equipos, onSuccess }: ReservaFormProps) {
             fecha_hora_fin: fecha_hora_fin.toISOString(),
          };
 
-         await api.post('/reservas/', payload);
+         const response = await api.post<ReservaEquipo>('/reservas/', payload);
          toast({ title: "Éxito", description: "Reserva solicitada correctamente." });
-         router.refresh();
-         onSuccess();
+         onSuccess(response.data);
+
       } catch (error) {
          const axiosError = error as AxiosError<ApiError>;
          const msg = axiosError.response?.data?.detail || "No se pudo crear la reserva. Verifique la disponibilidad.";
@@ -134,7 +136,8 @@ export function ReservaForm({ equipos, onSuccess }: ReservaFormProps) {
                )} />
             </div>
             <FormField control={form.control} name="proposito" render={({ field }) => (
-               <FormItem><FormLabel>Propósito de la Reserva</FormLabel><FormControl><Textarea placeholder="Ej: Evento de marketing en..." {...field} /></FormControl><FormMessage /></FormItem>
+               <FormItem><FormLabel>Propósito de la Reserva</FormLabel><FormControl><Textarea placeholder="Ej: Evento de marketing en..." {...field} /></FormControl><FormMessage />
+               </FormItem>
             )} />
             <div className="flex justify-end pt-4">
                <Button type="submit" disabled={isLoading}>

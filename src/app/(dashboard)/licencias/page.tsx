@@ -1,10 +1,9 @@
-// app/(dashboard)/licencias/page.tsx
 import { cookies } from 'next/headers';
 import { LicenciasClient } from "./components/LicenciasClient";
 import { LicenciaSoftware, SoftwareCatalogo, Proveedor, EquipoSimple, UsuarioSimple } from "@/types/api";
 
 async function getLicenciasData() {
-   const accessToken = cookies().get('access_token')?.value;
+   const accessToken = (await cookies()).get('access_token')?.value;
    if (!accessToken) return null;
 
    const headers = { 'Authorization': `Bearer ${accessToken}` };
@@ -12,8 +11,8 @@ async function getLicenciasData() {
 
    try {
       const [licenciasRes, catalogoRes, proveedoresRes, equiposRes, usuariosRes] = await Promise.all([
-         fetch(`${baseUrl}/licencias/?limit=500`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/licencias/catalogo/?limit=500`, { headers, cache: 'no-store' }),
+         fetch(`${baseUrl}/licencias/?limit=200`, { headers, cache: 'no-store' }),
+         fetch(`${baseUrl}/licencias/catalogo/?limit=200`, { headers, cache: 'no-store' }),
          fetch(`${baseUrl}/proveedores/?limit=500`, { headers, cache: 'no-store' }),
          fetch(`${baseUrl}/equipos/?limit=1000`, { headers, cache: 'no-store' }),
          fetch(`${baseUrl}/usuarios/?limit=1000`, { headers, cache: 'no-store' })

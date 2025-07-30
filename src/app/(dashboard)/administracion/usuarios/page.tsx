@@ -1,44 +1,42 @@
 import { cookies } from 'next/headers';
+import { Usuario, Rol } from "@/types/api";
 import { UsuariosClient } from "./components/UsuariosClient";
-import { Usuario, Rol } from '@/types/api';
 
-async function getUsersData() {
-   const cookieStore = await cookies();
-   const accessToken = cookieStore.get('access_token')?.value;
-
-   if (!accessToken) return { usuarios: [], roles: [] };
-
-   const headers = { 'Authorization': `Bearer ${accessToken}` };
-   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+// Helper genérico para obtener datos en el servidor
+async function fetchData(endpoint: string) {
+   const accessToken = (await cookies()).get('access_token')?.value;
+   if (!accessToken) return [];
 
    try {
-      const [usersRes, rolesRes] = await Promise.all([
-         fetch(`${baseUrl}/usuarios/?limit=1000`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/gestion/roles/`, { headers, cache: 'no-store' }),
-      ]);
-
-      const usuarios: Usuario[] = usersRes.ok ? await usersRes.json() : [];
-      const roles: Rol[] = rolesRes.ok ? await rolesRes.json() : [];
-
-      return { usuarios, roles };
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}${endpoint}`, {
+         headers: { 'Authorization': `Bearer ${accessToken}` },
+         cache: 'no-store',
+      });
+      if (!res.ok) {
+         console.error(`Error fetching ${endpoint}: ${res.status} ${res.statusText}`);
+         return [];
+      }
+      return res.json();
    } catch (error) {
-      console.error("[GET_USERS_DATA_ERROR]", error);
-      return { usuarios: [], roles: [] };
+      console.error(`Error fetching ${endpoint}:`, error);
+      return [];
    }
 }
 
 export default async function UsuariosPage() {
-   const { usuarios, roles } = await getUsersData();
+   // ✅ CORRECCIÓN: Se ajusta el límite de usuarios a 200
+   const [usuarios, roles] = await Promise.all([
+      fetchData('/usuarios/?limit=200') as Promise<Usuario[]>,
+      fetchData('/gestion/roles/') as Promise<Rol[]>,
+   ]);
 
    return (
-      <div className="space-y-8">
-         <div className="flex items-center justify-between">
-            <div>
-               <h1 className="text-3xl font-bold">Gestión de Usuarios</h1>
-               <p className="text-muted-foreground">
-                  Crea, edita y administra las cuentas de usuario y sus roles.
-               </p>
-            </div>
+      <div className="container mx-auto py-10">
+         <div className="mb-6">
+            <h1 className="text-3xl font-bold tracking-tight">Gestión de Usuarios</h1>
+            <p className="text-muted-foreground">
+               Crea, edita y administra los usuarios y sus roles en el sistema.
+            </p>
          </div>
          <UsuariosClient initialData={usuarios} roles={roles} />
       </div>

@@ -8,7 +8,7 @@ import { EquipoRead } from "@/types/api";
 
 // Helper de API para el lado del servidor
 async function getEquipos(): Promise<EquipoRead[]> {
-   const accessToken = cookies().get('access_token')?.value;
+   const accessToken = (await cookies()).get('access_token')?.value;
    if (!accessToken) return [];
 
    try {

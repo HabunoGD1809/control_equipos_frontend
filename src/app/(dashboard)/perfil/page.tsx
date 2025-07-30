@@ -10,7 +10,7 @@ import { ChangePasswordForm } from '@/components/features/usuarios/ChangePasswor
 import { Usuario } from '@/types/api';
 
 async function getCurrentUser(): Promise<Usuario | null> {
-   const accessToken = cookies().get('access_token')?.value;
+   const accessToken = (await cookies()).get('access_token')?.value;
    if (!accessToken) return null;
 
    try {

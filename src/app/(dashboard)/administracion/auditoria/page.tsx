@@ -3,7 +3,7 @@ import { AuditoriaClient } from "./components/AuditoriaClient";
 import { AuditLog } from '@/types/api';
 
 async function getAuditLogs(): Promise<AuditLog[]> {
-   const accessToken = cookies().get('access_token')?.value;
+   const accessToken = (await cookies()).get('access_token')?.value;
    if (!accessToken) return [];
 
    try {
@@ -30,6 +30,7 @@ export default async function AuditoriaPage() {
                Rastree todos los cambios y operaciones realizadas en el sistema.
             </p>
          </div>
+         {/* Ahora solo pasamos los datos, el componente cliente se encarga de las columnas */}
          <AuditoriaClient initialData={logs} />
       </div>
    );

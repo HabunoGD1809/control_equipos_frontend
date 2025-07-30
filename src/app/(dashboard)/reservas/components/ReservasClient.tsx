@@ -49,10 +49,15 @@ export function ReservasClient({ initialReservas, equiposDisponibles }: Reservas
 
    const handleUpdateState = async (id: string, estado: string) => {
       try {
-         await api.patch(`/reservas/${id}/estado`, { estado });
+         const response = await api.patch(`/reservas/${id}/estado`, { estado });
          toast({ title: "Éxito", description: `Reserva ${estado.toLowerCase()}.` });
-         const updatedReservas = await api.get<ReservaEquipo[]>('/reservas/?limit=1000');
-         setReservas(updatedReservas.data);
+
+         setReservas(currentReservas =>
+            currentReservas.map(reserva =>
+               reserva.id === id ? { ...reserva, estado: response.data.estado } : reserva
+            )
+         );
+
          router.refresh();
       } catch (error) {
          const axiosError = error as AxiosError<ApiError>;
@@ -60,11 +65,17 @@ export function ReservasClient({ initialReservas, equiposDisponibles }: Reservas
       }
    };
 
+   const onFormSuccess = (newReserva: ReservaEquipo) => {
+      setReservas(currentReservas => [...currentReservas, newReserva]);
+      setIsModalOpen(false);
+      router.refresh();
+   };
+
    return (
       <>
          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
             <DialogContent className="max-w-xl"><DialogHeader><DialogTitle>Solicitar una Reserva</DialogTitle></DialogHeader>
-               <ReservaForm equipos={equiposDisponibles} onSuccess={() => setIsModalOpen(false)} /></DialogContent>
+               <ReservaForm equipos={equiposDisponibles} onSuccess={onFormSuccess} /></DialogContent>
          </Dialog>
          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-1 space-y-4">

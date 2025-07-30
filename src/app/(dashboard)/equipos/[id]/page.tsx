@@ -6,7 +6,7 @@ import {
 import { EquipoDetailClient } from './components/EquipoDetailClient';
 
 async function getData(id: string) {
-   const accessToken = cookies().get('access_token')?.value;
+   const accessToken = (await cookies()).get('access_token')?.value;
    if (!accessToken) return null;
 
    const headers = { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' };

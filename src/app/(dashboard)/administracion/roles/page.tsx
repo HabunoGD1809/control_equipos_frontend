@@ -3,7 +3,7 @@ import { RolesClient } from "./components/RolesClient";
 import { Rol, Permiso } from "@/types/api";
 
 async function getRolesData() {
-   const accessToken = cookies().get('access_token')?.value;
+   const accessToken = (await cookies()).get('access_token')?.value;
    if (!accessToken) return { roles: [], permisos: [] };
 
    const headers = { 'Authorization': `Bearer ${accessToken}` };

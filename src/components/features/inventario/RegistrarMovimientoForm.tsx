@@ -8,7 +8,7 @@ import { useState } from "react"
 import { Loader2 } from "lucide-react"
 import { AxiosError } from "axios"
 
-import { Button } from "@/components/ui/button"
+import { Button } from "@/components/ui/Button"
 import {
    Form,
    FormControl,
@@ -16,16 +16,16 @@ import {
    FormItem,
    FormLabel,
    FormMessage,
-} from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
+} from "@/components/ui/Form"
+import { Input } from "@/components/ui/Input"
 import {
    Select,
    SelectContent,
    SelectItem,
    SelectTrigger,
    SelectValue,
-} from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
+} from "@/components/ui/Select"
+import { Textarea } from "@/components/ui/Textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { inventarioMovimientoSchema } from "@/lib/zod"
 import api from "@/lib/api"

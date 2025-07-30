@@ -4,7 +4,7 @@ import { EstadoEquipo, Proveedor } from "@/types/api";
 
 // Helper genérico para obtener catálogos
 async function fetchCatalog(endpoint: string): Promise<any[]> {
-   const accessToken = cookies().get('access_token')?.value;
+   const accessToken = (await cookies()).get('access_token')?.value;
    if (!accessToken) return [];
    try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}${endpoint}`, {

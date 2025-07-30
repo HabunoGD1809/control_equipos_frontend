@@ -3,7 +3,7 @@ import { InventarioClient } from "./components/InventarioClient";
 import { InventarioStock, TipoItemInventario, EquipoSimple, Proveedor } from "@/types/api";
 
 async function getInventarioData() {
-   const accessToken = cookies().get('access_token')?.value;
+   const accessToken = (await cookies()).get('access_token')?.value;
    if (!accessToken) return { stock: [], tipos: [], equipos: [], proveedores: [] };
 
    const headers = { 'Authorization': `Bearer ${accessToken}` };

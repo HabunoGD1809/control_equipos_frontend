@@ -1,3 +1,5 @@
+// src/types/api.ts
+
 // --- ENUMS ---
 export type EstadoDocumentoEnum = "Pendiente" | "Verificado" | "Rechazado";
 export type EstadoMantenimientoEnum = "Programado" | "En Proceso" | "Completado" | "Cancelado" | "Pendiente Aprobacion" | "Requiere Piezas" | "Pausado";
@@ -43,9 +45,13 @@ export interface Usuario {
    };
 }
 
-export interface Proveedor {
+// ✅ DEFINICIÓN AÑADIDA
+export interface ProveedorSimple {
    id: string;
    nombre: string;
+}
+
+export interface Proveedor extends ProveedorSimple {
    descripcion?: string;
    contacto?: string;
    direccion?: string;
@@ -99,10 +105,8 @@ export interface EquipoRead {
       color_hex?: string;
       icono?: string;
    };
-   proveedor?: {
-      id: string;
-      nombre: string;
-   };
+   // ✅ CORRECCIÓN: Usar ProveedorSimple
+   proveedor?: ProveedorSimple;
 }
 
 export interface Token {
@@ -146,19 +150,40 @@ export interface EquipoCreate {
    notas?: string;
 }
 
-// ✅ SOLUCIÓN: Deshabilitada la regla de ESLint para esta línea específica
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface EquipoUpdate extends Partial<EquipoCreate> { }
 
-
-// ✅ SOLUCIÓN: Interfaces añadidas que faltaban
+// ✅ CORRECCIÓN: Interfaz Mantenimiento actualizada para coincidir con la API
 export interface Mantenimiento {
    id: string;
-   tipo_mantenimiento: { nombre: string };
+   equipo_id: string;
+   tipo_mantenimiento_id: string;
    fecha_programada?: string;
+   fecha_inicio?: string;
    fecha_finalizacion?: string;
-   estado: string;
-   tecnico_responsable?: string;
+   costo_estimado?: string;
+   costo_real?: string;
+   tecnico_responsable: string;
+   proveedor_servicio_id?: string;
+   estado: EstadoMantenimientoEnum;
+   prioridad: number;
+   observaciones?: string;
+   fecha_proximo_mantenimiento?: string;
+   created_at: string;
+   updated_at: string;
+   equipo: EquipoSimple;
+   tipo_mantenimiento: TipoMantenimiento;
+   proveedor_servicio?: ProveedorSimple;
+}
+
+
+export interface MantenimientoCreate {
+   equipo_id: string;
+   tipo_mantenimiento_id: string;
+   fecha_programada: string;
+   tecnico_responsable: string;
+   proveedor_servicio_id?: string | null;
+   observaciones?: string | null;
 }
 
 export interface Documentacion {
@@ -211,11 +236,12 @@ export interface SoftwareCatalogo {
 
 export interface ReservaEquipo {
    id: string;
-   equipo: { nombre: string };
    fecha_hora_inicio: string;
    fecha_hora_fin: string;
-   solicitante: { nombre_usuario: string };
-   estado: string;
+   estado: EstadoReservaEnum;
+   proposito: string;
+   equipo: EquipoSimple;
+   solicitante: UsuarioSimple;
 }
 
 export interface InventarioStock {
@@ -262,4 +288,5 @@ export interface BackupLog {
    backup_status: string;
    file_path?: string;
    error_message?: string;
+   duration?: string;
 }

@@ -35,11 +35,13 @@ import {
 interface DataTableProps<TData, TValue> {
    columns: ColumnDef<TData, TValue>[]
    data: TData[]
+   filterColumn?: string
 }
 
 export function DataTable<TData, TValue>({
    columns,
    data,
+   filterColumn
 }: DataTableProps<TData, TValue>) {
    const [sorting, setSorting] = React.useState<SortingState>([])
    const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -62,17 +64,24 @@ export function DataTable<TData, TValue>({
       },
    })
 
+   const filterColumnName = filterColumn || (columns[0] as any)?.accessorKey;
+
+
    return (
       <div className="w-full space-y-4">
          <div className="flex items-center justify-between">
-            <Input
-               placeholder="Filtrar por nombre..."
-               value={(table.getColumn("nombre")?.getFilterValue() as string) ?? ""}
-               onChange={(event) =>
-                  table.getColumn("nombre")?.setFilterValue(event.target.value)
-               }
-               className="max-w-sm"
-            />
+            {filterColumnName && (
+               <Input
+                  placeholder={`Filtrar por ${filterColumnName}...`}
+                  value={
+                     (table.getColumn(filterColumnName)?.getFilterValue() as string) ?? ""
+                  }
+                  onChange={(event) =>
+                     table.getColumn(filterColumnName)?.setFilterValue(event.target.value)
+                  }
+                  className="max-w-sm"
+               />
+            )}
             <DropdownMenu>
                <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="ml-auto">

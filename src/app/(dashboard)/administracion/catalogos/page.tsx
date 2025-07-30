@@ -3,7 +3,7 @@ import { CatalogosClient } from "./components/CatalogosClient";
 import { EstadoEquipo, TipoDocumento, TipoMantenimiento, Proveedor } from "@/types/api";
 
 async function getCatalogosData() {
-   const accessToken = cookies().get('access_token')?.value;
+   const accessToken = (await cookies()).get('access_token')?.value;
    if (!accessToken) return null;
 
    const headers = { 'Authorization': `Bearer ${accessToken}` };

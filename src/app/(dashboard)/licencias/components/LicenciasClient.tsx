@@ -71,9 +71,9 @@ export function LicenciasClient({ initialLicencias, initialCatalogo, proveedores
 
    const licenciasColumns: ColumnDef<LicenciaSoftware>[] = [
       {
-         accessorKey: "software_info.nombre",
+         accessorFn: (row) => `${row.software_info.nombre} ${row.software_info.version || ''}`,
+         id: "software",
          header: "Software",
-         cell: ({ row }) => `${row.original.software_info.nombre} ${row.original.software_info.version || ''}`
       },
       {
          id: "disponibilidad",
@@ -178,7 +178,8 @@ export function LicenciasClient({ initialLicencias, initialCatalogo, proveedores
             </div>
 
             <TabsContent value="licencias">
-               <DataTable columns={licenciasColumns} data={initialLicencias} />
+               {/* ✅ CORRECCIÓN: Se usa el nuevo `id` de la columna para el filtrado. */}
+               <DataTable columns={licenciasColumns} data={initialLicencias} filterColumn="software" />
             </TabsContent>
             <TabsContent value="catalogo">
                {canManageCatalogo && <DataTable columns={catalogoColumns} data={initialCatalogo} />}

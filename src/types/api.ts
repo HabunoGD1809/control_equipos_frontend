@@ -1,11 +1,10 @@
-// src/types/api.ts
-
 // --- ENUMS ---
 export type EstadoDocumentoEnum = "Pendiente" | "Verificado" | "Rechazado";
 export type EstadoMantenimientoEnum = "Programado" | "En Proceso" | "Completado" | "Cancelado" | "Pendiente Aprobacion" | "Requiere Piezas" | "Pausado";
 export type EstadoMovimientoEquipoEnum = "Pendiente" | "Autorizado" | "En Proceso" | "Completado" | "Cancelado" | "Rechazado";
 export type EstadoReservaEnum = "Pendiente Aprobacion" | "Confirmada" | "Rechazada" | "Cancelada" | "Cancelada por Usuario" | "Cancelada por Gestor" | "En Curso" | "Finalizada";
 export type TipoMovimientoEquipoEnum = "Salida Temporal" | "Salida Definitiva" | "Entrada" | "Asignacion Interna" | "Transferencia Bodega";
+export type TipoRelacionComponenteEnum = "componente" | "conectado_a" | "parte_de" | "accesorio";
 
 // --- Modelos Base ---
 
@@ -45,7 +44,6 @@ export interface Usuario {
    };
 }
 
-// ✅ DEFINICIÓN AÑADIDA
 export interface ProveedorSimple {
    id: string;
    nombre: string;
@@ -93,7 +91,7 @@ export interface EquipoRead {
    fecha_adquisicion?: string;
    fecha_puesta_marcha?: string;
    fecha_garantia_expiracion?: string;
-   valor_adquisicion?: number;
+   valor_adquisicion?: string;
    proveedor_id?: string;
    centro_costo?: string;
    notas?: string;
@@ -105,7 +103,6 @@ export interface EquipoRead {
       color_hex?: string;
       icono?: string;
    };
-   // ✅ CORRECCIÓN: Usar ProveedorSimple
    proveedor?: ProveedorSimple;
 }
 
@@ -114,6 +111,26 @@ export interface Token {
    refresh_token: string;
    token_type: string;
 }
+
+// NUEVO: Interfaces para Componentes y Padres
+export interface ComponenteInfo {
+   id: string;
+   componente: EquipoSimple;
+   tipo_relacion: TipoRelacionComponenteEnum;
+   cantidad: number;
+   notas?: string;
+   created_at: string;
+}
+
+export interface PadreInfo {
+   id: string;
+   padre: EquipoSimple;
+   tipo_relacion: TipoRelacionComponenteEnum;
+   cantidad: number;
+   notas?: string;
+   created_at: string;
+}
+
 
 // --- DTOs (Data Transfer Objects) ---
 
@@ -136,24 +153,23 @@ export interface UsuarioUpdate {
 export interface EquipoCreate {
    nombre: string;
    numero_serie: string;
-   codigo_interno?: string;
+   codigo_interno?: string | null;
    estado_id: string;
-   ubicacion_actual?: string;
-   marca?: string;
-   modelo?: string;
-   fecha_adquisicion?: string;
-   fecha_puesta_marcha?: string;
-   fecha_garantia_expiracion?: string;
-   valor_adquisicion?: number;
-   proveedor_id?: string;
-   centro_costo?: string;
-   notas?: string;
+   ubicacion_actual?: string | null;
+   marca?: string | null;
+   modelo?: string | null;
+   fecha_adquisicion?: string | null;
+   fecha_puesta_marcha?: string | null;
+   fecha_garantia_expiracion?: string | null;
+   valor_adquisicion?: string | null;
+   proveedor_id?: string | null;
+   centro_costo?: string | null;
+   notas?: string | null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface EquipoUpdate extends Partial<EquipoCreate> { }
 
-// ✅ CORRECCIÓN: Interfaz Mantenimiento actualizada para coincidir con la API
 export interface Mantenimiento {
    id: string;
    equipo_id: string;

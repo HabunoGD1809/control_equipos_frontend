@@ -1,17 +1,21 @@
 "use client"
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
-import { PlusCircle } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/Dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/DropdownMenu";
 import { Mantenimiento, TipoMantenimiento } from "@/types/api";
+import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { ScheduleMantenimientoForm } from "./ScheduleMantenimientoForm";
 import { Badge } from "@/components/ui/Badge";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/AlertDialog";
 
 interface EquipoMantenimientoTabProps {
    equipoId: string;
@@ -21,12 +25,17 @@ interface EquipoMantenimientoTabProps {
 
 export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenimiento }: EquipoMantenimientoTabProps) {
    const [isModalOpen, setIsModalOpen] = useState(false);
+   const router = useRouter();
+
+   const {
+      isAlertOpen, isDeleting, openAlert, setIsAlertOpen, handleDelete, itemToDelete
+   } = useDeleteConfirmation("Mantenimiento", () => router.refresh());
 
    const columns: ColumnDef<Mantenimiento>[] = [
       {
-         accessorKey: "tipo_mantenimiento.nombre",
+         accessorFn: row => row.tipo_mantenimiento?.nombre || 'N/A',
+         id: "tipo_mantenimiento",
          header: "Tipo",
-         cell: ({ row }) => row.original.tipo_mantenimiento?.nombre || 'N/A'
       },
       {
          accessorKey: "fecha_programada",
@@ -40,17 +49,44 @@ export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenim
       },
       { accessorKey: "estado", header: "Estado", cell: ({ row }) => <Badge variant="outline">{row.getValue("estado")}</Badge> },
       { accessorKey: "tecnico_responsable", header: "Técnico" },
+      {
+         id: "actions",
+         cell: ({ row }) => (
+            <DropdownMenu>
+               <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+               <DropdownMenuContent align="end">
+                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => openAlert(row.original.id)}>
+                     <Trash2 className="mr-2 h-4 w-4" />Eliminar
+                  </DropdownMenuItem>
+               </DropdownMenuContent>
+            </DropdownMenu>
+         )
+      },
    ];
 
    return (
       <div className="mt-4 space-y-4">
+         <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
+            <AlertDialogContent>
+               <AlertDialogHeader>
+                  <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                     Esta acción no se puede deshacer. Se eliminará permanentemente el registro de mantenimiento.
+                  </AlertDialogDescription>
+               </AlertDialogHeader>
+               <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => handleDelete(`/mantenimientos/${itemToDelete}`)} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
+                     {isDeleting ? "Eliminando..." : "Sí, eliminar"}
+                  </AlertDialogAction>
+               </AlertDialogFooter>
+            </AlertDialogContent>
+         </AlertDialog>
+
          <div className="flex justify-end">
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
                <DialogTrigger asChild>
-                  <Button>
-                     <PlusCircle className="mr-2 h-4 w-4" />
-                     Programar Mantenimiento
-                  </Button>
+                  <Button><PlusCircle className="mr-2 h-4 w-4" /> Programar Mantenimiento</Button>
                </DialogTrigger>
                <DialogContent>
                   <DialogHeader>
@@ -62,12 +98,15 @@ export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenim
                   <ScheduleMantenimientoForm
                      equipoId={equipoId}
                      tiposMantenimiento={tiposMantenimiento}
-                     onSuccess={() => setIsModalOpen(false)}
+                     onSuccess={() => {
+                        router.refresh();
+                        setIsModalOpen(false);
+                     }}
                   />
                </DialogContent>
             </Dialog>
          </div>
-         <DataTable columns={columns} data={mantenimientos} />
+         <DataTable columns={columns} data={mantenimientos} filterColumn="tipo_mantenimiento" />
       </div>
    );
 }

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
 import { PlusCircle, Download, Trash2, CheckCircle, XCircle, Clock } from "lucide-react";
 import { format } from "date-fns";
@@ -9,8 +10,10 @@ import { es } from "date-fns/locale";
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/Dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/AlertDialog";
 import { Documentacion, TipoDocumento } from "@/types/api";
 import { UploadDocumentoForm } from "./UploadDocumentoForm";
+import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 
 interface EquipoDocumentacionTabProps {
    equipoId: string;
@@ -28,6 +31,11 @@ const EstadoIcon = ({ estado }: { estado: string }) => {
 
 export function EquipoDocumentacionTab({ equipoId, documentos, tiposDocumento }: EquipoDocumentacionTabProps) {
    const [isModalOpen, setIsModalOpen] = useState(false);
+   const router = useRouter();
+
+   const {
+      isAlertOpen, isDeleting, openAlert, setIsAlertOpen, handleDelete, itemToDelete
+   } = useDeleteConfirmation("Documento", () => router.refresh());
 
    const columns: ColumnDef<Documentacion>[] = [
       { accessorKey: "titulo", header: "Título" },
@@ -50,11 +58,13 @@ export function EquipoDocumentacionTab({ equipoId, documentos, tiposDocumento }:
       {
          id: "actions",
          cell: ({ row }) => (
-            <div className="flex gap-2">
+            <div className="flex gap-2 justify-end">
                <a href={row.original.enlace} target="_blank" rel="noopener noreferrer">
                   <Button variant="outline" size="icon"><Download className="h-4 w-4" /></Button>
                </a>
-               <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive/80"><Trash2 className="h-4 w-4" /></Button>
+               <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive/80" onClick={() => openAlert(row.original.id)}>
+                  <Trash2 className="h-4 w-4" />
+               </Button>
             </div>
          ),
       },
@@ -62,6 +72,23 @@ export function EquipoDocumentacionTab({ equipoId, documentos, tiposDocumento }:
 
    return (
       <div className="mt-4 space-y-4">
+         <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
+            <AlertDialogContent>
+               <AlertDialogHeader>
+                  <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                     Esta acción no se puede deshacer. Se eliminará permanentemente el documento y su archivo asociado.
+                  </AlertDialogDescription>
+               </AlertDialogHeader>
+               <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => handleDelete(`/documentacion/${itemToDelete}`)} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
+                     {isDeleting ? "Eliminando..." : "Sí, eliminar"}
+                  </AlertDialogAction>
+               </AlertDialogFooter>
+            </AlertDialogContent>
+         </AlertDialog>
+
          <div className="flex justify-end">
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
                <DialogTrigger asChild>

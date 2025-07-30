@@ -2,14 +2,22 @@
 
 import { useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { PlusCircle, MoreHorizontal } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/Dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/DropdownMenu";
+import {
+   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle
+} from "@/components/ui/Dialog";
+import {
+   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger
+} from "@/components/ui/DropdownMenu";
+import {
+   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
+} from "@/components/ui/AlertDialog";
 import { Usuario, Rol } from "@/types/api";
 import { UsuarioForm } from "@/components/features/usuarios/UsuarioForm";
 import api from "@/lib/api";
+import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 
 interface UsuariosClientProps {
    initialData: Usuario[];
@@ -21,8 +29,20 @@ export const UsuariosClient: React.FC<UsuariosClientProps> = ({ initialData, rol
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [selectedUser, setSelectedUser] = useState<Usuario | null>(null);
 
+   const {
+      isAlertOpen,
+      isDeleting,
+      openAlert,
+      setIsAlertOpen,
+      handleDelete
+   } = useDeleteConfirmation("Usuario", async () => {
+      const response = await api.get('/usuarios/?limit=200');
+      setUsuarios(response.data);
+   });
+
+
    const handleSuccess = async () => {
-      const response = await api.get('/usuarios/?limit=200'); // Consistent limit
+      const response = await api.get('/usuarios/?limit=200');
       setUsuarios(response.data);
       setIsModalOpen(false);
       setSelectedUser(null);
@@ -37,7 +57,6 @@ export const UsuariosClient: React.FC<UsuariosClientProps> = ({ initialData, rol
       { accessorKey: "nombre_usuario", header: "Nombre de Usuario" },
       { accessorKey: "email", header: "Email" },
       {
-         // ✅ CORRECCIÓN: Usar accessorFn para datos anidados
          accessorFn: (row) => row.rol.nombre,
          id: "rol",
          header: "Rol"
@@ -64,6 +83,13 @@ export const UsuariosClient: React.FC<UsuariosClientProps> = ({ initialData, rol
                      <DropdownMenuItem onClick={() => openModal(usuario)}>
                         Editar Usuario
                      </DropdownMenuItem>
+                     <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => openAlert(usuario.id)}
+                     >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Eliminar
+                     </DropdownMenuItem>
                   </DropdownMenuContent>
                </DropdownMenu>
             );
@@ -73,6 +99,27 @@ export const UsuariosClient: React.FC<UsuariosClientProps> = ({ initialData, rol
 
    return (
       <>
+         <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
+            <AlertDialogContent>
+               <AlertDialogHeader>
+                  <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                     Esta acción no se puede deshacer. Esto eliminará permanentemente al usuario y todos sus datos asociados.
+                  </AlertDialogDescription>
+               </AlertDialogHeader>
+               <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                     onClick={() => handleDelete(`/usuarios/${selectedUser?.id}`)}
+                     disabled={isDeleting}
+                     className="bg-destructive hover:bg-destructive/90"
+                  >
+                     {isDeleting ? "Eliminando..." : "Sí, eliminar"}
+                  </AlertDialogAction>
+               </AlertDialogFooter>
+            </AlertDialogContent>
+         </AlertDialog>
+
          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
             <DialogContent>
                <DialogHeader>

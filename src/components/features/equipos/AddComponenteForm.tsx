@@ -85,7 +85,6 @@ export function AddComponenteForm({ equipoPadreId, equiposDisponibles, onSuccess
                <FormField control={form.control} name="cantidad" render={({ field }) => (
                   <FormItem>
                      <FormLabel>Cantidad</FormLabel>
-                     {/* ✅ SOLUCIÓN: Convertir el valor a número en el onChange */}
                      <FormControl><Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} /></FormControl>
                      <FormMessage />
                   </FormItem>

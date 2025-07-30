@@ -28,7 +28,9 @@ interface ScheduleMantenimientoFormProps {
    onSuccess: () => void;
 }
 
-type FormValues = z.infer<typeof mantenimientoSchema>;
+// Quitamos equipo_id del schema Zod porque ya lo tenemos
+const formSchema = mantenimientoSchema.omit({ equipo_id: true });
+type FormValues = z.infer<typeof formSchema>;
 
 export function ScheduleMantenimientoForm({ equipoId, tiposMantenimiento, onSuccess }: ScheduleMantenimientoFormProps) {
    const router = useRouter();
@@ -36,16 +38,20 @@ export function ScheduleMantenimientoForm({ equipoId, tiposMantenimiento, onSucc
    const [isLoading, setIsLoading] = useState(false);
 
    const form = useForm<FormValues>({
-      resolver: zodResolver(mantenimientoSchema),
+      resolver: zodResolver(formSchema),
       defaultValues: {
-         prioridad: "0", // Baja por defecto
+         prioridad: 0,
       },
    });
 
    const onSubmit = async (data: FormValues) => {
       setIsLoading(true);
       try {
-         const payload = { ...data, equipo_id: equipoId, prioridad: parseInt(data.prioridad, 10) };
+         const payload = {
+            ...data,
+            equipo_id: equipoId,
+            fecha_programada: data.fecha_programada.toISOString() // Aseguramos formato correcto
+         };
          await api.post('/mantenimientos/', payload);
          toast({ title: "Éxito", description: "Mantenimiento programado correctamente." });
          router.refresh();
@@ -94,27 +100,6 @@ export function ScheduleMantenimientoForm({ equipoId, tiposMantenimiento, onSucc
                <FormItem>
                   <FormLabel>Técnico Responsable</FormLabel>
                   <FormControl><Input placeholder="Nombre del técnico o empresa" {...field} /></FormControl>
-                  <FormMessage />
-               </FormItem>
-            )} />
-            <FormField control={form.control} name="prioridad" render={({ field }) => (
-               <FormItem>
-                  <FormLabel>Prioridad</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                     <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                     <SelectContent>
-                        <SelectItem value="0">Baja</SelectItem>
-                        <SelectItem value="1">Media</SelectItem>
-                        <SelectItem value="2">Alta</SelectItem>
-                     </SelectContent>
-                  </Select>
-                  <FormMessage />
-               </FormItem>
-            )} />
-            <FormField control={form.control} name="observaciones" render={({ field }) => (
-               <FormItem>
-                  <FormLabel>Observaciones</FormLabel>
-                  <FormControl><Textarea placeholder="Describa el trabajo a realizar..." {...field} value={field.value ?? ""} /></FormControl>
                   <FormMessage />
                </FormItem>
             )} />

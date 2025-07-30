@@ -64,7 +64,7 @@ export function DataTable<TData, TValue>({
       },
    })
 
-   const filterColumnName = filterColumn || (columns[0] as any)?.accessorKey;
+   const filterColumnName = filterColumn || table.getAllColumns().find(c => c.getCanFilter())?.id;
 
 
    return (
@@ -102,7 +102,8 @@ export function DataTable<TData, TValue>({
                                  column.toggleVisibility(!!value)
                               }
                            >
-                              {column.id}
+                              {/* Mostramos el header en lugar del id para mayor claridad */}
+                              {typeof header === 'string' ? header : column.id}
                            </DropdownMenuCheckboxItem>
                         )
                      })}

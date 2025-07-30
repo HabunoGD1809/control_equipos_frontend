@@ -2,14 +2,19 @@
 
 import { useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { MoreHorizontal, PlusCircle } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/Dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/DropdownMenu";
+import {
+   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
+} from "@/components/ui/AlertDialog";
 import { Rol, Permiso } from "@/types/api";
 import { RoleForm } from "@/components/features/roles/RoleForm";
+import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
+import api from "@/lib/api";
 
 interface RolesClientProps {
    initialData: Rol[];
@@ -17,8 +22,16 @@ interface RolesClientProps {
 }
 
 export const RolesClient: React.FC<RolesClientProps> = ({ initialData, allPermissions }) => {
+   const [roles, setRoles] = useState(initialData);
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [selectedRole, setSelectedRole] = useState<Rol | null>(null);
+
+   const {
+      isAlertOpen, isDeleting, openAlert, setIsAlertOpen, handleDelete, itemToDelete
+   } = useDeleteConfirmation("Rol", async () => {
+      const response = await api.get('/gestion/roles/');
+      setRoles(response.data);
+   });
 
    const handleEdit = (role: Rol) => {
       setSelectedRole(role);
@@ -28,7 +41,7 @@ export const RolesClient: React.FC<RolesClientProps> = ({ initialData, allPermis
    const handleNew = () => {
       setSelectedRole(null);
       setIsModalOpen(true);
-   }
+   };
 
    const columns: ColumnDef<Rol>[] = [
       { accessorKey: "nombre", header: "Rol" },
@@ -46,7 +59,9 @@ export const RolesClient: React.FC<RolesClientProps> = ({ initialData, allPermis
                <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                   <DropdownMenuItem onClick={() => handleEdit(row.original)}>Editar Permisos</DropdownMenuItem>
-                  <DropdownMenuItem className="text-destructive focus:text-destructive">Eliminar Rol</DropdownMenuItem>
+                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => openAlert(row.original.id)}>
+                     <Trash2 className="mr-2 h-4 w-4" />Eliminar Rol
+                  </DropdownMenuItem>
                </DropdownMenuContent>
             </DropdownMenu>
          )
@@ -55,12 +70,24 @@ export const RolesClient: React.FC<RolesClientProps> = ({ initialData, allPermis
 
    return (
       <>
+         <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
+            <AlertDialogContent>
+               <AlertDialogHeader>
+                  <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                     Esta acción no se puede deshacer. Eliminar un rol puede afectar a los usuarios que lo tengan asignado.
+                  </AlertDialogDescription>
+               </AlertDialogHeader>
+               <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => handleDelete(`/gestion/roles/${itemToDelete}`)} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
+                     {isDeleting ? "Eliminando..." : "Sí, eliminar"}
+                  </AlertDialogAction>
+               </AlertDialogFooter>
+            </AlertDialogContent>
+         </AlertDialog>
+
          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-            <div className="flex justify-end">
-               <Button onClick={handleNew}>
-                  <PlusCircle className="mr-2 h-4 w-4" /> Crear Nuevo Rol
-               </Button>
-            </div>
             <DialogContent className="max-w-2xl">
                <DialogHeader>
                   <DialogTitle>{selectedRole ? `Editar Rol: ${selectedRole.nombre}` : "Crear Nuevo Rol"}</DialogTitle>
@@ -75,9 +102,13 @@ export const RolesClient: React.FC<RolesClientProps> = ({ initialData, allPermis
                />
             </DialogContent>
          </Dialog>
-
+         <div className="flex justify-end mb-4">
+            <Button onClick={handleNew}>
+               <PlusCircle className="mr-2 h-4 w-4" /> Crear Nuevo Rol
+            </Button>
+         </div>
          <div className="mt-4">
-            <DataTable columns={columns} data={initialData} />
+            <DataTable columns={columns} data={roles} filterColumn="nombre" />
          </div>
       </>
    );

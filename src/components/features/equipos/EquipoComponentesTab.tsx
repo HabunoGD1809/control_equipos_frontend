@@ -1,41 +1,41 @@
 "use client"
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
 import { PlusCircle, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/Dialog";
-import { EquipoSimple } from "@/types/api";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/AlertDialog";
+import { ComponenteInfo, EquipoSimple } from "@/types/api";
+import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { AddComponenteForm } from "./AddComponenteForm";
-
-// Definimos un tipo local para los datos de la tabla de componentes
-type ComponenteData = {
-   id: string;
-   componente: EquipoSimple;
-   cantidad: number;
-   tipo_relacion: string;
-};
 
 interface EquipoComponentesTabProps {
    equipoId: string;
-   componentes: ComponenteData[];
-   equiposDisponibles: EquipoSimple[]; // Equipos que pueden ser añadidos como componentes
+   componentes: ComponenteInfo[];
+   equiposDisponibles: EquipoSimple[];
 }
 
 export function EquipoComponentesTab({ equipoId, componentes, equiposDisponibles }: EquipoComponentesTabProps) {
    const [isModalOpen, setIsModalOpen] = useState(false);
+   const router = useRouter();
 
-   const columns: ColumnDef<ComponenteData>[] = [
-      { accessorKey: "componente.nombre", header: "Nombre" },
-      { accessorKey: "componente.numero_serie", header: "Número de Serie" },
+   const {
+      isAlertOpen, isDeleting, openAlert, setIsAlertOpen, handleDelete, itemToDelete
+   } = useDeleteConfirmation("Componente", () => router.refresh());
+
+   const columns: ColumnDef<ComponenteInfo>[] = [
+      { accessorFn: row => row.componente.nombre, id: "nombre", header: "Nombre" },
+      { accessorFn: row => row.componente.numero_serie, id: "numero_serie", header: "Número de Serie" },
       { accessorKey: "cantidad", header: "Cantidad" },
       { accessorKey: "tipo_relacion", header: "Relación" },
       {
          id: "actions",
-         cell: () => (
-            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive/80">
+         cell: ({ row }) => (
+            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive/80" onClick={() => openAlert(row.original.id)}>
                <Trash2 className="h-4 w-4" />
             </Button>
          ),
@@ -44,6 +44,23 @@ export function EquipoComponentesTab({ equipoId, componentes, equiposDisponibles
 
    return (
       <div className="mt-4 space-y-4">
+         <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
+            <AlertDialogContent>
+               <AlertDialogHeader>
+                  <AlertDialogTitle>¿Desvincular componente?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                     Esta acción no eliminará el equipo componente, solo lo desvinculará de este equipo padre.
+                  </AlertDialogDescription>
+               </AlertDialogHeader>
+               <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => handleDelete(`/equipos/componentes/${itemToDelete}`)} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
+                     {isDeleting ? "Desvinculando..." : "Sí, desvincular"}
+                  </AlertDialogAction>
+               </AlertDialogFooter>
+            </AlertDialogContent>
+         </AlertDialog>
+
          <div className="flex justify-end">
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
                <DialogTrigger asChild>
@@ -67,7 +84,8 @@ export function EquipoComponentesTab({ equipoId, componentes, equiposDisponibles
                </DialogContent>
             </Dialog>
          </div>
-         <DataTable columns={columns} data={componentes} />
+         {/* ✅ CORRECCIÓN: Pasamos el `id` de la columna para el filtrado */}
+         <DataTable columns={columns} data={componentes} filterColumn="nombre" />
       </div>
    );
 }

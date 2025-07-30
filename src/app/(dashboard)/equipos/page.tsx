@@ -1,49 +1,46 @@
-import { PlusCircle } from "lucide-react";
-import Link from "next/link";
 import { cookies } from 'next/headers';
-
-import { Button } from "@/components/ui/Button";
+import { EquipoRead, EstadoEquipo, Proveedor } from "@/types/api";
 import { EquiposClient } from "./components/EquiposClient";
-import { EquipoRead } from "@/types/api";
 
-// Helper de API para el lado del servidor
-async function getEquipos(): Promise<EquipoRead[]> {
+// Helper genérico para obtener datos en el servidor
+async function fetchData(endpoint: string) {
    const accessToken = (await cookies()).get('access_token')?.value;
    if (!accessToken) return [];
 
    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/equipos/?limit=200`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}${endpoint}`, {
          headers: { 'Authorization': `Bearer ${accessToken}` },
          cache: 'no-store',
       });
-      if (!response.ok) return [];
-      return response.json();
+      if (!res.ok) {
+         console.error(`Error fetching ${endpoint}: ${res.status} ${res.statusText}`);
+         return [];
+      }
+      return res.json();
    } catch (error) {
-      console.error("[GET_EQUIPOS_ERROR]", error);
+      console.error(`Error fetching ${endpoint}:`, error);
       return [];
    }
 }
 
 export default async function EquiposPage() {
-   const equipos = await getEquipos();
+   const [equipos, estados, proveedores] = await Promise.all([
+      fetchData('/equipos/?limit=200') as Promise<EquipoRead[]>,
+      fetchData('/catalogos/estados-equipo/') as Promise<EstadoEquipo[]>,
+      fetchData('/proveedores/') as Promise<Proveedor[]>,
+   ]);
+
+   const safeEquipos = Array.isArray(equipos) ? equipos : [];
+   const safeEstados = Array.isArray(estados) ? estados : [];
+   const safeProveedores = Array.isArray(proveedores) ? proveedores : [];
 
    return (
       <div className="space-y-8">
-         <div className="flex items-center justify-between">
-            <div>
-               <h1 className="text-3xl font-bold">Gestión de Equipos</h1>
-               <p className="text-muted-foreground">
-                  Visualiza, crea y administra todos los activos de la organización.
-               </p>
-            </div>
-            <Link href="/equipos/nuevo" passHref>
-               <Button>
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Crear Equipo
-               </Button>
-            </Link>
-         </div>
-         <EquiposClient data={equipos} />
+         <EquiposClient
+            initialData={safeEquipos}
+            estados={safeEstados}
+            proveedores={safeProveedores}
+         />
       </div>
    );
 }

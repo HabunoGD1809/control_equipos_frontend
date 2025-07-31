@@ -21,7 +21,7 @@ async function getData(id: string) {
       `/documentacion/equipo/${id}?limit=100`,
       `/movimientos/?equipo_id=${id}&limit=100`,
       `/licencias/asignaciones/?equipo_id=${id}&limit=100`,
-      `/equipos/?limit=1000`,
+      `/equipos/?limit=500`,
       `/catalogos/tipos-mantenimiento/`,
       `/catalogos/tipos-documento/`,
    ];

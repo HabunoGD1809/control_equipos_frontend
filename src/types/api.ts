@@ -7,6 +7,20 @@ export type TipoMovimientoEquipoEnum = "Salida Temporal" | "Salida Definitiva" |
 export type TipoRelacionComponenteEnum = "componente" | "conectado_a" | "parte_de" | "accesorio";
 
 // --- Modelos Base ---
+export interface EquipoPorEstado {
+   estado_id: string;
+   estado_nombre: string;
+   cantidad_equipos: number;
+   estado_color?: string | null;
+}
+
+export interface DashboardData {
+   total_equipos: number;
+   equipos_por_estado: EquipoPorEstado[];
+   mantenimientos_proximos_count: number;
+   licencias_por_expirar_count: number;
+   items_bajo_stock_count: number;
+}
 
 export interface Permiso {
    id: string;
@@ -112,7 +126,6 @@ export interface Token {
    token_type: string;
 }
 
-// NUEVO: Interfaces para Componentes y Padres
 export interface ComponenteInfo {
    id: string;
    componente: EquipoSimple;
@@ -130,7 +143,6 @@ export interface PadreInfo {
    notas?: string;
    created_at: string;
 }
-
 
 // --- DTOs (Data Transfer Objects) ---
 
@@ -213,12 +225,40 @@ export interface Documentacion {
 
 export interface Movimiento {
    id: string;
-   tipo_movimiento: string;
+   equipo_id: string;
+   tipo_movimiento: TipoMovimientoEquipoEnum;
+   fecha_prevista_retorno?: string | null;
+   origen?: string | null;
+   destino?: string | null;
+   proposito?: string | null;
+   recibido_por?: string | null;
+   observaciones?: string | null;
+   usuario_id?: string | null;
+   autorizado_por?: string | null;
    fecha_hora: string;
-   origen?: string;
-   destino?: string;
-   usuario_registrador?: { nombre_usuario: string };
-   proposito?: string;
+   fecha_retorno?: string | null;
+   estado: EstadoMovimientoEquipoEnum;
+   created_at: string;
+   equipo: EquipoSimple;
+   usuario_registrador?: UsuarioSimple | null;
+   usuario_autorizador?: UsuarioSimple | null;
+}
+
+export interface MovimientoCreate {
+   equipo_id: string;
+   tipo_movimiento: TipoMovimientoEquipoEnum;
+   fecha_prevista_retorno?: string | null;
+   origen?: string | null;
+   destino?: string | null;
+   proposito?: string | null;
+   recibido_por?: string | null;
+   observaciones?: string | null;
+}
+
+export interface MovimientoUpdate {
+   fecha_retorno?: string | null;
+   recibido_por?: string | null;
+   observaciones?: string | null;
 }
 
 export interface TipoMantenimiento {
@@ -252,12 +292,24 @@ export interface SoftwareCatalogo {
 
 export interface ReservaEquipo {
    id: string;
+   equipo_id: string;
+   usuario_solicitante_id: string;
    fecha_hora_inicio: string;
    fecha_hora_fin: string;
    estado: EstadoReservaEnum;
    proposito: string;
+   notas?: string;
+   aprobado_por_id?: string;
+   fecha_aprobacion?: string;
+   check_in_time?: string;
+   check_out_time?: string;
+   notas_administrador?: string;
+   notas_devolucion?: string;
+   created_at: string;
+   updated_at: string;
    equipo: EquipoSimple;
    solicitante: UsuarioSimple;
+   aprobado_por?: UsuarioSimple;
 }
 
 export interface InventarioStock {

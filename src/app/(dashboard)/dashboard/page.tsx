@@ -3,8 +3,11 @@ import { HardDrive, Wrench, Bell, PackageX } from "lucide-react";
 import { StatCard } from "@/components/features/dashboard/StatCard";
 import { EquiposPorEstadoChart } from "@/components/features/dashboard/EquiposPorEstadoChart";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
+import { DashboardData, Mantenimiento, InventarioStock } from '@/types/api';
+import { ProximosMantenimientosList } from '@/components/features/dashboard/ProximosMantenimientosList';
+import { ItemsBajoStockList } from '@/components/features/dashboard/ItemsBajoStockList';
 
-async function getDashboardData() {
+async function getDashboardPageData() {
    const cookieStore = await cookies();
    const accessToken = cookieStore.get('access_token')?.value;
 
@@ -12,34 +15,50 @@ async function getDashboardData() {
       return null;
    }
 
-   try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/dashboard/`, {
-         headers: { 'Authorization': `Bearer ${accessToken}` },
-         cache: 'no-store',
-      });
+   const headers = { 'Authorization': `Bearer ${accessToken}` };
+   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
-      if (!response.ok) {
-         console.error(`API Error: ${response.status} ${response.statusText}`);
+   try {
+      const [
+         dashboardRes,
+         mantenimientosRes,
+         bajoStockRes
+      ] = await Promise.all([
+         fetch(`${baseUrl}/dashboard/`, { headers, cache: 'no-store' }),
+         fetch(`${baseUrl}/mantenimientos/?estado=Programado&limit=5`, { headers, cache: 'no-store' }),
+         fetch(`${baseUrl}/inventario/stock/?bajo_stock=true&limit=5`, { headers, cache: 'no-store' })
+      ]);
+
+      if (!dashboardRes.ok) {
+         console.error(`API Error (Dashboard): ${dashboardRes.status} ${dashboardRes.statusText}`);
          return null;
       }
 
-      return await response.json();
+      return {
+         summary: await dashboardRes.json() as DashboardData,
+         proximosMantenimientos: mantenimientosRes.ok ? await mantenimientosRes.json() as Mantenimiento[] : [],
+         itemsBajoStock: bajoStockRes.ok ? await bajoStockRes.json() as InventarioStock[] : [],
+      };
+
    } catch (error) {
-      console.error("[GET_DASHBOARD_DATA_ERROR]", error);
+      console.error("[GET_DASHBOARD_PAGE_DATA_ERROR]", error);
       return null;
    }
 }
 
-export default async function DashboardPage() {
-   const data = await getDashboardData();
 
-   if (!data) {
+export default async function DashboardPage() {
+   const data = await getDashboardPageData();
+
+   if (!data || !data.summary) {
       return (
          <div className="flex h-full items-center justify-center">
             <p className="text-destructive">No se pudieron cargar los datos del dashboard.</p>
          </div>
       );
    }
+
+   const { summary, proximosMantenimientos, itemsBajoStock } = data;
 
    return (
       <div className="space-y-8">
@@ -53,25 +72,25 @@ export default async function DashboardPage() {
          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             <StatCard
                title="Total de Equipos"
-               value={data.total_equipos}
+               value={summary.total_equipos}
                icon={<HardDrive className="h-5 w-5 text-muted-foreground" />}
                description="Activos totales registrados"
             />
             <StatCard
                title="Mantenimientos Próximos"
-               value={data.mantenimientos_proximos_count}
+               value={summary.mantenimientos_proximos_count}
                icon={<Wrench className="h-5 w-5 text-muted-foreground" />}
                description="En los próximos 30 días"
             />
             <StatCard
                title="Licencias por Expirar"
-               value={data.licencias_por_expirar_count}
+               value={summary.licencias_por_expirar_count}
                icon={<Bell className="h-5 w-5 text-muted-foreground" />}
                description="En los próximos 30 días"
             />
             <StatCard
                title="Items con Bajo Stock"
-               value={data.items_bajo_stock_count}
+               value={summary.items_bajo_stock_count}
                icon={<PackageX className="h-5 w-5 text-muted-foreground" />}
                description="Por debajo del mínimo establecido"
             />
@@ -79,7 +98,7 @@ export default async function DashboardPage() {
 
          <div className="grid gap-6 lg:grid-cols-5">
             <div className="lg:col-span-3">
-               <EquiposPorEstadoChart data={data.equipos_por_estado} />
+               <EquiposPorEstadoChart data={summary.equipos_por_estado} />
             </div>
             <div className="lg:col-span-2 space-y-6">
                <Card>
@@ -87,7 +106,7 @@ export default async function DashboardPage() {
                      <CardTitle>Próximos Mantenimientos</CardTitle>
                   </CardHeader>
                   <CardContent>
-                     <p className="text-sm text-muted-foreground">Listado de mantenimientos futuros.</p>
+                     <ProximosMantenimientosList mantenimientos={proximosMantenimientos} />
                   </CardContent>
                </Card>
                <Card>
@@ -95,7 +114,7 @@ export default async function DashboardPage() {
                      <CardTitle>Items con Bajo Stock</CardTitle>
                   </CardHeader>
                   <CardContent>
-                     <p className="text-sm text-muted-foreground">Listado de items que requieren reposición.</p>
+                     <ItemsBajoStockList items={itemsBajoStock} />
                   </CardContent>
                </Card>
             </div>

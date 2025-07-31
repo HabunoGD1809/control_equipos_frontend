@@ -2,46 +2,40 @@ import { cookies } from 'next/headers';
 import { LicenciasClient } from "./components/LicenciasClient";
 import { LicenciaSoftware, SoftwareCatalogo, Proveedor, EquipoSimple, UsuarioSimple } from "@/types/api";
 
-async function getLicenciasData() {
+async function fetchData(endpoint: string) {
    const accessToken = (await cookies()).get('access_token')?.value;
-   if (!accessToken) return null;
-
-   const headers = { 'Authorization': `Bearer ${accessToken}` };
-   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+   if (!accessToken) return [];
 
    try {
-      const [licenciasRes, catalogoRes, proveedoresRes, equiposRes, usuariosRes] = await Promise.all([
-         fetch(`${baseUrl}/licencias/?limit=200`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/licencias/catalogo/?limit=200`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/proveedores/?limit=500`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/equipos/?limit=1000`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/usuarios/?limit=1000`, { headers, cache: 'no-store' })
-      ]);
-
-      if (!licenciasRes.ok || !catalogoRes.ok) {
-         console.error("Failed to fetch licencias or catalogo", licenciasRes.status, catalogoRes.status);
-         return null;
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}${endpoint}`, {
+         headers: { 'Authorization': `Bearer ${accessToken}` },
+         cache: 'no-store',
+      });
+      if (!res.ok) {
+         console.error(`Error fetching ${endpoint}: ${res.status} ${res.statusText}`);
+         return [];
       }
-
-      return {
-         licencias: await licenciasRes.json() as LicenciaSoftware[],
-         catalogo: await catalogoRes.json() as SoftwareCatalogo[],
-         proveedores: proveedoresRes.ok ? await proveedoresRes.json() as Proveedor[] : [],
-         equipos: equiposRes.ok ? await equiposRes.json() as EquipoSimple[] : [],
-         usuarios: usuariosRes.ok ? await usuariosRes.json() as UsuarioSimple[] : [],
-      };
+      return res.json();
    } catch (error) {
-      console.error("[GET_LICENCIAS_DATA_ERROR]", error);
-      return null;
+      console.error(`Error fetching ${endpoint}:`, error);
+      return [];
    }
 }
 
 export default async function LicenciasPage() {
-   const data = await getLicenciasData();
+   const [licencias, catalogo, proveedores, equipos, usuarios] = await Promise.all([
+      fetchData('/licencias/?limit=200') as Promise<LicenciaSoftware[]>,
+      fetchData('/licencias/catalogo/?limit=200') as Promise<SoftwareCatalogo[]>,
+      fetchData('/proveedores/?limit=500') as Promise<Proveedor[]>,
+      fetchData('/equipos/?limit=500') as Promise<EquipoSimple[]>,
+      fetchData('/usuarios/?limit=200') as Promise<UsuarioSimple[]>,
+   ]);
 
-   if (!data) {
-      return <div className="p-8">Error al cargar los datos de licencias.</div>;
-   }
+   const safeLicencias = Array.isArray(licencias) ? licencias : [];
+   const safeCatalogo = Array.isArray(catalogo) ? catalogo : [];
+   const safeProveedores = Array.isArray(proveedores) ? proveedores : [];
+   const safeEquipos = Array.isArray(equipos) ? equipos : [];
+   const safeUsuarios = Array.isArray(usuarios) ? usuarios : [];
 
    return (
       <div className="space-y-8">
@@ -52,11 +46,11 @@ export default async function LicenciasPage() {
             </p>
          </div>
          <LicenciasClient
-            initialLicencias={data.licencias}
-            initialCatalogo={data.catalogo}
-            proveedores={data.proveedores}
-            equipos={data.equipos}
-            usuarios={data.usuarios}
+            initialLicencias={safeLicencias}
+            initialCatalogo={safeCatalogo}
+            proveedores={safeProveedores}
+            equipos={safeEquipos}
+            usuarios={safeUsuarios}
          />
       </div>
    );

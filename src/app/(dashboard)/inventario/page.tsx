@@ -1,50 +1,48 @@
 import { cookies } from 'next/headers';
-import { InventarioClient } from "./components/InventarioClient";
-import { InventarioStock, TipoItemInventario, EquipoSimple, Proveedor } from "@/types/api";
+import { InventarioStock, TipoItemInventario, Proveedor, EquipoSimple } from '@/types/api';
+import { InventarioClient } from './components/InventarioClient';
 
-async function getInventarioData() {
+async function fetchData(endpoint: string) {
    const accessToken = (await cookies()).get('access_token')?.value;
-   if (!accessToken) return { stock: [], tipos: [], equipos: [], proveedores: [] };
-
-   const headers = { 'Authorization': `Bearer ${accessToken}` };
-   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+   if (!accessToken) return [];
 
    try {
-      const [stockRes, tiposRes, equiposRes, proveedoresRes] = await Promise.all([
-         fetch(`${baseUrl}/inventario/stock/?limit=500`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/inventario/tipos/?limit=500`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/equipos/?limit=1000`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/proveedores/?limit=1000`, { headers, cache: 'no-store' })
-      ]);
-
-      const stock: InventarioStock[] = stockRes.ok ? await stockRes.json() : [];
-      const tipos: TipoItemInventario[] = tiposRes.ok ? await tiposRes.json() : [];
-      const equipos: EquipoSimple[] = equiposRes.ok ? await equiposRes.json() : [];
-      const proveedores: Proveedor[] = proveedoresRes.ok ? await proveedoresRes.json() : [];
-
-      return { stock, tipos, equipos, proveedores };
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}${endpoint}`, {
+         headers: { 'Authorization': `Bearer ${accessToken}` },
+         cache: 'no-store',
+      });
+      if (!res.ok) {
+         console.error(`Error fetching ${endpoint}: ${res.status} ${res.statusText}`);
+         return [];
+      }
+      return res.json();
    } catch (error) {
-      console.error("[GET_INVENTARIO_DATA_ERROR]", error);
-      return { stock: [], tipos: [], equipos: [], proveedores: [] };
+      console.error(`Error fetching ${endpoint}:`, error);
+      return [];
    }
 }
 
 export default async function InventarioPage() {
-   const { stock, tipos, equipos, proveedores } = await getInventarioData();
+   const [stockData, tiposData, proveedores, equipos] = await Promise.all([
+      fetchData('/inventario/stock/?limit=200') as Promise<InventarioStock[]>,
+      fetchData('/inventario/tipos/?limit=200') as Promise<TipoItemInventario[]>,
+      fetchData('/proveedores/?limit=500') as Promise<Proveedor[]>,
+      fetchData('/equipos/?limit=500') as Promise<EquipoSimple[]>,
+   ]);
 
    return (
       <div className="space-y-8">
          <div>
             <h1 className="text-3xl font-bold">Gestión de Inventario</h1>
             <p className="text-muted-foreground">
-               Consulta el stock actual, gestiona tipos de ítems y registra movimientos.
+               Administre el stock y los tipos de ítems de inventario (consumibles, partes, etc.).
             </p>
          </div>
          <InventarioClient
-            initialStockData={stock}
-            initialTiposData={tipos}
-            equipos={equipos}
-            proveedores={proveedores}
+            initialStockData={Array.isArray(stockData) ? stockData : []}
+            initialTiposData={Array.isArray(tiposData) ? tiposData : []}
+            proveedores={Array.isArray(proveedores) ? proveedores : []}
+            equipos={Array.isArray(equipos) ? equipos : []}
          />
       </div>
    );

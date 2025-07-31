@@ -1,55 +1,45 @@
 import { cookies } from 'next/headers';
-import { ReservasClient } from "./components/ReservasClient";
 import { ReservaEquipo, EquipoSimple } from "@/types/api";
+import { ReservasClient } from "./components/ReservasClient";
 
-async function getReservasData() {
-   const accessToken = await (await cookies()).get('access_token')?.value;
-   if (!accessToken) return null;
-
-   const headers = { 'Authorization': `Bearer ${accessToken}` };
-   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+async function fetchData(endpoint: string, cache: RequestCache = 'no-store') {
+   const accessToken = (await cookies()).get('access_token')?.value;
+   if (!accessToken) return [];
 
    try {
-      const [reservasRes, equiposRes] = await Promise.all([
-         fetch(`${baseUrl}/reservas/?limit=200`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/equipos/?limit=1000`, { headers, cache: 'no-store' }),
-      ]);
-
-      if (!reservasRes.ok) {
-         console.error("Error al obtener reservas:", reservasRes.status, reservasRes.statusText);
-         return null;
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}${endpoint}`, {
+         headers: { 'Authorization': `Bearer ${accessToken}` },
+         cache,
+      });
+      if (!res.ok) {
+         console.error(`Error fetching ${endpoint}: ${res.status} ${res.statusText}`);
+         return [];
       }
-
-      const reservas = await reservasRes.json() as ReservaEquipo[];
-      const equipos = equiposRes.ok ? await equiposRes.json() as EquipoSimple[] : [];
-
-      return { reservas, equipos };
-
+      return res.json();
    } catch (error) {
-      console.error("[GET_RESERVAS_DATA_ERROR]", error);
-      return null;
+      console.error(`Error fetching ${endpoint}:`, error);
+      return [];
    }
 }
 
 export default async function ReservasPage() {
-   const data = await getReservasData();
+   const [reservas, equipos] = await Promise.all([
+      fetchData('/reservas/?limit=200') as Promise<ReservaEquipo[]>,
+      fetchData('/equipos/?limit=500') as Promise<EquipoSimple[]>,
+   ]);
 
-   if (!data) {
-      return <div className="p-8 text-center text-destructive">Error al cargar los datos de reservas. Por favor, verifica tu conexión o permisos.</div>;
-   }
+   const safeReservas = Array.isArray(reservas) ? reservas : [];
+   const safeEquipos = Array.isArray(equipos) ? equipos : [];
 
    return (
       <div className="space-y-8">
          <div>
-            <h1 className="text-3xl font-bold">Reservas de Equipos</h1>
+            <h1 className="text-3xl font-bold">Calendario de Reservas</h1>
             <p className="text-muted-foreground">
-               Visualice el calendario de disponibilidad y gestione las reservas.
+               Visualice, cree y gestione las reservas de equipos.
             </p>
          </div>
-         <ReservasClient
-            initialReservas={data.reservas}
-            equiposDisponibles={data.equipos}
-         />
+         <ReservasClient initialEvents={safeReservas} equipos={safeEquipos} />
       </div>
    );
 }

@@ -5,7 +5,7 @@ const requiredString = (message = "Este campo es requerido.") =>
       .min(1, { message });
 
 const requiredUuid = (message = "Debe seleccionar una opción.") =>
-   requiredString(message).uuid({ error: message });
+   requiredString(message).uuid({ message });
 
 const requiredDate = (message = "La fecha es requerida.") =>
    z.date({
@@ -136,113 +136,114 @@ export const inventarioMovimientoSchema = z.object({
          return !!data.motivo_ajuste && data.motivo_ajuste.length > 5;
       }
       return true;
-   }, { message: "El motivo es requerido para ajustes (mín. 5 caracteres).", path: ["motivo_ajuste"] });
+   }, { message: "El motivo es requerido para ajustes (mín. 5 caracteres).", path: ["motivo_ajuste"] });
 
-   // Esquema para el Catálogo de Software
-   export const softwareCatalogoSchema = z.object({
-      nombre: requiredString("El nombre es requerido.").min(2).max(255),
-      version: z.string().max(50).optional().nullable(),
-      fabricante: z.string().max(100).optional().nullable(),
-      tipo_licencia: requiredEnum(["Perpetua", "Suscripción Anual", "Suscripción Mensual", "OEM", "Freeware", "Open Source", "Otra"]),
-      metrica_licenciamiento: requiredEnum(["Por Dispositivo", "Por Usuario Nominal", "Por Usuario Concurrente", "Por Core", "Por Servidor", "Gratuita", "Otra"]),
-      descripcion: z.string().optional().nullable(),
-   });
+// Esquema para el Catálogo de Software
+export const softwareCatalogoSchema = z.object({
+   nombre: requiredString("El nombre es requerido.").min(2).max(255),
+   version: z.string().max(50).optional().nullable(),
+   fabricante: z.string().max(100).optional().nullable(),
+   tipo_licencia: requiredEnum(["Perpetua", "Suscripción Anual", "Suscripción Mensual", "OEM", "Freeware", "Open Source", "Otra"]),
+   metrica_licenciamiento: requiredEnum(["Por Dispositivo", "Por Usuario Nominal", "Por Usuario Concurrente", "Por Core", "Por Servidor", "Gratuita", "Otra"]),
+   descripcion: z.string().optional().nullable(),
+});
 
-   // Esquema para Licencias de Software Adquiridas
-   export const licenciaSoftwareSchema = z.object({
-      software_catalogo_id: requiredUuid("Debe seleccionar un software del catálogo."),
-      clave_producto: z.string().optional().nullable(),
-      fecha_adquisicion: requiredDate(),
-      fecha_expiracion: z.date().optional().nullable(),
-      proveedor_id: z.string().uuid().optional().nullable(),
-      costo_adquisicion: z.coerce.number().min(0).optional().nullable(),
-      cantidad_total: z.coerce.number().int().min(1, "La cantidad debe ser al menos 1."),
-      notas: z.string().optional().nullable(),
-   });
+// Esquema para Licencias de Software Adquiridas
+export const licenciaSoftwareSchema = z.object({
+   software_catalogo_id: requiredUuid("Debe seleccionar un software del catálogo."),
+   clave_producto: z.string().optional().nullable(),
+   fecha_adquisicion: requiredDate(),
+   fecha_expiracion: z.date().optional().nullable(),
+   proveedor_id: z.string().uuid().optional().nullable(),
+   costo_adquisicion: z.coerce.number().min(0).optional().nullable(),
+   cantidad_total: z.coerce.number().int().min(1, "La cantidad debe ser al menos 1."),
+   notas: z.string().optional().nullable(),
+   numero_orden_compra: z.string().optional().nullable(),
+});
 
-   // Esquema para Asignar una Licencia
-   export const asignarLicenciaSchema = z.object({
-      asignar_a: requiredEnum(["equipo", "usuario"], "Debe seleccionar un tipo de asignación."),
-      equipo_id: z.string().uuid().optional().nullable(),
-      usuario_id: z.string().uuid().optional().nullable(),
-      notas: z.string().optional().nullable(),
-   }).refine(data => (data.asignar_a === 'equipo' ? !!data.equipo_id : true), {
-      message: "Debe seleccionar un equipo.",
-      path: ["equipo_id"],
-   }).refine(data => (data.asignar_a === 'usuario' ? !!data.usuario_id : true), {
-      message: "Debe seleccionar un usuario.",
-      path: ["usuario_id"],
-   });
+// Esquema para Asignar una Licencia
+export const asignarLicenciaSchema = z.object({
+   asignar_a: requiredEnum(["equipo", "usuario"], "Debe seleccionar un tipo de asignación."),
+   equipo_id: z.string().uuid().optional().nullable(),
+   usuario_id: z.string().uuid().optional().nullable(),
+   notas: z.string().optional().nullable(),
+}).refine(data => (data.asignar_a === 'equipo' ? !!data.equipo_id : true), {
+   message: "Debe seleccionar un equipo.",
+   path: ["equipo_id"],
+}).refine(data => (data.asignar_a === 'usuario' ? !!data.usuario_id : true), {
+   message: "Debe seleccionar un usuario.",
+   path: ["usuario_id"],
+});
 
-   // Esquema para la creación de Usuarios
-   export const usuarioCreateSchema = z.object({
-      nombre_usuario: z.string().min(3, "Mínimo 3 caracteres").max(50),
-      email: z.string().email("Debe ser un email válido.").optional().nullable(),
-      password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres."),
-      rol_id: requiredUuid("Debe seleccionar un rol."),
-   });
+// Esquema para la creación de Usuarios
+export const usuarioCreateSchema = z.object({
+   nombre_usuario: z.string().min(3, "Mínimo 3 caracteres").max(50),
+   email: z.string().email("Debe ser un email válido.").optional().nullable(),
+   password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres."),
+   rol_id: requiredUuid("Debe seleccionar un rol."),
+});
 
-   // Esquema para la actualización de Usuarios
-   export const usuarioUpdateSchema = z.object({
-      nombre_usuario: z.string().min(3, "Mínimo 3 caracteres").max(50).optional(),
-      email: z.string().email("Debe ser un email válido.").optional().nullable(),
-      password: z.string().min(8, "Mínimo 8 caracteres.").optional().nullable().or(z.literal('')),
-      rol_id: z.string().uuid().optional(),
-      bloqueado: z.boolean().optional(),
-   });
+// Esquema para la actualización de Usuarios
+export const usuarioUpdateSchema = z.object({
+   nombre_usuario: z.string().min(3, "Mínimo 3 caracteres").max(50).optional(),
+   email: z.string().email("Debe ser un email válido.").optional().nullable(),
+   password: z.string().min(8, "Mínimo 8 caracteres.").optional().nullable().or(z.literal('')),
+   rol_id: z.string().uuid().optional(),
+   bloqueado: z.boolean().optional(),
+});
 
-   // Esquema para la creación y actualización de Roles
-   export const rolSchema = z.object({
-      nombre: requiredString("El nombre del rol es requerido.").min(3).max(100),
-      descripcion: z.string().optional().nullable(),
-      permiso_ids: z.array(z.string().uuid()).min(1, "Debe seleccionar al menos un permiso."),
-   });
+// Esquema para la creación y actualización de Roles
+export const rolSchema = z.object({
+   nombre: requiredString("El nombre del rol es requerido.").min(3).max(100),
+   descripcion: z.string().optional().nullable(),
+   permiso_ids: z.array(z.string().uuid()).min(1, "Debe seleccionar al menos un permiso."),
+});
 
-   // Esquema para Proveedores
-   export const proveedorSchema = z.object({
-      nombre: requiredString("El nombre es requerido.").min(2).max(255),
-      descripcion: z.string().optional().nullable(),
-      contacto: z.string().optional().nullable(),
-      direccion: z.string().optional().nullable(),
-      sitio_web: z.string().url("Debe ser una URL válida.").optional().nullable().or(z.literal('')),
-      rnc: z.string().max(50).optional().nullable(),
-   });
+// Esquema para Proveedores
+export const proveedorSchema = z.object({
+   nombre: requiredString("El nombre es requerido.").min(2).max(255),
+   descripcion: z.string().optional().nullable(),
+   contacto: z.string().optional().nullable(),
+   direccion: z.string().optional().nullable(),
+   sitio_web: z.string().url("Debe ser una URL válida.").optional().nullable().or(z.literal('')),
+   rnc: z.string().max(50).optional().nullable(),
+});
 
-   // Esquema genérico para catálogos simples
-   export const genericCatalogSchema = z.object({
-      nombre: requiredString("El nombre es requerido.").min(2).max(100),
-      descripcion: z.string().optional().nullable(),
-      color_hex: z.string().regex(/^#([0-9a-fA-F]{6})$/, "Debe ser un color hexadecimal válido, ej: #FFFFFF").optional().nullable().or(z.literal('')),
-      es_preventivo: z.boolean().optional(),
-      periodicidad_dias: z.coerce.number().int().min(0).optional().nullable(),
-   });
+// Esquema genérico para catálogos simples
+export const genericCatalogSchema = z.object({
+   nombre: requiredString("El nombre es requerido.").min(2).max(100),
+   descripcion: z.string().optional().nullable(),
+   color_hex: z.string().regex(/^#([0-9a-fA-F]{6})$/, "Debe ser un color hexadecimal válido, ej: #FFFFFF").optional().nullable().or(z.literal('')),
+   es_preventivo: z.boolean().optional(),
+   periodicidad_dias: z.coerce.number().int().min(0).optional().nullable(),
+});
 
-   // Esquema para la creación de Reservas
-   export const reservaSchema = z.object({
-      equipo_id: requiredUuid("Debe seleccionar un equipo."),
-      proposito: requiredString("El propósito es requerido (mín. 5 caracteres).").min(5),
-      fecha_inicio: requiredDate(),
-      hora_inicio: requiredString("La hora de inicio es requerida."),
-      fecha_fin: requiredDate(),
-      hora_fin: requiredString("La hora de fin es requerida."),
-      notas: z.string().optional().nullable(),
-   }).refine(data => {
-      const [startHour, startMinute] = data.hora_inicio.split(':').map(Number);
-      const [endHour, endMinute] = data.hora_fin.split(':').map(Number);
-      const startDate = new Date(data.fecha_inicio.setHours(startHour, startMinute));
-      const endDate = new Date(data.fecha_fin.setHours(endHour, endMinute));
-      return endDate > startDate;
-   }, {
-      message: "La fecha y hora de fin debe ser posterior a la de inicio.",
-      path: ["fecha_fin"],
-   });
+// Esquema para la creación de Reservas
+export const reservaSchema = z.object({
+   equipo_id: requiredUuid("Debe seleccionar un equipo."),
+   proposito: requiredString("El propósito es requerido (mín. 5 caracteres).").min(5),
+   fecha_inicio: requiredDate(),
+   hora_inicio: requiredString("La hora de inicio es requerida."),
+   fecha_fin: requiredDate(),
+   hora_fin: requiredString("La hora de fin es requerida."),
+   notas: z.string().optional().nullable(),
+}).refine(data => {
+   const [startHour, startMinute] = data.hora_inicio.split(':').map(Number);
+   const [endHour, endMinute] = data.hora_fin.split(':').map(Number);
+   const startDate = new Date(data.fecha_inicio.setHours(startHour, startMinute));
+   const endDate = new Date(data.fecha_fin.setHours(endHour, endMinute));
+   return endDate > startDate;
+}, {
+   message: "La fecha y hora de fin debe ser posterior a la de inicio.",
+   path: ["fecha_fin"],
+});
 
-   // Esquema para el formulario de cambio de contraseña
-   export const changePasswordSchema = z.object({
-      current_password: requiredString("La contraseña actual es requerida."),
-      new_password: z.string().min(8, "La nueva contraseña debe tener al menos 8 caracteres."),
-      confirm_password: z.string()
-   }).refine(data => data.new_password === data.confirm_password, {
-      message: "Las contraseñas no coinciden.",
-      path: ["confirm_password"],
-   });
+// Esquema para el formulario de cambio de contraseña
+export const changePasswordSchema = z.object({
+   current_password: requiredString("La contraseña actual es requerida."),
+   new_password: z.string().min(8, "La nueva contraseña debe tener al menos 8 caracteres."),
+   confirm_password: z.string()
+}).refine(data => data.new_password === data.confirm_password, {
+   message: "Las contraseñas no coinciden.",
+   path: ["confirm_password"],
+});

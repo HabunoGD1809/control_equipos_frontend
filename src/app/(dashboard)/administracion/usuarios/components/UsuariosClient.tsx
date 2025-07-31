@@ -34,7 +34,8 @@ export const UsuariosClient: React.FC<UsuariosClientProps> = ({ initialData, rol
       isDeleting,
       openAlert,
       setIsAlertOpen,
-      handleDelete
+      handleDelete,
+      itemToDelete
    } = useDeleteConfirmation("Usuario", async () => {
       const response = await api.get('/usuarios/?limit=200');
       setUsuarios(response.data);
@@ -109,8 +110,9 @@ export const UsuariosClient: React.FC<UsuariosClientProps> = ({ initialData, rol
                </AlertDialogHeader>
                <AlertDialogFooter>
                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  {/* CORRECCIÓN: Usar itemToDelete del hook para asegurar que el ID es correcto */}
                   <AlertDialogAction
-                     onClick={() => handleDelete(`/usuarios/${selectedUser?.id}`)}
+                     onClick={() => handleDelete(`/usuarios/${itemToDelete}`)}
                      disabled={isDeleting}
                      className="bg-destructive hover:bg-destructive/90"
                   >

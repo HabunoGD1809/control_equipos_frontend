@@ -102,8 +102,7 @@ export function DataTable<TData, TValue>({
                                  column.toggleVisibility(!!value)
                               }
                            >
-                              {/* Mostramos el header en lugar del id para mayor claridad */}
-                              {typeof header === 'string' ? header : column.id}
+                              {column.id}
                            </DropdownMenuCheckboxItem>
                         )
                      })}

@@ -178,7 +178,6 @@ export function LicenciasClient({ initialLicencias, initialCatalogo, proveedores
             </div>
 
             <TabsContent value="licencias">
-               {/* ✅ CORRECCIÓN: Se usa el nuevo `id` de la columna para el filtrado. */}
                <DataTable columns={licenciasColumns} data={initialLicencias} filterColumn="software" />
             </TabsContent>
             <TabsContent value="catalogo">

@@ -110,7 +110,6 @@ export const UsuariosClient: React.FC<UsuariosClientProps> = ({ initialData, rol
                </AlertDialogHeader>
                <AlertDialogFooter>
                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  {/* CORRECCIÓN: Usar itemToDelete del hook para asegurar que el ID es correcto */}
                   <AlertDialogAction
                      onClick={() => handleDelete(`/usuarios/${itemToDelete}`)}
                      disabled={isDeleting}

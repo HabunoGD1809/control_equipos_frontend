@@ -1,10 +1,105 @@
 // --- ENUMS ---
-export type EstadoDocumentoEnum = "Pendiente" | "Verificado" | "Rechazado";
-export type EstadoMantenimientoEnum = "Programado" | "En Proceso" | "Completado" | "Cancelado" | "Pendiente Aprobacion" | "Requiere Piezas" | "Pausado";
-export type EstadoMovimientoEquipoEnum = "Pendiente" | "Autorizado" | "En Proceso" | "Completado" | "Cancelado" | "Rechazado";
-export type EstadoReservaEnum = "Pendiente Aprobacion" | "Confirmada" | "Rechazada" | "Cancelada" | "Cancelada por Usuario" | "Cancelada por Gestor" | "En Curso" | "Finalizada";
-export type TipoMovimientoEquipoEnum = "Salida Temporal" | "Salida Definitiva" | "Entrada" | "Asignacion Interna" | "Transferencia Bodega";
-export type TipoRelacionComponenteEnum = "componente" | "conectado_a" | "parte_de" | "accesorio";
+export enum EstadoDocumentoEnum {
+   Pendiente = "Pendiente",
+   Verificado = "Verificado",
+   Rechazado = "Rechazado",
+}
+
+export enum EstadoMantenimientoEnum {
+   Programado = "Programado",
+   EnProceso = "En Proceso",
+   Completado = "Completado",
+   Cancelado = "Cancelado",
+   PendienteAprobacion = "Pendiente Aprobacion",
+   RequierePiezas = "Requiere Piezas",
+   Pausado = "Pausado",
+}
+
+export enum EstadoMovimientoEquipoEnum {
+   Pendiente = "Pendiente",
+   Autorizado = "Autorizado",
+   EnProceso = "En Proceso",
+   Completado = "Completado",
+   Cancelado = "Cancelado",
+   Rechazado = "Rechazado",
+}
+
+export enum EstadoReservaEnum {
+   PendienteAprobacion = "Pendiente Aprobacion",
+   Confirmada = "Confirmada",
+   Rechazada = "Rechazada",
+   Cancelada = "Cancelada",
+   CanceladaPorUsuario = "Cancelada por Usuario",
+   CanceladaPorGestor = "Cancelada por Gestor",
+   EnCurso = "En Curso",
+   Finalizada = "Finalizada",
+}
+
+export enum TipoMovimientoEquipoEnum {
+   SalidaTemporal = "Salida Temporal",
+   SalidaDefinitiva = "Salida Definitiva",
+   Entrada = "Entrada",
+   AsignacionInterna = "Asignacion Interna",
+   TransferenciaBodega = "Transferencia Bodega",
+}
+
+export enum TipoRelacionComponenteEnum {
+   Componente = "componente",
+   ConectadoA = "conectado_a",
+   ParteDe = "parte_de",
+   Accesorio = "accesorio",
+}
+
+export enum TipoNotificacionEnum {
+   Info = "info",
+   Alerta = "alerta",
+   Error = "error",
+   Mantenimiento = "mantenimiento",
+   Reserva = "reserva",
+   Sistema = "sistema",
+}
+
+export enum TipoLicenciaSoftwareEnum {
+   Perpetua = "Perpetua",
+   SuscripcionAnual = "Suscripción Anual",
+   SuscripcionMensual = "Suscripción Mensual",
+   OEM = "OEM",
+   Freeware = "Freeware",
+   OpenSource = "Open Source",
+   Otra = "Otra",
+}
+
+export enum MetricaLicenciamientoEnum {
+   PorDispositivo = "Por Dispositivo",
+   PorUsuarioNominal = "Por Usuario Nominal",
+   PorUsuarioConcurrente = "Por Usuario Concurrente",
+   PorCore = "Por Core",
+   PorServidor = "Por Servidor",
+   Gratuita = "Gratuita",
+   Otra = "Otra",
+}
+
+export enum UnidadMedidaEnum {
+   Unidad = "Unidad",
+   Metro = "Metro",
+   Kg = "Kg",
+   Litro = "Litro",
+   Caja = "Caja",
+   Paquete = "Paquete",
+}
+
+export enum TipoMovimientoInvEnum {
+   EntradaCompra = "Entrada Compra",
+   SalidaUso = "Salida Uso",
+   SalidaDescarte = "Salida Descarte",
+   AjustePositivo = "Ajuste Positivo",
+   AjusteNegativo = "Ajuste Negativo",
+   TransferenciaSalida = "Transferencia Salida",
+   TransferenciaEntrada = "Transferencia Entrada",
+   DevolucionProveedor = "Devolucion Proveedor",
+   DevolucionInterna = "Devolucion Interna",
+}
+
 
 // --- Modelos Base ---
 export interface EquipoPorEstado {
@@ -144,8 +239,211 @@ export interface PadreInfo {
    created_at: string;
 }
 
-// --- DTOs (Data Transfer Objects) ---
+export interface Mantenimiento {
+   id: string;
+   equipo_id: string;
+   tipo_mantenimiento_id: string;
+   fecha_programada?: string;
+   fecha_inicio?: string;
+   fecha_finalizacion?: string;
+   costo_estimado?: string;
+   costo_real?: string;
+   tecnico_responsable: string;
+   proveedor_servicio_id?: string;
+   estado: EstadoMantenimientoEnum;
+   prioridad: number;
+   observaciones?: string;
+   fecha_proximo_mantenimiento?: string;
+   created_at: string;
+   updated_at: string;
+   equipo: EquipoSimple;
+   tipo_mantenimiento: TipoMantenimiento;
+   proveedor_servicio?: ProveedorSimple;
+}
 
+export interface Documentacion {
+   id: string;
+   titulo: string;
+   descripcion?: string | null;
+   tipo_documento_id: string;
+   enlace: string;
+   nombre_archivo?: string | null;
+   mime_type?: string | null;
+   tamano_bytes?: number | null;
+   fecha_subida: string;
+   subido_por?: string | null;
+   estado: EstadoDocumentoEnum;
+   verificado_por?: string | null;
+   fecha_verificacion?: string | null;
+   notas_verificacion?: string | null;
+   tipo_documento: TipoDocumento;
+   subido_por_usuario?: UsuarioSimple | null;
+}
+
+export interface Movimiento {
+   id: string;
+   equipo_id: string;
+   tipo_movimiento: TipoMovimientoEquipoEnum;
+   fecha_prevista_retorno?: string | null;
+   origen?: string | null;
+   destino?: string | null;
+   proposito?: string | null;
+   recibido_por?: string | null;
+   observaciones?: string | null;
+   usuario_id?: string | null;
+   autorizado_por?: string | null;
+   fecha_hora: string;
+   fecha_retorno?: string | null;
+   estado: EstadoMovimientoEquipoEnum;
+   created_at: string;
+   equipo: EquipoSimple;
+   usuario_registrador?: UsuarioSimple | null;
+   usuario_autorizador?: UsuarioSimple | null;
+}
+
+export interface TipoMantenimiento {
+   id: string;
+   nombre: string;
+   descripcion?: string | null;
+   periodicidad_dias?: number | null;
+   requiere_documentacion: boolean;
+   es_preventivo: boolean;
+   created_at: string;
+}
+
+export interface TipoDocumento {
+   id: string;
+   nombre: string;
+   descripcion?: string | null;
+   requiere_verificacion: boolean;
+   formato_permitido?: string[] | null;
+   created_at: string;
+}
+
+export interface LicenciaSoftwareSimple {
+   id: string;
+   software_nombre?: string | null;
+   software_version?: string | null;
+   clave_producto?: string | null;
+   fecha_expiracion?: string | null;
+}
+
+export interface LicenciaSoftware extends LicenciaSoftwareSimple {
+   software_catalogo_id: string;
+   fecha_adquisicion: string;
+   proveedor_id?: string | null;
+   costo_adquisicion?: string | null;
+   numero_orden_compra?: string | null;
+   cantidad_total: number;
+   notas?: string | null;
+   cantidad_disponible: number;
+   created_at: string;
+   updated_at: string;
+   software_info: SoftwareCatalogoSimple;
+   proveedor?: ProveedorSimple | null;
+}
+
+export interface SoftwareCatalogoSimple {
+   id: string;
+   nombre: string;
+   version?: string | null;
+   fabricante?: string | null;
+}
+
+export interface SoftwareCatalogo extends SoftwareCatalogoSimple {
+   descripcion?: string | null;
+   categoria?: string | null;
+   tipo_licencia: TipoLicenciaSoftwareEnum;
+   metrica_licenciamiento: MetricaLicenciamientoEnum;
+   created_at: string;
+   updated_at: string;
+}
+
+export interface ReservaEquipo {
+   id: string;
+   equipo_id: string;
+   usuario_solicitante_id: string;
+   fecha_hora_inicio: string;
+   fecha_hora_fin: string;
+   estado: EstadoReservaEnum;
+   proposito: string;
+   notas?: string;
+   aprobado_por_id?: string;
+   fecha_aprobacion?: string;
+   check_in_time?: string;
+   check_out_time?: string;
+   notas_administrador?: string;
+   notas_devolucion?: string;
+   created_at: string;
+   updated_at: string;
+   equipo: EquipoSimple;
+   solicitante: UsuarioSimple;
+   aprobado_por?: UsuarioSimple;
+}
+
+export interface InventarioStock {
+   id: string;
+   tipo_item_id: string;
+   ubicacion: string;
+   lote?: string | null;
+   fecha_caducidad?: string | null;
+   cantidad_actual: number;
+   ultima_actualizacion: string;
+   tipo_item: TipoItemInventarioSimple;
+}
+
+export interface TipoItemInventarioSimple {
+   id: string;
+   nombre: string;
+   unidad_medida: UnidadMedidaEnum;
+   sku?: string | null;
+   marca?: string | null;
+   modelo?: string | null;
+}
+
+export interface TipoItemInventario extends TipoItemInventarioSimple {
+   categoria: string;
+   descripcion?: string | null;
+   stock_minimo: number;
+   proveedor_preferido_id?: string | null;
+   proveedor_preferido?: ProveedorSimple | null;
+}
+
+export interface Notificacion {
+   id: string;
+   mensaje: string;
+   tipo: TipoNotificacionEnum;
+   urgencia: number;
+   referencia_id?: string | null;
+   referencia_tabla?: string | null;
+   leido: boolean;
+   created_at: string;
+   fecha_leido?: string | null;
+}
+
+export interface AuditLog<T = unknown> {
+   id: string;
+   audit_timestamp: string;
+   table_name: string;
+   operation: 'INSERT' | 'UPDATE' | 'DELETE';
+   username?: string | null;
+   app_user_id?: string | null;
+   old_data?: Record<string, T> | null;
+   new_data?: Record<string, T> | null;
+}
+
+export interface BackupLog {
+   id: string;
+   backup_timestamp: string;
+   backup_status: string;
+   backup_type: string;
+   duration?: string | null;
+   file_path?: string | null;
+   error_message?: string | null;
+   notes?: string | null;
+}
+
+// --- DTOs (Data Transfer Objects) para Creación y Actualización ---
 export interface UsuarioCreate {
    nombre_usuario: string;
    email?: string;
@@ -182,29 +480,6 @@ export interface EquipoCreate {
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface EquipoUpdate extends Partial<EquipoCreate> { }
 
-export interface Mantenimiento {
-   id: string;
-   equipo_id: string;
-   tipo_mantenimiento_id: string;
-   fecha_programada?: string;
-   fecha_inicio?: string;
-   fecha_finalizacion?: string;
-   costo_estimado?: string;
-   costo_real?: string;
-   tecnico_responsable: string;
-   proveedor_servicio_id?: string;
-   estado: EstadoMantenimientoEnum;
-   prioridad: number;
-   observaciones?: string;
-   fecha_proximo_mantenimiento?: string;
-   created_at: string;
-   updated_at: string;
-   equipo: EquipoSimple;
-   tipo_mantenimiento: TipoMantenimiento;
-   proveedor_servicio?: ProveedorSimple;
-}
-
-
 export interface MantenimientoCreate {
    equipo_id: string;
    tipo_mantenimiento_id: string;
@@ -214,34 +489,11 @@ export interface MantenimientoCreate {
    observaciones?: string | null;
 }
 
-export interface Documentacion {
-   id: string;
-   titulo: string;
-   tipo_documento: { nombre: string };
-   fecha_subida: string;
-   estado: string;
-   enlace: string;
-}
-
-export interface Movimiento {
-   id: string;
-   equipo_id: string;
-   tipo_movimiento: TipoMovimientoEquipoEnum;
-   fecha_prevista_retorno?: string | null;
-   origen?: string | null;
-   destino?: string | null;
-   proposito?: string | null;
-   recibido_por?: string | null;
-   observaciones?: string | null;
-   usuario_id?: string | null;
-   autorizado_por?: string | null;
-   fecha_hora: string;
-   fecha_retorno?: string | null;
-   estado: EstadoMovimientoEquipoEnum;
-   created_at: string;
-   equipo: EquipoSimple;
-   usuario_registrador?: UsuarioSimple | null;
-   usuario_autorizador?: UsuarioSimple | null;
+export interface MantenimientoUpdate extends Partial<Omit<MantenimientoCreate, 'equipo_id'>> {
+   estado?: EstadoMantenimientoEnum;
+   costo_real?: string;
+   fecha_inicio?: string;
+   fecha_finalizacion?: string;
 }
 
 export interface MovimientoCreate {
@@ -261,100 +513,26 @@ export interface MovimientoUpdate {
    observaciones?: string | null;
 }
 
-export interface TipoMantenimiento {
-   id: string;
-   nombre: string;
-}
-
-export interface TipoDocumento {
-   id: string;
-   nombre: string;
-}
-
-export interface LicenciaSoftware {
-   id: string;
-   software_info: { nombre: string; version?: string };
-   cantidad_disponible: number;
-   cantidad_total: number;
-   fecha_expiracion?: string;
-   fecha_adquisicion: string;
-   costo_adquisicion?: number;
-}
-
-export interface SoftwareCatalogo {
-   id: string;
-   nombre: string;
-   version?: string;
-   fabricante?: string;
-   tipo_licencia: string;
-   metrica_licenciamiento: string;
-}
-
-export interface ReservaEquipo {
-   id: string;
+export interface ReservaEquipoCreate {
    equipo_id: string;
-   usuario_solicitante_id: string;
    fecha_hora_inicio: string;
    fecha_hora_fin: string;
-   estado: EstadoReservaEnum;
    proposito: string;
-   notas?: string;
-   aprobado_por_id?: string;
-   fecha_aprobacion?: string;
-   check_in_time?: string;
-   check_out_time?: string;
-   notas_administrador?: string;
-   notas_devolucion?: string;
-   created_at: string;
-   updated_at: string;
-   equipo: EquipoSimple;
-   solicitante: UsuarioSimple;
-   aprobado_por?: UsuarioSimple;
+   notas?: string | null;
 }
 
-export interface InventarioStock {
-   id: string;
-   tipo_item: {
-      nombre: string;
-      sku?: string;
-      stock_minimo: number;
-   };
-   ubicacion: string;
-   cantidad_actual: number;
-   lote?: string;
+export interface ReservaEquipoUpdateEstado {
+   estado: EstadoReservaEnum;
+   notas_administrador?: string | null;
 }
 
-export interface TipoItemInventario {
-   id: string;
-   nombre: string;
-   categoria: string;
-   marca?: string;
-   modelo?: string;
-   unidad_medida: string;
+export interface ReservaEquipoCheckInOut {
+   check_in_time?: string | null;
+   check_out_time?: string | null;
+   notas_devolucion?: string | null;
 }
 
-export interface Notificacion {
-   id: string;
-   mensaje: string;
-   leido: boolean;
-   created_at: string;
-}
-
-export interface AuditLog {
-   id: string;
-   audit_timestamp: string;
-   table_name: string;
-   operation: string;
-   username: string;
-   app_user_id?: string;
-}
-
-export interface BackupLog {
-   id: string;
-   backup_timestamp: string;
-   backup_type: string;
-   backup_status: string;
-   file_path?: string;
-   error_message?: string;
-   duration?: string;
+export interface DocumentacionVerify {
+   estado: 'Verificado' | 'Rechazado';
+   notas_verificacion?: string | null;
 }

@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import {
    EquipoRead, Mantenimiento, Documentacion, Movimiento,
-   TipoMantenimiento, TipoDocumento, EquipoSimple, ComponenteInfo, PadreInfo, LicenciaSoftware
+   TipoMantenimiento, TipoDocumento, EquipoSimple, ComponenteInfo, PadreInfo, LicenciaSoftware, Proveedor
 } from "@/types/api";
 import { EquipoDetailClient } from './components/EquipoDetailClient';
 
@@ -24,6 +24,7 @@ async function getData(id: string) {
       `/equipos/?limit=500`,
       `/catalogos/tipos-mantenimiento/`,
       `/catalogos/tipos-documento/`,
+      `/proveedores/?limit=500`
    ];
 
    try {
@@ -34,12 +35,11 @@ async function getData(id: string) {
       const [
          equipoRes, componentesRes, parteDeRes, mantenimientosRes,
          documentosRes, movimientosRes, licenciasRes, equiposDisponiblesRes,
-         tiposMantenimientoRes, tiposDocumentoRes
+         tiposMantenimientoRes, tiposDocumentoRes, proveedoresRes
       ] = responses;
 
       if (!equipoRes.ok) return null;
 
-      // ✅ Procesamos la respuesta de asignaciones para obtener solo las licencias
       const asignaciones = licenciasRes.ok ? await licenciasRes.json() as { licencia: LicenciaSoftware }[] : [];
       const licencias = asignaciones.map(a => a.licencia);
 
@@ -54,6 +54,7 @@ async function getData(id: string) {
          equiposDisponibles: equiposDisponiblesRes.ok ? await equiposDisponiblesRes.json() as EquipoSimple[] : [],
          tiposMantenimiento: tiposMantenimientoRes.ok ? await tiposMantenimientoRes.json() as TipoMantenimiento[] : [],
          tiposDocumento: tiposDocumentoRes.ok ? await tiposDocumentoRes.json() as TipoDocumento[] : [],
+         proveedores: proveedoresRes.ok ? await proveedoresRes.json() as Proveedor[] : [],
       };
 
       return data;

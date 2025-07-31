@@ -2,7 +2,7 @@
 
 import {
    EquipoRead, Mantenimiento, Documentacion, Movimiento,
-   TipoMantenimiento, TipoDocumento, EquipoSimple, ComponenteInfo, PadreInfo, LicenciaSoftware
+   TipoMantenimiento, TipoDocumento, EquipoSimple, ComponenteInfo, PadreInfo, LicenciaSoftware, Proveedor
 } from "@/types/api";
 import { Badge } from '@/components/ui/Badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
@@ -25,6 +25,7 @@ interface EquipoDetailClientProps {
    equiposDisponibles: EquipoSimple[];
    tiposMantenimiento: TipoMantenimiento[];
    tiposDocumento: TipoDocumento[];
+   proveedores: Proveedor[];
 }
 
 export function EquipoDetailClient({
@@ -37,7 +38,8 @@ export function EquipoDetailClient({
    licencias,
    equiposDisponibles,
    tiposMantenimiento,
-   tiposDocumento
+   tiposDocumento,
+   proveedores
 }: EquipoDetailClientProps) {
 
    return (
@@ -87,10 +89,16 @@ export function EquipoDetailClient({
                </Card>
             </TabsContent>
 
-            <TabsContent value="mantenimiento"><EquipoMantenimientoTab equipoId={equipo.id} mantenimientos={mantenimientos} tiposMantenimiento={tiposMantenimiento} /></TabsContent>
+            <TabsContent value="mantenimiento">
+               <EquipoMantenimientoTab
+                  equipoId={equipo.id}
+                  mantenimientos={mantenimientos}
+                  tiposMantenimiento={tiposMantenimiento}
+                  proveedores={proveedores}
+               />
+            </TabsContent>
             <TabsContent value="documentacion"><EquipoDocumentacionTab equipoId={equipo.id} documentos={documentos} tiposDocumento={tiposDocumento} /></TabsContent>
 
-            {/* ✅ Pestaña de Licencias */}
             <TabsContent value="licencias">
                <Card className="mt-4">
                   <CardHeader><CardTitle>Licencias Asignadas</CardTitle></CardHeader>

@@ -84,7 +84,6 @@ export function EquipoComponentesTab({ equipoId, componentes, equiposDisponibles
                </DialogContent>
             </Dialog>
          </div>
-         {/* ✅ CORRECCIÓN: Pasamos el `id` de la columna para el filtrado */}
          <DataTable columns={columns} data={componentes} filterColumn="nombre" />
       </div>
    );

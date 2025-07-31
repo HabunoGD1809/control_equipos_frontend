@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
-import { PlusCircle, MoreHorizontal, Trash2 } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Trash2, Edit } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -11,25 +11,38 @@ import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/Dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/DropdownMenu";
-import { Mantenimiento, TipoMantenimiento } from "@/types/api";
+import { Mantenimiento, Proveedor, TipoMantenimiento } from "@/types/api";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { ScheduleMantenimientoForm } from "./ScheduleMantenimientoForm";
 import { Badge } from "@/components/ui/Badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/AlertDialog";
+import { EditarMantenimientoForm } from "@/app/(dashboard)/mantenimientos/components/EditarMantenimientoForm";
+import { useHasPermission } from "@/hooks/useHasPermission";
 
 interface EquipoMantenimientoTabProps {
    equipoId: string;
    mantenimientos: Mantenimiento[];
    tiposMantenimiento: TipoMantenimiento[];
+   proveedores: Proveedor[]; // Añadir proveedores para el formulario de edición
 }
 
-export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenimiento }: EquipoMantenimientoTabProps) {
-   const [isModalOpen, setIsModalOpen] = useState(false);
+export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenimiento, proveedores }: EquipoMantenimientoTabProps) {
+   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+   const [selectedMantenimiento, setSelectedMantenimiento] = useState<Mantenimiento | null>(null);
    const router = useRouter();
+
+   const canEdit = useHasPermission(['editar_mantenimientos']);
+   const canDelete = useHasPermission(['eliminar_mantenimientos']);
 
    const {
       isAlertOpen, isDeleting, openAlert, setIsAlertOpen, handleDelete, itemToDelete
    } = useDeleteConfirmation("Mantenimiento", () => router.refresh());
+
+   const handleEditClick = (mantenimiento: Mantenimiento) => {
+      setSelectedMantenimiento(mantenimiento);
+      setIsEditModalOpen(true);
+   };
 
    const columns: ColumnDef<Mantenimiento>[] = [
       {
@@ -55,9 +68,16 @@ export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenim
             <DropdownMenu>
                <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                <DropdownMenuContent align="end">
-                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => openAlert(row.original.id)}>
-                     <Trash2 className="mr-2 h-4 w-4" />Eliminar
-                  </DropdownMenuItem>
+                  {canEdit && (
+                     <DropdownMenuItem onClick={() => handleEditClick(row.original)}>
+                        <Edit className="mr-2 h-4 w-4" /> Editar
+                     </DropdownMenuItem>
+                  )}
+                  {canDelete && (
+                     <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => openAlert(row.original.id)}>
+                        <Trash2 className="mr-2 h-4 w-4" />Eliminar
+                     </DropdownMenuItem>
+                  )}
                </DropdownMenuContent>
             </DropdownMenu>
          )
@@ -83,8 +103,27 @@ export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenim
             </AlertDialogContent>
          </AlertDialog>
 
+         {/* Modal de Edición */}
+         {selectedMantenimiento && (
+            <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+               <DialogContent>
+                  <DialogHeader>
+                     <DialogTitle>Editar Mantenimiento</DialogTitle>
+                  </DialogHeader>
+                  <EditarMantenimientoForm
+                     mantenimiento={selectedMantenimiento}
+                     proveedores={proveedores}
+                     onSuccess={() => {
+                        setIsEditModalOpen(false);
+                        setSelectedMantenimiento(null);
+                     }}
+                  />
+               </DialogContent>
+            </Dialog>
+         )}
+
          <div className="flex justify-end">
-            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+            <Dialog open={isScheduleModalOpen} onOpenChange={setIsScheduleModalOpen}>
                <DialogTrigger asChild>
                   <Button><PlusCircle className="mr-2 h-4 w-4" /> Programar Mantenimiento</Button>
                </DialogTrigger>
@@ -99,8 +138,7 @@ export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenim
                      equipoId={equipoId}
                      tiposMantenimiento={tiposMantenimiento}
                      onSuccess={() => {
-                        router.refresh();
-                        setIsModalOpen(false);
+                        setIsScheduleModalOpen(false);
                      }}
                   />
                </DialogContent>

@@ -399,6 +399,7 @@ export interface TipoItemInventarioSimple {
    sku?: string | null;
    marca?: string | null;
    modelo?: string | null;
+   stock_minimo: number;
 }
 
 export interface TipoItemInventario extends TipoItemInventarioSimple {

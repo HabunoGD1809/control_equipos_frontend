@@ -238,12 +238,17 @@ export const reservaSchema = z.object({
    path: ["fecha_fin"],
 });
 
+export const loginSchema = z.object({
+   username: z.string().min(1, { message: "El nombre de usuario es requerido." }),
+   password: z.string().min(1, { message: "La contraseña es requerida." }),
+});
+
 // Esquema para el formulario de cambio de contraseña
 export const changePasswordSchema = z.object({
-   current_password: requiredString("La contraseña actual es requerida."),
-   new_password: z.string().min(8, "La nueva contraseña debe tener al menos 8 caracteres."),
-   confirm_password: z.string()
+   current_password: z.string().min(1, { message: "La contraseña actual es requerida." }),
+   new_password: z.string().min(8, { message: "La nueva contraseña debe tener al menos 8 caracteres." }),
+   confirm_password: z.string(),
 }).refine(data => data.new_password === data.confirm_password, {
-   message: "Las contraseñas no coinciden.",
+   message: "Las nuevas contraseñas no coinciden.",
    path: ["confirm_password"],
 });

@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/components/ui/use-toast"
 import api from "@/lib/api"
 import { AxiosError } from "axios"
+import Link from "next/link"
 
 const formSchema = z.object({
    username: z.string().min(1, { message: "El nombre de usuario es requerido." }),
@@ -48,7 +49,7 @@ export default function ForgotPasswordPage() {
          toast({ title: "Éxito", description: "Token de reseteo generado. Por favor, entréguelo al usuario de forma segura." });
       } catch (err) {
          const axiosError = err as AxiosError<ApiError>;
-         setError(axiosError.response?.data?.detail || "No se pudo iniciar el reseteo de contraseña.");
+         setError(axiosError.response?.data?.detail || "No se pudo iniciar el reseteo de contraseña. Verifique que es un administrador.");
       }
    }
 
@@ -63,22 +64,27 @@ export default function ForgotPasswordPage() {
             <Card className="w-[420px]">
                <CardHeader className="text-center">
                   <div className="flex justify-center items-center mb-4"><KeyRound className="h-10 w-10 text-primary" /></div>
-                  <CardTitle>Reseteo de Contraseña (Admin)</CardTitle>
-                  <CardDescription>Genere un token de un solo uso para un usuario.</CardDescription>
+                  <CardTitle>Recuperación de Contraseña</CardTitle>
+                  <CardDescription>Esta acción debe ser realizada por un administrador.</CardDescription>
                </CardHeader>
                <CardContent>
                   {!resetInfo ? (
-                     <Form {...form}>
-                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                           <FormField control={form.control} name="username" render={({ field }) => (
-                              <FormItem><FormLabel>Nombre de Usuario</FormLabel><FormControl><Input placeholder="usuario.a.resetear" {...field} /></FormControl><FormMessage /></FormItem>
-                           )} />
-                           {error && <div className="flex items-center p-3 text-sm text-destructive bg-destructive/10 rounded-md"><AlertCircle className="h-4 w-4 mr-2" /><p>{error}</p></div>}
-                           <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-                              {form.formState.isSubmitting ? "Generando..." : "Generar Token"}
-                           </Button>
-                        </form>
-                     </Form>
+                     <>
+                        <p className="text-sm text-muted-foreground mb-4 text-center">
+                           Ingrese el nombre del usuario que necesita restablecer su contraseña. Se generará un token que deberá ser entregado al usuario.
+                        </p>
+                        <Form {...form}>
+                           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                              <FormField control={form.control} name="username" render={({ field }) => (
+                                 <FormItem><FormLabel>Nombre de Usuario</FormLabel><FormControl><Input placeholder="usuario.a.resetear" {...field} /></FormControl><FormMessage /></FormItem>
+                              )} />
+                              {error && <div className="flex items-center p-3 text-sm text-destructive bg-destructive/10 rounded-md"><AlertCircle className="h-4 w-4 mr-2" /><p>{error}</p></div>}
+                              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+                                 {form.formState.isSubmitting ? "Generando..." : "Generar Token de Reseteo"}
+                              </Button>
+                           </form>
+                        </Form>
+                     </>
                   ) : (
                      <div className="space-y-4 text-center">
                         <p>Token para <strong>{resetInfo.username}</strong>:</p>
@@ -86,10 +92,17 @@ export default function ForgotPasswordPage() {
                            <span className="truncate flex-1">{resetInfo.reset_token}</span>
                            <Button variant="ghost" size="icon" onClick={() => copyToClipboard(resetInfo.reset_token)}><Copy className="h-4 w-4" /></Button>
                         </div>
-                        <p className="text-xs text-muted-foreground">Este token expira en 15 minutos. Entréguelo al usuario.</p>
+                        <p className="text-xs text-muted-foreground">Este token expira en 15 minutos. Entréguelo de forma segura al usuario para que pueda <Link href="/reset-password"><span className="text-primary hover:underline">establecer su nueva contraseña</span></Link>.</p>
                         <Button variant="outline" onClick={() => setResetInfo(null)}>Generar otro token</Button>
                      </div>
                   )}
+                  <div className="mt-4 text-center text-sm">
+                     <Link href="/login" passHref>
+                        <span className="underline text-muted-foreground hover:text-primary cursor-pointer">
+                           Volver a Iniciar Sesión
+                        </span>
+                     </Link>
+                  </div>
                </CardContent>
             </Card>
          </motion.div>

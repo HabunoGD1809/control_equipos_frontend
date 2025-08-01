@@ -1,9 +1,11 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Usuario, Permiso } from '@/types/api';
+import { Usuario } from '@/types/api';
 import api from '@/lib/api';
 
-type UserProfile = (Omit<Usuario, 'rol'> & { rol: { id: string; nombre: string; permisos: Permiso[] } });
+// El tipo de usuario en el store será directamente el que nos da la API.
+// Esto evita discrepancias. El rol que viene en /usuarios/me es el simplificado.
+type UserProfile = Usuario;
 
 type AuthState = {
    user: UserProfile | null;

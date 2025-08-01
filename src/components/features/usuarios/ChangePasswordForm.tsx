@@ -32,7 +32,7 @@ export function ChangePasswordForm() {
    const onSubmit = async (data: FormValues) => {
       setIsLoading(true);
       try {
-         await api.put('/usuarios/me/password', {
+         await api.post('/auth/change-password', {
             current_password: data.current_password,
             new_password: data.new_password
          });

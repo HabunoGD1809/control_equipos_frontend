@@ -17,7 +17,7 @@ import { AxiosError } from "axios"
 
 const formSchema = z.object({
    username: z.string().min(1, "El nombre de usuario es requerido."),
-   token: z.string().uuid("El token no es válido."),
+   token: z.string().uuid("El token no es válido. Verifique que lo haya copiado correctamente."),
    new_password: z.string().min(8, "La nueva contraseña debe tener al menos 8 caracteres."),
 });
 
@@ -41,7 +41,7 @@ export default function ResetPasswordPage() {
          setSuccess(true);
       } catch (err) {
          const axiosError = err as AxiosError<ApiError>;
-         setError(axiosError.response?.data?.detail || "No se pudo cambiar la contraseña. Verifique los datos.");
+         setError(axiosError.response?.data?.detail || "No se pudo cambiar la contraseña. Verifique que los datos sean correctos y que el token no haya expirado.");
       }
    }
 
@@ -68,13 +68,13 @@ export default function ResetPasswordPage() {
                      <Form {...form}>
                         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                            <FormField control={form.control} name="username" render={({ field }) => (
-                              <FormItem><FormLabel>Nombre de Usuario</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                              <FormItem><FormLabel>Su Nombre de Usuario</FormLabel><FormControl><Input placeholder="su.usuario" {...field} /></FormControl><FormMessage /></FormItem>
                            )} />
                            <FormField control={form.control} name="token" render={({ field }) => (
-                              <FormItem><FormLabel>Token de Reseteo</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                              <FormItem><FormLabel>Token de Reseteo</FormLabel><FormControl><Input placeholder="Pegue el token aquí" {...field} /></FormControl><FormMessage /></FormItem>
                            )} />
                            <FormField control={form.control} name="new_password" render={({ field }) => (
-                              <FormItem><FormLabel>Nueva Contraseña</FormLabel><FormControl><Input type="password" {...field} /></FormControl><FormMessage /></FormItem>
+                              <FormItem><FormLabel>Nueva Contraseña</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} /></FormControl><FormMessage /></FormItem>
                            )} />
                            {error && <div className="flex items-center p-3 text-sm text-destructive bg-destructive/10 rounded-md"><AlertCircle className="h-4 w-4 mr-2" /><p>{error}</p></div>}
                            <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>

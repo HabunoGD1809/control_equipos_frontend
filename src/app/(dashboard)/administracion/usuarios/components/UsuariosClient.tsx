@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { PlusCircle, MoreHorizontal, Trash2 } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Trash2, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import {
@@ -18,6 +18,7 @@ import { Usuario, Rol } from "@/types/api";
 import { UsuarioForm } from "@/components/features/usuarios/UsuarioForm";
 import api from "@/lib/api";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
+import { useToast } from "@/components/ui/use-toast";
 
 interface UsuariosClientProps {
    initialData: Usuario[];
@@ -28,6 +29,13 @@ export const UsuariosClient: React.FC<UsuariosClientProps> = ({ initialData, rol
    const [usuarios, setUsuarios] = useState(initialData);
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [selectedUser, setSelectedUser] = useState<Usuario | null>(null);
+   const { toast } = useToast();
+
+   // Estado para el modal de reseteo de contraseña
+   const [resetInfo, setResetInfo] = useState<{ username: string, token: string } | null>(null);
+   const [isResetAlertOpen, setIsResetAlertOpen] = useState(false);
+   const [isGeneratingToken, setIsGeneratingToken] = useState(false);
+
 
    const {
       isAlertOpen,
@@ -53,6 +61,29 @@ export const UsuariosClient: React.FC<UsuariosClientProps> = ({ initialData, rol
       setSelectedUser(user);
       setIsModalOpen(true);
    };
+
+   const handleRequestReset = async (username: string) => {
+      setIsGeneratingToken(true);
+      try {
+         const response = await api.post('/auth/password-recovery/request-reset', { username });
+         setResetInfo({ username, token: response.data.reset_token });
+         setIsResetAlertOpen(true);
+      } catch (error) {
+         toast({
+            variant: "destructive",
+            title: "Error",
+            description: "No se pudo generar el token de reseteo. Verifique sus permisos.",
+         });
+      } finally {
+         setIsGeneratingToken(false);
+      }
+   };
+
+   const copyToClipboard = (text: string) => {
+      navigator.clipboard.writeText(text);
+      toast({ description: "Token copiado al portapapeles." });
+   };
+
 
    const columns: ColumnDef<Usuario>[] = [
       { accessorKey: "nombre_usuario", header: "Nombre de Usuario" },
@@ -83,6 +114,10 @@ export const UsuariosClient: React.FC<UsuariosClientProps> = ({ initialData, rol
                      <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                      <DropdownMenuItem onClick={() => openModal(usuario)}>
                         Editar Usuario
+                     </DropdownMenuItem>
+                     <DropdownMenuItem onClick={() => handleRequestReset(usuario.nombre_usuario)} disabled={isGeneratingToken}>
+                        <KeyRound className="mr-2 h-4 w-4" />
+                        {isGeneratingToken ? "Generando..." : "Resetear Contraseña"}
                      </DropdownMenuItem>
                      <DropdownMenuItem
                         className="text-destructive focus:text-destructive"
@@ -120,6 +155,29 @@ export const UsuariosClient: React.FC<UsuariosClientProps> = ({ initialData, rol
                </AlertDialogFooter>
             </AlertDialogContent>
          </AlertDialog>
+
+         <AlertDialog open={isResetAlertOpen} onOpenChange={setIsResetAlertOpen}>
+            <AlertDialogContent>
+               <AlertDialogHeader>
+                  <AlertDialogTitle>Token de Reseteo Generado</AlertDialogTitle>
+                  <AlertDialogDescription>
+                     Copie este token y entréguelo de forma segura al usuario <strong>{resetInfo?.username}</strong>. El token es válido por 15 minutos.
+                  </AlertDialogDescription>
+               </AlertDialogHeader>
+               <div className="p-4 bg-muted rounded-md font-mono text-sm break-all">
+                  {resetInfo?.token}
+               </div>
+               <AlertDialogFooter>
+                  <Button variant="outline" onClick={() => copyToClipboard(resetInfo?.token || '')}>
+                     Copiar Token
+                  </Button>
+                  <AlertDialogAction onClick={() => setIsResetAlertOpen(false)}>
+                     Cerrar
+                  </AlertDialogAction>
+               </AlertDialogFooter>
+            </AlertDialogContent>
+         </AlertDialog>
+
 
          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
             <DialogContent>

@@ -5,26 +5,17 @@ import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import { motion } from "framer-motion"
 import { LogIn, AlertCircle } from "lucide-react"
-import { AxiosError } from "axios"
-
+import Link from "next/link"
 import { Button } from "@/components/ui/Button"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form"
 import { Input } from "@/components/ui/Input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuthStore } from "@/store/authStore"
-import api from "@/lib/api"
-import { Usuario } from "@/types/api"
-
-// Esquema de validación con Zod
-const loginSchema = z.object({
-   username: z.string().min(1, { message: "El nombre de usuario es requerido." }),
-   password: z.string().min(1, { message: "La contraseña es requerida." }),
-});
-
+import { loginSchema } from "@/lib/zod"
+import { Token } from "@/types/api"
 
 type FormValues = z.infer<typeof loginSchema>
 
@@ -34,10 +25,9 @@ interface ApiError {
 
 export default function LoginPage() {
    const router = useRouter()
-   // Llama a las acciones y estados desde tu store de Zustand
-   const { setTokens, setUser } = useAuthStore();
    const { toast } = useToast()
    const [error, setError] = useState<string | null>(null)
+   const { setTokens, checkAuthStatus } = useAuthStore.getState();
 
    const form = useForm<FormValues>({
       resolver: zodResolver(loginSchema),
@@ -50,38 +40,40 @@ export default function LoginPage() {
    async function onSubmit(values: FormValues) {
       setError(null)
       try {
-         // 1. Pide los tokens
-         const tokenResponse = await api.post('/auth/login/access-token', new URLSearchParams({
-            username: values.username,
-            password: values.password
-         }));
+         const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(values)
+         });
 
-         const { access_token, refresh_token } = tokenResponse.data;
+         if (!response.ok) {
+            const errorData: ApiError = await response.json();
+            throw new Error(errorData.detail || 'Credenciales incorrectas.');
+         }
 
-         // 2. Guarda los tokens en el store de Zustand
-         setTokens({ accessToken: access_token, refreshToken: refresh_token });
+         const tokens: Token = await response.json();
 
-         // 3. Pide la información del usuario
-         const userResponse = await api.get<Usuario>('/usuarios/me');
+         setTokens({ accessToken: tokens.access_token, refreshToken: tokens.refresh_token });
 
-         // 4. Guarda la información del usuario en el store
-         setUser(userResponse.data);
+         await checkAuthStatus();
 
          toast({
             title: "¡Bienvenido!",
             description: "Has iniciado sesión correctamente.",
          })
+
          router.push("/dashboard")
-      } catch (err) {
-         const axiosError = err as AxiosError<ApiError>
-         const errorMessage = axiosError.response?.data?.detail || "Ocurrió un error inesperado."
+         router.refresh()
+
+      } catch (err: any) {
+         const errorMessage = err.message || "Ocurrió un error inesperado."
          setError(errorMessage)
          form.setValue("password", "")
       }
    }
 
    return (
-      <div className="flex items-center justify-center min-h-screen bg-secondary">
+      <div className="flex items-center justify-center min-h-screen">
          <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -105,7 +97,7 @@ export default function LoginPage() {
                               <FormItem>
                                  <FormLabel>Nombre de Usuario</FormLabel>
                                  <FormControl>
-                                    <Input placeholder="tu.usuario" {...field} />
+                                    <Input placeholder="usuario" {...field} />
                                  </FormControl>
                                  <FormMessage />
                               </FormItem>
@@ -136,9 +128,9 @@ export default function LoginPage() {
                      </form>
                   </Form>
                   <div className="mt-4 text-center text-sm">
-                     <Link href="/forgot-password" passHref>
-                        <span className="underline text-muted-foreground hover:text-primary cursor-pointer">
-                           ¿Olvidó su contraseña?
+                     <Link href="/reset-password" passHref>
+                        <span className="text-muted-foreground hover:text-primary cursor-pointer">
+                           ¿Olvidaste tu contraseña?
                         </span>
                      </Link>
                   </div>

@@ -46,7 +46,7 @@ export default function ResetPasswordPage() {
    }
 
    return (
-      <div className="flex items-center justify-center min-h-screen bg-secondary">
+      <div className="flex items-center justify-center min-h-screen">
          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
             <Card className="w-[420px]">
                <CardHeader className="text-center">
@@ -68,7 +68,7 @@ export default function ResetPasswordPage() {
                      <Form {...form}>
                         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                            <FormField control={form.control} name="username" render={({ field }) => (
-                              <FormItem><FormLabel>Su Nombre de Usuario</FormLabel><FormControl><Input placeholder="su.usuario" {...field} /></FormControl><FormMessage /></FormItem>
+                              <FormItem><FormLabel>Su Nombre de Usuario</FormLabel><FormControl><Input placeholder="usuario" {...field} /></FormControl><FormMessage /></FormItem>
                            )} />
                            <FormField control={form.control} name="token" render={({ field }) => (
                               <FormItem><FormLabel>Token de Reseteo</FormLabel><FormControl><Input placeholder="Pegue el token aquí" {...field} /></FormControl><FormMessage /></FormItem>

@@ -1,151 +1,309 @@
-"use client"
+"use client";
 
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import * as z from "zod"
-import { useState } from "react"
-import { CalendarIcon, Loader2 } from "lucide-react"
-import { format, setHours, setMinutes } from "date-fns"
-import { es } from "date-fns/locale"
-import { AxiosError } from "axios"
+import { useState, useMemo } from "react";
+import { useForm } from "react-hook-form";
+import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
+import { z } from "zod";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { format, setHours, setMinutes } from "date-fns";
+import { es } from "date-fns/locale";
+import { CalendarIcon, Loader2, AlertCircle } from "lucide-react";
 
-import { Button } from "@/components/ui/Button"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/Popover"
-import { Calendar } from "@/components/ui/Calendar"
-import { Textarea } from "@/components/ui/Textarea"
-import { useToast } from "@/components/ui/use-toast"
-import { reservaSchema } from "@/lib/zod"
-import api from "@/lib/api"
-import { EquipoSimple, ReservaEquipo } from "@/types/api"
-import { cn } from "@/lib/utils"
+import { reservaSchema } from "@/lib/zod";
+import { useCheckAvailability } from "@/hooks/useCheckAvailability";
+import type { EquipoSimple, ReservaEquipo, ReservaEquipoCreate } from "@/types/api";
+import { useToast } from "@/components/ui/use-toast";
+import { cn } from "@/lib/utils";
 
-const timeOptions = Array.from({ length: 24 * 2 }, (_, i) => {
-   const hour = Math.floor(i / 2);
-   const minute = (i % 2) * 30;
-   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+import { Button } from "@/components/ui/Button";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/Popover";
+import { Calendar } from "@/components/ui/Calendar";
+import { Textarea } from "@/components/ui/Textarea";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/Alert";
+
+import { reservasService } from "@/app/services/reservasService";
+
+const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
+   const h = String(Math.floor(i / 2)).padStart(2, "0");
+   const m = i % 2 === 0 ? "00" : "30";
+   return `${h}:${m}`;
 });
-
-interface ReservaFormProps {
-   equipos: EquipoSimple[];
-   onSuccess: (newReserva: ReservaEquipo) => void;
-}
 
 type FormValues = z.infer<typeof reservaSchema>;
 
-interface ApiError {
-   detail: string;
+interface ReservaFormProps {
+   equipos: EquipoSimple[];
+   initialData?: ReservaEquipo | null;
+   onSuccess: (newReserva?: ReservaEquipo) => void;
 }
 
-export function ReservaForm({ equipos, onSuccess }: ReservaFormProps) {
+export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProps) {
    const { toast } = useToast();
-   const [isLoading, setIsLoading] = useState(false);
+   const queryClient = useQueryClient();
+   const { checkOverlap, isChecking } = useCheckAvailability();
+   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+
+   const defaultValues = useMemo<FormValues>(() => {
+      if (initialData) {
+         const start = new Date(initialData.fecha_hora_inicio);
+         const end = new Date(initialData.fecha_hora_fin);
+         return {
+            equipo_id: initialData.equipo_id,
+            proposito: initialData.proposito ?? "",
+            notas: initialData.notas ?? "",
+            fecha_inicio: start,
+            hora_inicio: format(start, "HH:mm"),
+            fecha_fin: end,
+            hora_fin: format(end, "HH:mm"),
+         };
+      }
+      return {
+         equipo_id: "",
+         proposito: "",
+         notas: "",
+         fecha_inicio: new Date(),
+         hora_inicio: "09:00",
+         fecha_fin: new Date(),
+         hora_fin: "10:00",
+      };
+   }, [initialData]);
 
    const form = useForm<FormValues>({
-      resolver: zodResolver(reservaSchema),
-      defaultValues: {
-         fecha_inicio: new Date(),
-         fecha_fin: new Date(),
-      }
+      resolver: standardSchemaResolver(reservaSchema),
+      defaultValues,
+   });
+
+   const mutation = useMutation({
+      mutationFn: async (payload: ReservaEquipoCreate) => {
+         return await reservasService.create(payload);
+      },
+      onSuccess: (data) => {
+         toast({ title: "Éxito", description: "Reserva solicitada correctamente." });
+         queryClient.invalidateQueries({ queryKey: ["reservas"] });
+         onSuccess(data);
+      },
+      onError: (err: unknown) => {
+         const e = err as Error & { status?: number };
+         if (e.status === 409) {
+            setAvailabilityError("Conflicto de horario detectado por el servidor.");
+            return;
+         }
+         toast({ variant: "destructive", title: "Error", description: e.message || "No se pudo procesar la solicitud." });
+      },
    });
 
    const onSubmit = async (data: FormValues) => {
-      setIsLoading(true);
-      try {
-         const [startHour, startMinute] = data.hora_inicio.split(':').map(Number);
-         const [endHour, endMinute] = data.hora_fin.split(':').map(Number);
+      setAvailabilityError(null);
 
-         const fecha_hora_inicio = setMinutes(setHours(data.fecha_inicio, startHour), startMinute);
-         const fecha_hora_fin = setMinutes(setHours(data.fecha_fin, endHour), endMinute);
+      const [sh, sm] = data.hora_inicio.split(":").map(Number);
+      const [eh, em] = data.hora_fin.split(":").map(Number);
 
-         const payload = {
-            equipo_id: data.equipo_id,
-            proposito: data.proposito,
-            notas: data.notas,
-            fecha_hora_inicio: fecha_hora_inicio.toISOString(),
-            fecha_hora_fin: fecha_hora_fin.toISOString(),
-         };
+      const fecha_hora_inicio = setMinutes(setHours(data.fecha_inicio, sh), sm);
+      const fecha_hora_fin = setMinutes(setHours(data.fecha_fin, eh), em);
 
-         const response = await api.post<ReservaEquipo>('/reservas/', payload);
-         toast({ title: "Éxito", description: "Reserva solicitada correctamente." });
-         onSuccess(response.data);
+      const hasConflict = await checkOverlap({
+         equipoId: data.equipo_id,
+         startDate: fecha_hora_inicio,
+         endDate: fecha_hora_fin,
+         excludeReservaId: initialData?.id,
+      });
 
-      } catch (error) {
-         const axiosError = error as AxiosError<ApiError>;
-         const msg = axiosError.response?.data?.detail || "No se pudo crear la reserva. Verifique la disponibilidad.";
-         toast({ variant: "destructive", title: "Error", description: msg });
-      } finally {
-         setIsLoading(false);
+      if (hasConflict) {
+         setAvailabilityError("El equipo ya tiene una reserva confirmada en este horario. Seleccione otro rango.");
+         return;
       }
+
+      const payload: ReservaEquipoCreate = {
+         equipo_id: data.equipo_id,
+         proposito: data.proposito,
+         notas: data.notas ?? undefined,
+         fecha_hora_inicio: fecha_hora_inicio.toISOString(),
+         fecha_hora_fin: fecha_hora_fin.toISOString(),
+      };
+
+      mutation.mutate(payload);
    };
+
+   const isSubmitting = mutation.isPending || isChecking;
 
    return (
       <Form {...form}>
          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
-            <FormField control={form.control} name="equipo_id" render={({ field }) => (
-               <FormItem><FormLabel>Equipo a Reservar</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                     <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un equipo..." /></SelectTrigger></FormControl>
-                     <SelectContent>{equipos.map(e => <SelectItem key={e.id} value={e.id}>{e.nombre} ({e.numero_serie})</SelectItem>)}</SelectContent>
-                  </Select><FormMessage />
-               </FormItem>
-            )} />
+            {availabilityError && (
+               <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Horario no disponible</AlertTitle>
+                  <AlertDescription>{availabilityError}</AlertDescription>
+               </Alert>
+            )}
+
+            <FormField
+               control={form.control}
+               name="equipo_id"
+               render={({ field }) => (
+                  <FormItem>
+                     <FormLabel>Equipo a Reservar</FormLabel>
+                     <Select
+                        onValueChange={(val) => {
+                           field.onChange(val);
+                           setAvailabilityError(null);
+                        }}
+                        value={field.value}
+                        disabled={!!initialData}
+                     >
+                        <FormControl>
+                           <SelectTrigger><SelectValue placeholder="Seleccione un equipo..." /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                           {equipos.map((e) => (
+                              <SelectItem key={e.id} value={e.id}>
+                                 {e.nombre} ({e.numero_serie})
+                              </SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
+                     <FormMessage />
+                  </FormItem>
+               )}
+            />
+
             <div className="grid grid-cols-2 gap-4">
-               <FormField control={form.control} name="fecha_inicio" render={({ field }) => (
-                  <FormItem className="flex flex-col"><FormLabel>Fecha de Inicio</FormLabel>
-                     <Popover><PopoverTrigger asChild><FormControl>
-                        <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                           {field.value ? format(field.value, "PPP", { locale: es }) : <span>Seleccione fecha</span>}
-                           <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                        </Button>
-                     </FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start">
-                           <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
-                        </PopoverContent></Popover><FormMessage />
-                  </FormItem>
-               )} />
-               <FormField control={form.control} name="hora_inicio" render={({ field }) => (
-                  <FormItem><FormLabel>Hora de Inicio</FormLabel>
-                     <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl><SelectTrigger><SelectValue placeholder="HH:MM" /></SelectTrigger></FormControl>
-                        <SelectContent>{timeOptions.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-                     </Select><FormMessage />
-                  </FormItem>
-               )} />
+               <FormField
+                  control={form.control}
+                  name="fecha_inicio"
+                  render={({ field }) => (
+                     <FormItem className="flex flex-col">
+                        <FormLabel>Fecha de Inicio</FormLabel>
+                        <Popover>
+                           <PopoverTrigger asChild>
+                              <FormControl>
+                                 <Button
+                                    variant="outline"
+                                    className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
+                                 >
+                                    {field.value ? format(field.value, "PPP", { locale: es }) : "Seleccione fecha"}
+                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                 </Button>
+                              </FormControl>
+                           </PopoverTrigger>
+                           <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar mode="single" selected={field.value} onSelect={field.onChange} autoFocus />
+                           </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                     </FormItem>
+                  )}
+               />
+
+               <FormField
+                  control={form.control}
+                  name="hora_inicio"
+                  render={({ field }) => (
+                     <FormItem>
+                        <FormLabel>Hora de Inicio</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                           <FormControl>
+                              <SelectTrigger><SelectValue placeholder="HH:MM" /></SelectTrigger>
+                           </FormControl>
+                           <SelectContent>
+                              {TIME_OPTIONS.map((t) => (
+                                 <SelectItem key={t} value={t}>{t}</SelectItem>
+                              ))}
+                           </SelectContent>
+                        </Select>
+                        <FormMessage />
+                     </FormItem>
+                  )}
+               />
             </div>
+
             <div className="grid grid-cols-2 gap-4">
-               <FormField control={form.control} name="fecha_fin" render={({ field }) => (
-                  <FormItem className="flex flex-col"><FormLabel>Fecha de Fin</FormLabel>
-                     <Popover><PopoverTrigger asChild><FormControl>
-                        <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                           {field.value ? format(field.value, "PPP", { locale: es }) : <span>Seleccione fecha</span>}
-                           <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                        </Button>
-                     </FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start">
-                           <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
-                        </PopoverContent></Popover><FormMessage />
-                  </FormItem>
-               )} />
-               <FormField control={form.control} name="hora_fin" render={({ field }) => (
-                  <FormItem><FormLabel>Hora de Fin</FormLabel>
-                     <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl><SelectTrigger><SelectValue placeholder="HH:MM" /></SelectTrigger></FormControl>
-                        <SelectContent>{timeOptions.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-                     </Select><FormMessage />
-                  </FormItem>
-               )} />
+               <FormField
+                  control={form.control}
+                  name="fecha_fin"
+                  render={({ field }) => (
+                     <FormItem className="flex flex-col">
+                        <FormLabel>Fecha de Fin</FormLabel>
+                        <Popover>
+                           <PopoverTrigger asChild>
+                              <FormControl>
+                                 <Button
+                                    variant="outline"
+                                    className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
+                                 >
+                                    {field.value ? format(field.value, "PPP", { locale: es }) : "Seleccione fecha"}
+                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                 </Button>
+                              </FormControl>
+                           </PopoverTrigger>
+                           <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar mode="single" selected={field.value} onSelect={field.onChange} autoFocus />
+                           </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                     </FormItem>
+                  )}
+               />
+
+               <FormField
+                  control={form.control}
+                  name="hora_fin"
+                  render={({ field }) => (
+                     <FormItem>
+                        <FormLabel>Hora de Fin</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                           <FormControl>
+                              <SelectTrigger><SelectValue placeholder="HH:MM" /></SelectTrigger>
+                           </FormControl>
+                           <SelectContent>
+                              {TIME_OPTIONS.map((t) => (
+                                 <SelectItem key={t} value={t}>{t}</SelectItem>
+                              ))}
+                           </SelectContent>
+                        </Select>
+                        <FormMessage />
+                     </FormItem>
+                  )}
+               />
             </div>
-            <FormField control={form.control} name="proposito" render={({ field }) => (
-               <FormItem><FormLabel>Propósito de la Reserva</FormLabel><FormControl><Textarea placeholder="Ej: Evento de marketing en..." {...field} /></FormControl><FormMessage />
-               </FormItem>
-            )} />
+
+            <FormField
+               control={form.control}
+               name="proposito"
+               render={({ field }) => (
+                  <FormItem>
+                     <FormLabel>Propósito de la Reserva</FormLabel>
+                     <FormControl>
+                        <Textarea placeholder="Ej: Evento de marketing..." {...field} value={field.value ?? ""} />
+                     </FormControl>
+                     <FormMessage />
+                  </FormItem>
+               )}
+            />
+
+            <FormField
+               control={form.control}
+               name="notas"
+               render={({ field }) => (
+                  <FormItem>
+                     <FormLabel>Notas Adicionales (Opcional)</FormLabel>
+                     <FormControl>
+                        <Textarea placeholder="Requerimientos especiales..." {...field} value={field.value ?? ""} />
+                     </FormControl>
+                     <FormMessage />
+                  </FormItem>
+               )}
+            />
+
             <div className="flex justify-end pt-4">
-               <Button type="submit" disabled={isLoading}>
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Solicitar Reserva
+               <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isChecking ? "Verificando..." : "Solicitar Reserva"}
                </Button>
             </div>
          </form>
       </Form>
-   )
+   );
 }

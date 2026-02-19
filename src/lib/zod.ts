@@ -1,254 +1,795 @@
 import * as z from "zod";
+import { isBefore, isAfter, startOfDay, isValid } from "date-fns";
+import {
+  EstadoMantenimientoEnum,
+  TipoMovimientoEquipoEnum,
+  CategoriaItemEnum,
+  UnidadMedidaEnum,
+  TipoLicenciaSoftwareEnum,
+  MetricaLicenciamientoEnum,
+  TipoMovimientoInvEnum,
+  TipoRelacionComponenteEnum,
+  TipoDocumento,
+  TipoMantenimiento,
+  EstadoDocumentoEnum,
+  TipoMovimientoEquipo,
+} from "@/types/api";
 
-const requiredString = (message = "Este campo es requerido.") =>
-   z.string({ error: (iss) => iss.input === undefined ? message : undefined })
-      .min(1, { message });
-
-const requiredUuid = (message = "Debe seleccionar una opción.") =>
-   requiredString(message).uuid({ message });
-
-const requiredDate = (message = "La fecha es requerida.") =>
-   z.date({
-      error: (iss) => iss.input === undefined ? message : "Fecha inválida."
-   });
-
-const requiredEnum = <T extends [string, ...string[]]>(
-   values: T,
-   message = "Debe seleccionar una opción."
-) =>
-   z.enum(values).refine(
-      (val) => values.includes(val),
-      { params: { message } }
-   ).superRefine((val, ctx) => {
-      if (!values.includes(val)) {
-         ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message,
-         });
-      }
-   });
+// --- HELPERS & CONSTANTS ---
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
-const ACCEPTED_FILE_TYPES = ["image/jpeg", "image/png", "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"];
 
-export const documentoSchema = z.object({
-   titulo: requiredString("El título es requerido.").min(3).max(255),
-   tipo_documento_id: requiredUuid("Debe seleccionar un tipo de documento."),
-   descripcion: z.string().optional().nullable(),
-   file: z
-      .any()
-      .refine((file) => file, "El archivo es requerido.")
-      .refine((file) => file?.size <= MAX_FILE_SIZE, `El tamaño máximo es 10 MB.`)
-      .refine(
-         (file) => ACCEPTED_FILE_TYPES.includes(file?.type),
-         "Formato de archivo no soportado (.jpg, .png, .pdf, .docx, .xlsx)"
-      ),
+// Mapa de extensiones (BD) a MIME Types (Navegador)
+export const MIME_TYPE_MAP: Record<string, string[]> = {
+  pdf: ["application/pdf"],
+  jpg: ["image/jpeg"],
+  jpeg: ["image/jpeg"],
+  png: ["image/png"],
+  webp: ["image/webp"],
+  doc: ["application/msword"],
+  docx: [
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ],
+  xls: ["application/vnd.ms-excel"],
+  xlsx: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+  xml: ["text/xml", "application/xml"],
+  txt: ["text/plain"],
+};
+
+// ─── HELPERS DE VALIDACIÓN ──────────────────────────────────────────────────
+
+// v4: z.string() ya no acepta `{ error }` como primer argumento directo para
+//     mensajes de tipo — se pasa el string directo como shorthand.
+const requiredString = (message = "Este campo es requerido.") =>
+  z.string(message).min(1, { error: message });
+
+// v4: z.string().pipe(z.uuid()) → z.guid()
+//     z.guid() es el equivalente exacto al viejo z.string().uuid() de v3
+//     (patrón 8-4-4-4-12 hex, sin validación estricta RFC 4122).
+//     Usamos guid() en lugar de uuid() para mantener compatibilidad con
+//     UUIDs generados por la base de datos que pueden no cumplir RFC 4122 estricto.
+const requiredUuid = (message = "Debe seleccionar una opción.") =>
+  z.guid({ error: message });
+
+const requiredDate = (message = "La fecha es requerida.") =>
+  z.date({ error: message });
+
+// v4: z.enum() acepta directamente un array readonly, sin necesidad del
+//     tuple hack `[values[0], ...values.slice(1)] as [T, ...T[]]`.
+const requiredEnum = <T extends string>(
+  values: T[],
+  message = "Debe seleccionar una opción válida.",
+) => z.enum(values as [T, ...T[]], { error: message });
+
+// ─── SCHEMAS DINÁMICOS ───────────────────────────────────────────────────────
+
+/**
+ * Valida documentos contra las reglas de la BD (TiposDocumento)
+ */
+export const createDocumentoSchema = (tiposDisponibles: TipoDocumento[]) =>
+  z
+    .object({
+      titulo: requiredString("El título es requerido.").min(3).max(255),
+      tipo_documento_id: requiredUuid("Debe seleccionar un tipo de documento."),
+      descripcion: z.string().optional().nullable(),
+      file: z
+        .any()
+        // v4: .refine() sigue igual, message → sigue aceptándose como string directo
+        .refine((file) => file, "El archivo es requerido.")
+        .refine(
+          (file) => file?.size <= MAX_FILE_SIZE,
+          "El tamaño máximo es 10 MB.",
+        ),
+    })
+    // v4: .superRefine() → .check() es la API preferida en v4.
+    //     .check() recibe (ctx) directamente; el valor se accede via ctx.value.
+    .check((ctx) => {
+      const data = ctx.value;
+
+      const tipoSeleccionado = tiposDisponibles.find(
+        (t) => t.id === data.tipo_documento_id,
+      );
+
+      if (!tipoSeleccionado) {
+        ctx.issues.push({
+          code: "custom",
+          message: "Tipo de documento inválido.",
+          path: ["tipo_documento_id"],
+          input: data.tipo_documento_id,
+        });
+        return;
+      }
+
+      const file = data.file as File;
+      if (!file) return;
+
+      if (
+        tipoSeleccionado.formato_permitido &&
+        tipoSeleccionado.formato_permitido.length > 0
+      ) {
+        const allowedMimes = tipoSeleccionado.formato_permitido.flatMap(
+          (ext) => MIME_TYPE_MAP[ext.toLowerCase()] || [],
+        );
+
+        if (allowedMimes.length > 0 && !allowedMimes.includes(file.type)) {
+          ctx.issues.push({
+            code: "custom",
+            message: `Formato inválido. Permitidos: ${tipoSeleccionado.formato_permitido.join(
+              ", ",
+            )}`,
+            path: ["file"],
+            input: file.type,
+          });
+        }
+      }
+    });
+
+export const documentacionUpdateSchema = z.object({
+  titulo: z.string().min(3).max(255).optional(),
+  descripcion: z.string().optional().nullable(),
+  // v4: z.string().pipe(z.uuid()) → z.guid()
+  tipo_documento_id: z.guid().optional(),
 });
 
-export const equipoSchema = z.object({
-   nombre: requiredString("El nombre debe tener al menos 2 caracteres.").min(2).max(255),
-   numero_serie: requiredString("El número de serie es requerido."),
-   codigo_interno: z.string().max(100).optional().nullable(),
-   estado_id: requiredUuid("Debe seleccionar un estado."),
-   proveedor_id: z.string().uuid().optional().nullable(),
-   ubicacion_actual: z.string().max(255).optional().nullable(),
-   marca: z.string().max(100).optional().nullable(),
-   modelo: z.string().max(100).optional().nullable(),
-   fecha_adquisicion: z.date().optional().nullable(),
-   fecha_puesta_marcha: z.date().optional().nullable(),
-   fecha_garantia_expiracion: z.date().optional().nullable(),
-   valor_adquisicion: z.coerce.number().min(0).optional().nullable(),
-   centro_costo: z.string().max(100).optional().nullable(),
-   notas: z.string().optional().nullable(),
-});
+export const createCierreMantenimientoSchema = (
+  tipoMantenimiento: TipoMantenimiento,
+  tieneDocumentosAdjuntos: boolean,
+) =>
+  z
+    .object({
+      estado: requiredEnum(Object.values(EstadoMantenimientoEnum)),
+      // v4: z.coerce sigue igual
+      costo_real: z.coerce
+        .number()
+        .min(0, { error: "El costo real es requerido." }),
+      fecha_inicio: requiredDate("Fecha de inicio real requerida."),
+      fecha_finalizacion: requiredDate("Fecha de finalización requerida."),
+      observaciones: z.string().optional().nullable(),
+      tecnico_responsable: requiredString("Técnico responsable requerido."),
+    })
+    // v4: .superRefine() → .check()
+    .check((ctx) => {
+      const data = ctx.value;
+
+      if (
+        data.estado === EstadoMantenimientoEnum.Completado &&
+        tipoMantenimiento.requiere_documentacion &&
+        !tieneDocumentosAdjuntos
+      ) {
+        ctx.issues.push({
+          code: "custom",
+          message:
+            "Este tipo de mantenimiento requiere adjuntar documentación antes de completarse.",
+          path: ["estado"],
+          input: data.estado,
+        });
+      }
+
+      if (
+        data.fecha_inicio &&
+        data.fecha_finalizacion &&
+        isAfter(data.fecha_inicio, data.fecha_finalizacion)
+      ) {
+        ctx.issues.push({
+          code: "custom",
+          message: "La finalización no puede ser antes del inicio.",
+          path: ["fecha_finalizacion"],
+          input: data.fecha_finalizacion,
+        });
+      }
+    });
+
+// ─── EQUIPOS ────────────────────────────────────────────────────────────────
+
+export const equipoSchema = z
+  .object({
+    nombre: requiredString("El nombre debe tener al menos 2 caracteres.")
+      .min(2)
+      .max(255),
+    numero_serie: requiredString("El número de serie es requerido.").regex(
+      // /^[A-Z0-9]+-[A-Z0-9]+-[A-Z0-9]+$/,
+      /^[A-Z0-9]{3}-[A-Z0-9]{3}-[A-Z0-9]{3}$/,
+      // v4: .regex() segundo argumento puede ser string directamente (sin objeto)
+      "Formato estricto: XXX-000-XXX (Solo Mayúsculas, Números y Guiones)",
+    ),
+    codigo_interno: z.string().max(100).optional().nullable(),
+    estado_id: requiredUuid("Debe seleccionar un estado."),
+    // v4: z.string().pipe(z.uuid()) → z.guid()
+    proveedor_id: z.guid().optional().nullable(),
+    ubicacion_actual: z.string().max(255).optional().nullable(),
+    marca: z.string().max(100).optional().nullable(),
+    modelo: z.string().max(100).optional().nullable(),
+    fecha_adquisicion: z.date().optional().nullable(),
+    fecha_puesta_marcha: z.date().optional().nullable(),
+    fecha_garantia_expiracion: z.date().optional().nullable(),
+    valor_adquisicion: z.coerce
+      .number()
+      .min(0, { error: "El valor no puede ser negativo." })
+      .optional()
+      .nullable(),
+    centro_costo: z.string().max(100).optional().nullable(),
+    notas: z.string().optional().nullable(),
+  })
+  // v4: .superRefine() → .check()
+  .check((ctx) => {
+    const data = ctx.value;
+    const now = new Date();
+
+    if (data.fecha_adquisicion && isAfter(data.fecha_adquisicion, now)) {
+      ctx.issues.push({
+        code: "custom",
+        message: "La fecha de adquisición no puede ser futura.",
+        path: ["fecha_adquisicion"],
+        input: data.fecha_adquisicion,
+      });
+    }
+
+    if (
+      data.fecha_adquisicion &&
+      data.fecha_puesta_marcha &&
+      isBefore(data.fecha_puesta_marcha, data.fecha_adquisicion)
+    ) {
+      ctx.issues.push({
+        code: "custom",
+        message: "La puesta en marcha no puede ser anterior a la adquisición.",
+        path: ["fecha_puesta_marcha"],
+        input: data.fecha_puesta_marcha,
+      });
+    }
+
+    if (
+      data.fecha_adquisicion &&
+      data.fecha_garantia_expiracion &&
+      !isAfter(data.fecha_garantia_expiracion, data.fecha_adquisicion)
+    ) {
+      ctx.issues.push({
+        code: "custom",
+        message: "La garantía debe expirar después de la adquisición.",
+        path: ["fecha_garantia_expiracion"],
+        input: data.fecha_garantia_expiracion,
+      });
+    }
+  });
 
 export const addComponenteSchema = z.object({
-   equipo_componente_id: requiredUuid("Debe seleccionar un equipo componente."),
-   cantidad: z.coerce.number().int().min(1, "La cantidad debe ser al menos 1."),
-   tipo_relacion: requiredEnum(
-      ["componente", "conectado_a", "parte_de", "accesorio"],
-      "Debe seleccionar un tipo de relación."
-   ),
-   notas: z.string().optional().nullable(),
+  // v4: requiredUuid ya usa z.guid() internamente
+  equipo_componente_id: requiredUuid("Debe seleccionar un equipo componente."),
+  cantidad: z.coerce
+    .number()
+    .int()
+    .min(1, { error: "La cantidad debe ser al menos 1." }),
+  tipo_relacion: requiredEnum(
+    Object.values(TipoRelacionComponenteEnum),
+    "Tipo de relación inválida.",
+  ),
+  notas: z.string().optional().nullable(),
 });
+
+export const editComponenteSchema = z.object({
+  cantidad: z.coerce
+    .number()
+    .int()
+    .min(1, { error: "La cantidad debe ser al menos 1." }),
+  tipo_relacion: requiredEnum(
+    Object.values(TipoRelacionComponenteEnum),
+    "Tipo de relación inválida.",
+  ),
+  notas: z.string().optional().nullable(),
+});
+
+// ─── MANTENIMIENTO ──────────────────────────────────────────────────────────
 
 export const mantenimientoSchema = z.object({
-   tipo_mantenimiento_id: requiredUuid("Debe seleccionar un tipo de mantenimiento."),
-   fecha_programada: requiredDate("La fecha programada es requerida."),
-   tecnico_responsable: requiredString("El nombre del técnico es requerido.").min(3),
-   prioridad: z.coerce.number().int().min(0).max(2, "La prioridad no es válida."),
-   observaciones: z.string().optional().nullable(),
+  equipo_id: requiredUuid("Debe seleccionar un equipo."),
+  tipo_mantenimiento_id: requiredUuid("Debe seleccionar un tipo de mantenimiento."),
+  fecha_programada: requiredDate("La fecha programada es requerida.").refine(
+    (date) => {
+      const today = startOfDay(new Date());
+      return isAfter(date, today) || date.getTime() >= today.getTime();
+    },
+    "La fecha programada no puede estar en el pasado.",
+  ),
+  tecnico_responsable: requiredString("El nombre del técnico es requerido.").min(3),
+  prioridad: z.coerce.number().int().min(0).max(2, { error: "Prioridad inválida (0-2)." }),
+  observaciones: z.string().optional().nullable(),
+  costo_estimado: z.coerce.number().min(0).optional().nullable(),
+  proveedor_servicio_id: z.guid().optional().nullable(),
 });
 
-// TipoItemSchema:
+export const mantenimientoUpdateSchema = z.object({
+  fecha_programada: z.date().optional(),
+  fecha_inicio: z.date().optional(),
+  fecha_finalizacion: z.date().optional(),
+  costo_estimado: z.coerce.number().optional(),
+  costo_real: z.coerce.number().optional(),
+  tecnico_responsable: z.string().optional(),
+  // v4: z.string().pipe(z.uuid()) → z.guid()
+  proveedor_servicio_id: z.guid().optional().nullable(),
+  prioridad: z.coerce.number().int().min(0).max(2).optional(),
+  estado: requiredEnum(Object.values(EstadoMantenimientoEnum)).optional(),
+  observaciones: z.string().optional(),
+});
+
+// ─── INVENTARIO ─────────────────────────────────────────────────────────────
+
 export const tipoItemSchema = z.object({
-   nombre: requiredString("El nombre es requerido.").min(2).max(100),
-   categoria: requiredEnum(
-      ["Consumible", "Parte Repuesto", "Accesorio", "Otro"],
-      "Debe seleccionar una categoría."
-   ),
-   unidad_medida: requiredEnum(
-      ["Unidad", "Metro", "Kg", "Litro", "Caja", "Paquete"],
-      "Debe seleccionar una unidad de medida."
-   ),
-   descripcion: z.string().optional().nullable(),
-   marca: z.string().max(100).optional().nullable(),
-   modelo: z.string().max(100).optional().nullable(),
-   sku: z.string().max(100).optional().nullable(),
-   stock_minimo: z.coerce.number().int().min(0).default(0),
-   proveedor_preferido_id: z.string().uuid().optional().nullable(),
+  nombre: requiredString("El nombre es requerido.").min(2).max(100),
+  categoria: requiredEnum(
+    Object.values(CategoriaItemEnum),
+    "Categoría inválida.",
+  ),
+  unidad_medida: requiredEnum(
+    Object.values(UnidadMedidaEnum),
+    "Unidad de medida inválida.",
+  ),
+  descripcion: z.string().optional().nullable(),
+  marca: z.string().max(100).optional().nullable(),
+  modelo: z.string().max(100).optional().nullable(),
+  sku: z.string().max(100).optional().nullable(),
+  codigo_barras: z.string().max(100).optional().nullable(),
+  stock_minimo: z.coerce.number().int().min(0).default(0),
+  // v4: z.string().pipe(z.uuid()) → z.guid()
+  proveedor_preferido_id: z.guid().optional().nullable(),
 });
 
-// En movimientos:
-export const inventarioMovimientoSchema = z.object({
-   tipo_item_id: requiredUuid("Debe seleccionar un ítem."),
-   tipo_movimiento: requiredEnum(
-      [
-         "Entrada Compra", "Salida Uso", "Salida Descarte", "Ajuste Positivo",
-         "Ajuste Negativo", "Transferencia Salida", "Transferencia Entrada",
-         "Devolucion Proveedor", "Devolucion Interna"
-      ],
-      "Debe seleccionar un tipo de movimiento."
-   ),
-   cantidad: z.coerce.number().int().min(1, "La cantidad debe ser mayor a 0."),
-   ubicacion_origen: z.string().optional().nullable(),
-   ubicacion_destino: z.string().optional().nullable(),
-   motivo_ajuste: z.string().optional().nullable(),
-   equipo_asociado_id: z.string().uuid().optional().nullable(),
-   notas: z.string().optional().nullable(),
-})
-   .refine(data => {
-      if (["Salida Uso", "Salida Descarte", "Transferencia Salida", "Devolucion Proveedor"]
-         .includes(data.tipo_movimiento)) {
-         return !!data.ubicacion_origen && data.ubicacion_origen.length > 0;
-      }
-      return true;
-   }, { message: "La ubicación de origen es requerida.", path: ["ubicacion_origen"] })
-   .refine(data => {
-      if (["Entrada Compra", "Transferencia Entrada", "Devolucion Interna"]
-         .includes(data.tipo_movimiento)) {
-         return !!data.ubicacion_destino && data.ubicacion_destino.length > 0;
-      }
-      return true;
-   }, { message: "La ubicación de destino es requerida.", path: ["ubicacion_destino"] })
-   .refine(data => {
-      if (data.tipo_movimiento.includes("Ajuste")) {
-         return !!data.motivo_ajuste && data.motivo_ajuste.length > 5;
-      }
-      return true;
-   }, { message: "El motivo es requerido para ajustes (mín. 5 caracteres).", path: ["motivo_ajuste"] });
+export const inventarioMovimientoSchema = z
+  .object({
+    tipo_item_id: requiredUuid("Debe seleccionar un ítem."),
+    tipo_movimiento: requiredEnum(
+      Object.values(TipoMovimientoInvEnum),
+      "Tipo de movimiento inválido.",
+    ),
+    cantidad: z.coerce
+      .number()
+      .int()
+      .min(1, { error: "La cantidad debe ser mayor a 0." }),
+    costo_unitario: z.coerce.number().min(0).optional().nullable(),
+    lote_origen: z.string().max(50).optional().default("N/A"),
+    lote_destino: z.string().max(50).optional().default("N/A"),
+    ubicacion_origen: z.string().optional().nullable(),
+    ubicacion_destino: z.string().optional().nullable(),
+    motivo_ajuste: z.string().optional().nullable(),
+    // v4: z.string().pipe(z.uuid()) → z.guid()
+    equipo_asociado_id: z.guid().optional().nullable(),
+    mantenimiento_id: z.guid().optional().nullable(),
+    notas: z.string().optional().nullable(),
+  })
+  // v4: .superRefine() → .check()
+  .check((ctx) => {
+    const data = ctx.value;
 
-// Esquema para el Catálogo de Software
+    const salidas = [
+      TipoMovimientoInvEnum.SalidaUso,
+      TipoMovimientoInvEnum.SalidaDescarte,
+      TipoMovimientoInvEnum.TransferenciaSalida,
+      TipoMovimientoInvEnum.DevolucionProveedor,
+    ] as string[];
+
+    if (salidas.includes(data.tipo_movimiento) && !data.ubicacion_origen) {
+      ctx.issues.push({
+        code: "custom",
+        message: "Origen requerido.",
+        path: ["ubicacion_origen"],
+        input: data.ubicacion_origen,
+      });
+    }
+
+    const entradas = [
+      TipoMovimientoInvEnum.EntradaCompra,
+      TipoMovimientoInvEnum.TransferenciaEntrada,
+      TipoMovimientoInvEnum.DevolucionInterna,
+    ] as string[];
+
+    if (entradas.includes(data.tipo_movimiento) && !data.ubicacion_destino) {
+      ctx.issues.push({
+        code: "custom",
+        message: "Destino requerido.",
+        path: ["ubicacion_destino"],
+        input: data.ubicacion_destino,
+      });
+    }
+
+    if (
+      data.tipo_movimiento.includes("Ajuste") &&
+      (!data.motivo_ajuste || data.motivo_ajuste.length < 5)
+    ) {
+      ctx.issues.push({
+        code: "custom",
+        message: "Motivo requerido (mín 5 caracteres).",
+        path: ["motivo_ajuste"],
+        input: data.motivo_ajuste,
+      });
+    }
+  });
+
+// ─── LICENCIAS ──────────────────────────────────────────────────────────────
+
 export const softwareCatalogoSchema = z.object({
-   nombre: requiredString("El nombre es requerido.").min(2).max(255),
-   version: z.string().max(50).optional().nullable(),
-   fabricante: z.string().max(100).optional().nullable(),
-   tipo_licencia: requiredEnum(["Perpetua", "Suscripción Anual", "Suscripción Mensual", "OEM", "Freeware", "Open Source", "Otra"]),
-   metrica_licenciamiento: requiredEnum(["Por Dispositivo", "Por Usuario Nominal", "Por Usuario Concurrente", "Por Core", "Por Servidor", "Gratuita", "Otra"]),
-   descripcion: z.string().optional().nullable(),
+  nombre: requiredString("El nombre es requerido.").min(2).max(255),
+  version: z.string().max(50).optional().nullable(),
+  fabricante: z.string().max(100).optional().nullable(),
+  tipo_licencia: requiredEnum(Object.values(TipoLicenciaSoftwareEnum)),
+  metrica_licenciamiento: requiredEnum(
+    Object.values(MetricaLicenciamientoEnum),
+  ),
+  descripcion: z.string().optional().nullable(),
+  categoria: z.string().optional().nullable(),
 });
 
-// Esquema para Licencias de Software Adquiridas
-export const licenciaSoftwareSchema = z.object({
-   software_catalogo_id: requiredUuid("Debe seleccionar un software del catálogo."),
-   clave_producto: z.string().optional().nullable(),
-   fecha_adquisicion: requiredDate(),
-   fecha_expiracion: z.date().optional().nullable(),
-   proveedor_id: z.string().uuid().optional().nullable(),
-   costo_adquisicion: z.coerce.number().min(0).optional().nullable(),
-   cantidad_total: z.coerce.number().int().min(1, "La cantidad debe ser al menos 1."),
-   notas: z.string().optional().nullable(),
-   numero_orden_compra: z.string().optional().nullable(),
-});
+export const licenciaSoftwareSchema = z
+  .object({
+    // v4: requiredUuid ya usa z.guid() internamente
+    software_catalogo_id: requiredUuid("Debe seleccionar un software."),
+    clave_producto: z.string().optional().nullable(),
+    fecha_adquisicion: requiredDate(),
+    fecha_expiracion: z.date().optional().nullable(),
+    // v4: z.string().pipe(z.uuid()) → z.guid()
+    proveedor_id: z.guid().optional().nullable(),
+    costo_adquisicion: z.coerce.number().min(0).optional().nullable(),
+    cantidad_total: z.coerce
+      .number()
+      .int()
+      .min(1, { error: "Mínimo 1 licencia." }),
+    notas: z.string().optional().nullable(),
+    numero_orden_compra: z.string().optional().nullable(),
+  })
+  // v4: .refine() con objeto de opciones sigue siendo válido
+  .refine(
+    (data) =>
+      !data.fecha_expiracion ||
+      !data.fecha_adquisicion ||
+      isBefore(data.fecha_adquisicion, data.fecha_expiracion),
+    {
+      message: "Expiración debe ser posterior a adquisición.",
+      path: ["fecha_expiracion"],
+    },
+  );
 
-// Esquema para Asignar una Licencia
-export const asignarLicenciaSchema = z.object({
-   asignar_a: requiredEnum(["equipo", "usuario"], "Debe seleccionar un tipo de asignación."),
-   equipo_id: z.string().uuid().optional().nullable(),
-   usuario_id: z.string().uuid().optional().nullable(),
-   notas: z.string().optional().nullable(),
-}).refine(data => (data.asignar_a === 'equipo' ? !!data.equipo_id : true), {
-   message: "Debe seleccionar un equipo.",
-   path: ["equipo_id"],
-}).refine(data => (data.asignar_a === 'usuario' ? !!data.usuario_id : true), {
-   message: "Debe seleccionar un usuario.",
-   path: ["usuario_id"],
-});
+export const asignarLicenciaSchema = z
+  .object({
+    asignar_a: z.enum(["equipo", "usuario"], {
+      error: "Seleccione un destino.",
+    }),
+    // v4: z.string().pipe(z.uuid()) → z.guid()
+    equipo_id: z.guid().optional().nullable(),
+    usuario_id: z.guid().optional().nullable(),
+    notas: z.string().optional().nullable(),
+    instalado: z.boolean().optional(),
+  })
+  .refine((data) => data.asignar_a !== "equipo" || !!data.equipo_id, {
+    message: "Seleccione un equipo.",
+    path: ["equipo_id"],
+  })
+  .refine((data) => data.asignar_a !== "usuario" || !!data.usuario_id, {
+    message: "Seleccione un usuario.",
+    path: ["usuario_id"],
+  });
 
-// Esquema para la creación de Usuarios
+// ─── USUARIOS Y ROLES ───────────────────────────────────────────────────────
+
 export const usuarioCreateSchema = z.object({
-   nombre_usuario: z.string().min(3, "Mínimo 3 caracteres").max(50),
-   email: z.string().email("Debe ser un email válido.").optional().nullable(),
-   password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres."),
-   rol_id: requiredUuid("Debe seleccionar un rol."),
+  nombre_usuario: z.string().min(3).max(50),
+  // v4: z.string().pipe(z.email()) → z.email() es ahora top-level
+  //     La unión con z.literal("") se mantiene para permitir string vacío
+  email: z
+    .email({ error: "Email inválido" })
+    .optional()
+    .nullable()
+    .or(z.literal("")),
+  password: z.string().min(8, { error: "Mínimo 8 caracteres" }),
+  rol_id: requiredUuid("Rol requerido."),
 });
 
-// Esquema para la actualización de Usuarios
 export const usuarioUpdateSchema = z.object({
-   nombre_usuario: z.string().min(3, "Mínimo 3 caracteres").max(50).optional(),
-   email: z.string().email("Debe ser un email válido.").optional().nullable(),
-   password: z.string().min(8, "Mínimo 8 caracteres.").optional().nullable().or(z.literal('')),
-   rol_id: z.string().uuid().optional(),
-   bloqueado: z.boolean().optional(),
+  nombre_usuario: z.string().min(3).max(50).optional(),
+  // v4: z.string().pipe(z.email()) → z.email() top-level
+  email: z
+    .email({ error: "Email inválido" })
+    .optional()
+    .nullable()
+    .or(z.literal("")),
+  password: z.string().min(8).optional().nullable().or(z.literal("")),
+  // v4: z.string().pipe(z.uuid()) → z.guid()
+  rol_id: z.guid().optional(),
+  bloqueado: z.boolean().optional(),
+  requiere_cambio_contrasena: z.boolean().optional(),
 });
 
-// Esquema para la creación y actualización de Roles
 export const rolSchema = z.object({
-   nombre: requiredString("El nombre del rol es requerido.").min(3).max(100),
-   descripcion: z.string().optional().nullable(),
-   permiso_ids: z.array(z.string().uuid()).min(1, "Debe seleccionar al menos un permiso."),
+  nombre: requiredString("Nombre requerido.").min(3).max(100),
+  descripcion: z.string().optional().nullable(),
+  // v4: z.string().pipe(z.uuid()) → z.guid() dentro del array
+  permiso_ids: z.array(z.guid()).min(1, { error: "Mínimo un permiso." }),
 });
 
-// Esquema para Proveedores
+// ─── PROVEEDORES Y CATÁLOGOS ────────────────────────────────────────────────
+
 export const proveedorSchema = z.object({
-   nombre: requiredString("El nombre es requerido.").min(2).max(255),
-   descripcion: z.string().optional().nullable(),
-   contacto: z.string().optional().nullable(),
-   direccion: z.string().optional().nullable(),
-   sitio_web: z.string().url("Debe ser una URL válida.").optional().nullable().or(z.literal('')),
-   rnc: z.string().max(50).optional().nullable(),
+  nombre: requiredString("Nombre requerido.").min(2).max(255),
+  descripcion: z.string().optional().nullable(),
+  contacto: z.string().optional().nullable(),
+  direccion: z.string().optional().nullable(),
+  // v4: z.string().pipe(z.url()) → z.url() es ahora top-level
+  sitio_web: z
+    .url({ error: "URL inválida" })
+    .optional()
+    .nullable()
+    .or(z.literal("")),
+  rnc: z.string().max(50).optional().nullable(),
 });
 
-// Esquema genérico para catálogos simples
-export const genericCatalogSchema = z.object({
-   nombre: requiredString("El nombre es requerido.").min(2).max(100),
-   descripcion: z.string().optional().nullable(),
-   color_hex: z.string().regex(/^#([0-9a-fA-F]{6})$/, "Debe ser un color hexadecimal válido, ej: #FFFFFF").optional().nullable().or(z.literal('')),
-   es_preventivo: z.boolean().optional(),
-   periodicidad_dias: z.coerce.number().int().min(0).optional().nullable(),
+export const estadoEquipoSchema = z.object({
+  nombre: requiredString("Nombre requerido.").min(2).max(100),
+  descripcion: z.string().optional().nullable(),
+  color_hex: z
+    .string()
+    .regex(/^#([0-9a-fA-F]{6})$/, "Color Hex inválido")
+    .optional()
+    .nullable()
+    .or(z.literal("")),
 });
 
-// Esquema para la creación de Reservas
-export const reservaSchema = z.object({
-   equipo_id: requiredUuid("Debe seleccionar un equipo."),
-   proposito: requiredString("El propósito es requerido (mín. 5 caracteres).").min(5),
-   fecha_inicio: requiredDate(),
-   hora_inicio: requiredString("La hora de inicio es requerida."),
-   fecha_fin: requiredDate(),
-   hora_fin: requiredString("La hora de fin es requerida."),
-   notas: z.string().optional().nullable(),
-}).refine(data => {
-   const [startHour, startMinute] = data.hora_inicio.split(':').map(Number);
-   const [endHour, endMinute] = data.hora_fin.split(':').map(Number);
-   const startDate = new Date(data.fecha_inicio.setHours(startHour, startMinute));
-   const endDate = new Date(data.fecha_fin.setHours(endHour, endMinute));
-   return endDate > startDate;
-}, {
-   message: "La fecha y hora de fin debe ser posterior a la de inicio.",
-   path: ["fecha_fin"],
+export const tipoMantenimientoSchema = z.object({
+  nombre: requiredString("Nombre requerido.").min(2).max(100),
+  descripcion: z.string().optional().nullable(),
+  es_preventivo: z.boolean().optional(),
+  requiere_documentacion: z.boolean().optional(),
+  periodicidad_dias: z.coerce.number().int().min(0).optional().nullable(),
 });
+
+// ─── RESERVAS Y MOVIMIENTOS ─────────────────────────────────────────────────
+
+export const reservaSchema = z
+  .object({
+    equipo_id: requiredUuid("Debe seleccionar un equipo."),
+    proposito: requiredString("Propósito requerido (mín 5 chars).").min(5),
+    fecha_inicio: requiredDate(),
+    hora_inicio: requiredString(),
+    fecha_fin: requiredDate(),
+    hora_fin: requiredString(),
+    notas: z.string().optional().nullable(),
+  })
+  // v4: .refine() con objeto de opciones sigue siendo válido cuando se necesita path
+  .refine(
+    (data) => {
+      if (!isValid(data.fecha_inicio) || !isValid(data.fecha_fin)) return false;
+
+      const start = new Date(data.fecha_inicio);
+      const [sh, sm] = data.hora_inicio.split(":").map(Number);
+      start.setHours(sh, sm);
+
+      const end = new Date(data.fecha_fin);
+      const [eh, em] = data.hora_fin.split(":").map(Number);
+      end.setHours(eh, em);
+
+      return isAfter(end, start);
+    },
+    {
+      message: "La fecha/hora fin debe ser posterior al inicio.",
+      path: ["fecha_fin"],
+    },
+  );
+
+export const movimientoEquipoSchema = z
+  .object({
+    equipo_id: requiredUuid("Debe seleccionar un equipo."),
+    tipo_movimiento: requiredEnum(
+      Object.values(TipoMovimientoEquipoEnum),
+      "Tipo inválido.",
+    ),
+    destino: z.string().optional().nullable(),
+    proposito: z.string().optional().nullable(),
+    observaciones: z.string().optional().nullable(),
+    fecha_prevista_retorno: z.date().optional().nullable(),
+    // v4: z.string().pipe(z.uuid()) → z.guid()
+    usuario_id: z.guid().optional().nullable(),
+  })
+  // v4: .superRefine() → .check()
+  .check((ctx) => {
+    const data = ctx.value;
+
+    // Regla de BD: Constraint 'check_retorno_salida_temporal'
+    if (
+      data.tipo_movimiento === TipoMovimientoEquipoEnum.SalidaTemporal &&
+      !data.fecha_prevista_retorno
+    ) {
+      ctx.issues.push({
+        code: "custom",
+        message: "Fecha retorno requerida.",
+        path: ["fecha_prevista_retorno"],
+        input: data.fecha_prevista_retorno,
+      });
+    }
+
+    // Regla de BD: Constraint 'check_origen_destino_asignacion'
+    // La asignación interna requiere destino Y usuario (para tracking de ubicación)
+    if (data.tipo_movimiento === TipoMovimientoEquipoEnum.AsignacionInterna) {
+      if (!data.usuario_id) {
+        ctx.issues.push({
+          code: "custom",
+          message: "Usuario asignado requerido.",
+          path: ["usuario_id"],
+          input: data.usuario_id,
+        });
+      }
+      if (!data.destino || data.destino.length < 3) {
+        ctx.issues.push({
+          code: "custom",
+          message: "Ubicación/Destino de la asignación requerido.",
+          path: ["destino"],
+          input: data.destino,
+        });
+      }
+    }
+
+    // Reglas de negocio adicionales para salidas definitivas
+    const salidасConDestinoRequerido = [
+      TipoMovimientoEquipoEnum.SalidaDefinitiva,
+      TipoMovimientoEquipoEnum.TransferenciaBodega,
+    ] as TipoMovimientoEquipo[];
+
+    if (
+      salidасConDestinoRequerido.includes(data.tipo_movimiento) &&
+      (!data.destino || data.destino.length < 3)
+    ) {
+      ctx.issues.push({
+        code: "custom",
+        message: "Destino físico requerido.",
+        path: ["destino"],
+        input: data.destino,
+      });
+    }
+  });
+
+export const autorizarMovimientoSchema = z
+  .object({
+    accion: z.enum(["Aprobar", "Rechazar"], {
+      error: "Debe tomar una decisión.",
+    }),
+    observaciones: z.string().optional(),
+  })
+  // v4: .superRefine() → .check()
+  .check((ctx) => {
+    const data = ctx.value;
+
+    if (
+      data.accion === "Rechazar" &&
+      (!data.observaciones || data.observaciones.length < 5)
+    ) {
+      ctx.issues.push({
+        code: "custom",
+        message: "Debe justificar el rechazo (mín. 5 caracteres).",
+        path: ["observaciones"],
+        input: data.observaciones,
+      });
+    }
+  });
+
+// ─── AUTH & SISTEMA ─────────────────────────────────────────────────────────
 
 export const loginSchema = z.object({
-   username: z.string().min(1, { message: "El nombre de usuario es requerido." }),
-   password: z.string().min(1, { message: "La contraseña es requerida." }),
+  username: requiredString("Usuario requerido."),
+  password: requiredString("Contraseña requerida."),
 });
 
-// Esquema para el formulario de cambio de contraseña
-export const changePasswordSchema = z.object({
-   current_password: z.string().min(1, { message: "La contraseña actual es requerida." }),
-   new_password: z.string().min(8, { message: "La nueva contraseña debe tener al menos 8 caracteres." }),
-   confirm_password: z.string(),
-}).refine(data => data.new_password === data.confirm_password, {
-   message: "Las nuevas contraseñas no coinciden.",
-   path: ["confirm_password"],
+export const changePasswordSchema = z
+  .object({
+    current_password: requiredString("Contraseña actual requerida."),
+    new_password: z.string().min(8, { error: "Mínimo 8 caracteres." }),
+    confirm_password: z.string(),
+  })
+  .refine((data) => data.new_password === data.confirm_password, {
+    message: "Las contraseñas no coinciden.",
+    path: ["confirm_password"],
+  });
+
+export const resetPasswordRequestSchema = z.object({
+  username: requiredString("El nombre de usuario es requerido."),
 });
+
+export const resetPasswordConfirmSchema = z
+  .object({
+    username: requiredString("El usuario es requerido."),
+    token: requiredString("El token es requerido."),
+    new_password: z.string().min(8, {
+      error: "La nueva contraseña debe tener al menos 8 caracteres.",
+    }),
+    confirm_password: z.string().min(8, { error: "Confirme la contraseña." }),
+  })
+  .refine((data) => data.new_password === data.confirm_password, {
+    message: "Las contraseñas no coinciden.",
+    path: ["confirm_password"],
+  });
+
+// ─── OTROS ──────────────────────────────────────────────────────────────────
+
+export const reporteSchema = z
+  .object({
+    tipo_reporte: z.enum([
+      "equipos",
+      "mantenimientos",
+      "inventario",
+      "movimientos",
+      "auditoria",
+    ]),
+    formato: z.enum(["pdf", "excel"]),
+    fecha_inicio: requiredDate(),
+    fecha_fin: requiredDate(),
+  })
+  .refine((data) => !isBefore(data.fecha_fin, data.fecha_inicio), {
+    message: "Fecha fin inválida.",
+    path: ["fecha_fin"],
+  });
+
+export const aprobarReservaSchema = z
+  .object({
+    accion: z.enum(["Aprobar", "Rechazar"]),
+    notas_admin: z.string().optional(),
+  })
+  // v4: .superRefine() → .check()
+  .check((ctx) => {
+    const data = ctx.value;
+
+    if (data.accion === "Rechazar" && !data.notas_admin) {
+      ctx.issues.push({
+        code: "custom",
+        message: "Justifique el rechazo.",
+        path: ["notas_admin"],
+        input: data.notas_admin,
+      });
+    }
+  });
+
+export const reservaCheckOutSchema = z.object({
+  notas_entrega: z.string().optional(),
+});
+
+export const reservaCheckInSchema = z.object({
+  notas_devolucion: z.string().optional(),
+  // v4: z.string().pipe(z.uuid()) → z.guid()
+  estado_final_id: z.guid().optional(),
+});
+
+export const documentacionVerifySchema = z
+  .object({
+    estado: requiredEnum([
+      EstadoDocumentoEnum.Verificado,
+      EstadoDocumentoEnum.Rechazado,
+    ]),
+    notas_verificacion: z.string().optional().nullable(),
+  })
+  // v4: .superRefine() → .check()
+  .check((ctx) => {
+    const data = ctx.value;
+
+    if (
+      data.estado === EstadoDocumentoEnum.Rechazado &&
+      !data.notas_verificacion
+    ) {
+      ctx.issues.push({
+        code: "custom",
+        message: "Debe indicar la razón del rechazo.",
+        path: ["notas_verificacion"],
+        input: data.notas_verificacion,
+      });
+    }
+  });
+
+// Al final de zod.ts
+export const genericCatalogSchema = z.object({
+  nombre: requiredString("Nombre requerido.").min(2).max(100),
+  descripcion: z.string().optional().nullable(),
+  color_hex: z
+    .string()
+    .regex(/^#([0-9a-fA-F]{6})$/, "Color Hex inválido")
+    .optional()
+    .nullable()
+    .or(z.literal("")),
+  periodicidad_dias: z.coerce.number().int().min(0).optional().nullable(),
+  es_preventivo: z.boolean().optional(),
+  requiere_documentacion: z.boolean().optional(),
+});
+
+// Alias para consistencia con imports
+export const LoginSchema = loginSchema;
+export const ChangePasswordSchema = changePasswordSchema;

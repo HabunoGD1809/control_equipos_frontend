@@ -2,7 +2,8 @@
 
 import { LogOut, UserCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useAuthStore } from "@/store/authStore"
+import { useSession } from "@/contexts/SessionProvider"; // ✅ Cambio aquí
+import { logoutAction } from "@/actions/auth-actions"; // ✅ Usamos Server Action
 import { Button } from "@/components/ui/Button"
 import {
    DropdownMenu,
@@ -14,22 +15,22 @@ import {
 } from "@/components/ui/DropdownMenu"
 import { ThemeToggle } from "./ThemeToggle"
 import { Notifications } from "./Notifications"
-import { GlobalSearch } from "./GlobalSearch" // Importar Búsqueda Global
+import { GlobalSearch } from "./GlobalSearch"
 
 export function Header() {
-   const { user, logout } = useAuthStore();
+   const { user } = useSession(); // ✅ Datos desde el contexto
    const router = useRouter();
 
    const handleLogout = async () => {
-      await fetch('/api/auth/logout', { method: 'POST' });
-      logout();
-      router.push('/login');
+      await logoutAction(); // ✅ Limpieza segura de cookies
+      // El action ya redirige, pero por seguridad en UI:
+      // router.push('/login');
    };
 
    return (
       <header className="flex items-center justify-between h-16 px-6 bg-card border-b w-full gap-4">
          <div>
-            <GlobalSearch /> {/* Añadir Búsqueda Global */}
+            <GlobalSearch />
          </div>
          <div className="flex items-center gap-4">
             <ThemeToggle />
@@ -40,7 +41,7 @@ export function Header() {
                      <UserCircle className="h-6 w-6" />
                      <div className="text-left hidden sm:block">
                         <p className="text-sm font-medium">{user?.nombre_usuario}</p>
-                        <p className="text-xs text-muted-foreground">{user?.rol.nombre}</p>
+                        <p className="text-xs text-muted-foreground">{user?.rol?.nombre}</p>
                      </div>
                   </Button>
                </DropdownMenuTrigger>

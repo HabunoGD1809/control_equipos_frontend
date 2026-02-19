@@ -1,139 +1,240 @@
-"use client"
+"use client";
 
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import * as z from "zod"
-import { useRouter } from "next/navigation"
-import { useState, useMemo } from "react"
-import { Loader2 } from "lucide-react"
+import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
+import { z } from "zod";
+import { useRouter } from "next/navigation";
+import { Loader2, Shield } from "lucide-react";
 
-import { Button } from "@/components/ui/Button"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form"
-import { Input } from "@/components/ui/Input"
-import { Checkbox } from "@/components/ui/Checkbox"
-import { useToast } from "@/components/ui/use-toast"
-import { rolSchema } from "@/lib/zod"
-import api from "@/lib/api"
-import { Rol, Permiso } from "@/types/api"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
+import { rolSchema } from "@/lib/zod";
+import { rolesService } from "@/app/services/rolesService";
+import { useAuthStore } from "@/store/authStore";
+import type { Rol, Permiso } from "@/types/api";
+import { useToast } from "@/components/ui/use-toast";
+
+import { Button } from "@/components/ui/Button";
+import {
+   Form,
+   FormControl,
+   FormDescription,
+   FormField,
+   FormItem,
+   FormLabel,
+   FormMessage,
+} from "@/components/ui/Form";
+import { Input } from "@/components/ui/Input";
+import { Textarea } from "@/components/ui/Textarea";
+import { Checkbox } from "@/components/ui/Checkbox";
+import { Card, CardContent } from "@/components/ui/Card";
+
+type RoleFormValues = z.infer<typeof rolSchema>;
 
 interface RoleFormProps {
-   initialData?: Rol | null;
-   allPermissions: Permiso[];
-   onSuccess: () => void;
+   initialData?: Rol;
+   onSuccess?: () => void;
+   onCancel?: () => void;
 }
 
-type FormValues = z.infer<typeof rolSchema>;
-
-// Función para agrupar permisos por categoría (ej: 'ver_equipos' -> 'equipos')
-const groupPermissions = (permissions: Permiso[]) => {
-   return permissions.reduce((acc, permission) => {
-      const category = permission.nombre.split('_').pop() || 'general';
-      if (!acc[category]) {
-         acc[category] = [];
-      }
-      acc[category].push(permission);
-      return acc;
-   }, {} as Record<string, Permiso[]>);
-};
-
-export function RoleForm({ initialData, allPermissions, onSuccess }: RoleFormProps) {
+export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
    const router = useRouter();
    const { toast } = useToast();
+
+   const { isInitialized, isAuthenticated } = useAuthStore();
+
    const [isLoading, setIsLoading] = useState(false);
-   const isEditing = !!initialData;
+   const [permisosDisponibles, setPermisosDisponibles] = useState<Permiso[]>([]);
+   const [loadingPermisos, setLoadingPermisos] = useState(true);
 
-   const groupedPermissions = useMemo(() => groupPermissions(allPermissions), [allPermissions]);
-
-   const form = useForm<FormValues>({
-      resolver: zodResolver(rolSchema),
+   const form = useForm<RoleFormValues>({
+      resolver: standardSchemaResolver(rolSchema),
       defaultValues: {
-         nombre: initialData?.nombre || "",
-         descripcion: initialData?.descripcion || "",
-         permiso_ids: initialData?.permisos.map(p => p.id) || [],
+         nombre: initialData?.nombre ?? "",
+         descripcion: initialData?.descripcion ?? "",
+         permiso_ids: initialData?.permisos?.map((p) => p.id) ?? [],
       },
    });
 
-   const onSubmit = async (data: FormValues) => {
+   useEffect(() => {
+      if (!isInitialized || !isAuthenticated) return;
+
+      rolesService
+         .getAllPermisos()
+         .then(setPermisosDisponibles)
+         .catch(() =>
+            toast({
+               variant: "destructive",
+               title: "Error de carga",
+               description: "No se pudieron cargar los permisos. Verifique conexión.",
+            }),
+         )
+         .finally(() => setLoadingPermisos(false));
+   }, [isInitialized, isAuthenticated, toast]);
+
+   const onSubmit = async (data: RoleFormValues) => {
       setIsLoading(true);
       try {
-         if (isEditing) {
-            await api.put(`/gestion/roles/${initialData.id}`, data);
-            toast({ title: "Éxito", description: "Rol actualizado correctamente." });
+         const payload = {
+            nombre: data.nombre,
+            descripcion: data.descripcion ?? undefined,
+            permiso_ids: data.permiso_ids,
+         };
+
+         if (initialData) {
+            await rolesService.update(initialData.id, payload);
+            toast({ title: "Rol actualizado correctamente" });
          } else {
-            await api.post('/gestion/roles/', data);
-            toast({ title: "Éxito", description: "Rol creado correctamente." });
+            await rolesService.create(payload);
+            toast({ title: "Rol creado correctamente" });
          }
-         router.refresh();
-         onSuccess();
-      } catch (error) {
-         console.error("Error al guardar el rol:", error);
-         toast({ variant: "destructive", title: "Error", description: "No se pudo guardar el rol." });
+
+         if (onSuccess) {
+            onSuccess();
+         } else {
+            router.push("/administracion/roles");
+            router.refresh();
+         }
+      } catch (error: unknown) {
+         const detail =
+            (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+            "Ocurrió un error inesperado.";
+         toast({ variant: "destructive", title: "Error al guardar", description: detail });
       } finally {
          setIsLoading(false);
       }
    };
 
+   const handleCancel = () => (onCancel ? onCancel() : router.back());
+
+   const permisoGroups = permisosDisponibles.reduce<Record<string, Permiso[]>>(
+      (acc, p) => {
+         const key = p.nombre.split("_")[1] ?? "general";
+         (acc[key] ??= []).push(p);
+         return acc;
+      },
+      {},
+   );
+
+   if (!isInitialized) {
+      return (
+         <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+         </div>
+      );
+   }
+
    return (
       <Form {...form}>
-         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pt-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               <FormField control={form.control} name="nombre" render={({ field }) => (
-                  <FormItem><FormLabel>Nombre del Rol</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-               )} />
-               <FormField control={form.control} name="descripcion" render={({ field }) => (
-                  <FormItem><FormLabel>Descripción</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
-               )} />
+         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <div className="grid gap-6 md:grid-cols-2">
+               <FormField
+                  control={form.control}
+                  name="nombre"
+                  render={({ field }) => (
+                     <FormItem>
+                        <FormLabel>Nombre del Rol</FormLabel>
+                        <FormControl>
+                           <Input placeholder="Ej: supervisor_almacen" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                     </FormItem>
+                  )}
+               />
+
+               <FormField
+                  control={form.control}
+                  name="descripcion"
+                  render={({ field }) => (
+                     <FormItem>
+                        <FormLabel>Descripción</FormLabel>
+                        <FormControl>
+                           <Textarea
+                              placeholder="Descripción..."
+                              {...field}
+                              value={field.value ?? ""}
+                           />
+                        </FormControl>
+                        <FormMessage />
+                     </FormItem>
+                  )}
+               />
             </div>
 
-            <FormField
-               control={form.control}
-               name="permiso_ids"
-               render={() => (
-                  <FormItem>
-                     <div className="mb-4">
-                        <FormLabel className="text-base">Permisos</FormLabel>
+            <Card>
+               <CardContent className="pt-6">
+                  <div className="flex items-center gap-2 mb-4">
+                     <Shield className="h-5 w-5 text-primary" />
+                     <h3 className="font-medium text-lg">Permisos del Sistema</h3>
+                  </div>
+
+                  {loadingPermisos ? (
+                     <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                      </div>
-                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[400px] overflow-y-auto p-1">
-                        {Object.entries(groupedPermissions).map(([category, permissions]) => (
-                           <Card key={category}>
-                              <CardHeader className="p-4"><CardTitle className="text-base capitalize">{category}</CardTitle></CardHeader>
-                              <CardContent className="p-4 pt-0 space-y-2">
-                                 {permissions.map((item) => (
-                                    <FormField key={item.id} control={form.control} name="permiso_ids"
-                                       render={({ field }) => (
-                                          <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                                             <FormControl>
-                                                <Checkbox
-                                                   checked={field.value?.includes(item.id)}
-                                                   onCheckedChange={(checked) => {
-                                                      return checked
-                                                         ? field.onChange([...field.value, item.id])
-                                                         : field.onChange(field.value?.filter((value) => value !== item.id))
-                                                   }}
-                                                />
-                                             </FormControl>
-                                             <FormLabel className="font-normal text-sm">{item.descripcion || item.nombre}</FormLabel>
-                                          </FormItem>
-                                       )}
-                                    />
-                                 ))}
-                              </CardContent>
-                           </Card>
+                  ) : permisosDisponibles.length === 0 ? (
+                     <p className="text-sm text-muted-foreground text-center py-4">
+                        No se encontraron permisos disponibles.
+                     </p>
+                  ) : (
+                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                        {Object.entries(permisoGroups).map(([groupName, permisos]) => (
+                           <div key={groupName} className="space-y-3 border p-4 rounded-lg">
+                              <h4 className="font-semibold capitalize text-sm text-muted-foreground border-b pb-2">
+                                 Módulo: {groupName}
+                              </h4>
+
+                              {permisos.map((permiso) => (
+                                 <FormField
+                                    key={permiso.id}
+                                    control={form.control}
+                                    name="permiso_ids"
+                                    render={({ field }) => (
+                                       <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                                          <FormControl>
+                                             <Checkbox
+                                                checked={field.value?.includes(permiso.id)}
+                                                onCheckedChange={(checked) =>
+                                                   field.onChange(
+                                                      checked
+                                                         ? [...field.value, permiso.id]
+                                                         : field.value.filter((v) => v !== permiso.id),
+                                                   )
+                                                }
+                                             />
+                                          </FormControl>
+                                          <div className="space-y-1 leading-none">
+                                             <FormLabel className="font-normal cursor-pointer">
+                                                {permiso.nombre}
+                                             </FormLabel>
+                                             {permiso.descripcion && (
+                                                <FormDescription className="text-xs">
+                                                   {permiso.descripcion}
+                                                </FormDescription>
+                                             )}
+                                          </div>
+                                       </FormItem>
+                                    )}
+                                 />
+                              ))}
+                           </div>
                         ))}
                      </div>
-                     <FormMessage />
-                  </FormItem>
-               )}
-            />
+                  )}
 
-            <div className="flex justify-end pt-4">
-               <Button type="submit" disabled={isLoading}>
+                  <FormMessage>{form.formState.errors.permiso_ids?.message}</FormMessage>
+               </CardContent>
+            </Card>
+
+            <div className="flex justify-end gap-4">
+               <Button type="button" variant="outline" onClick={handleCancel}>
+                  Cancelar
+               </Button>
+               <Button type="submit" disabled={isLoading || loadingPermisos}>
                   {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {isEditing ? "Guardar Cambios" : "Crear Rol"}
+                  Guardar Rol
                </Button>
             </div>
          </form>
       </Form>
-   )
+   );
 }

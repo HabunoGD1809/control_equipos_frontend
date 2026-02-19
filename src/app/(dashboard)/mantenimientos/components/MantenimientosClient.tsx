@@ -2,19 +2,24 @@
 
 import { useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { PlusCircle, MoreHorizontal, Edit, Trash2 } from "lucide-react";
-import { format } from 'date-fns';
+import { PlusCircle, MoreHorizontal, Edit, Trash2, Loader2 } from "lucide-react";
+import { format } from "date-fns";
+import { useRouter } from "next/navigation";
+
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/Dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/DropdownMenu";
-import { Mantenimiento, EquipoSimple, TipoMantenimiento, Proveedor } from "@/types/api";
-import { useHasPermission } from "@/hooks/useHasPermission";
-import { MantenimientoForm } from "./MantenimientoForm";
 import { Badge } from "@/components/ui/Badge";
+import { useToast } from "@/components/ui/use-toast";
+
+import type { Mantenimiento, EquipoSimple, TipoMantenimiento, Proveedor, Documentacion, PaginatedResponse } from "@/types/api";
+import { useHasPermission } from "@/hooks/useHasPermission";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
-import { useRouter } from "next/navigation";
+
+import { MantenimientoForm } from "./MantenimientoForm";
 import { EditarMantenimientoForm } from "./EditarMantenimientoForm";
+import { api } from "@/lib/http";
 
 interface MantenimientosClientProps {
    initialData: Mantenimiento[];
@@ -23,28 +28,66 @@ interface MantenimientosClientProps {
    proveedores: Proveedor[];
 }
 
-export function MantenimientosClient({
-   initialData,
-   equipos,
-   tiposMantenimiento,
-   proveedores
-}: MantenimientosClientProps) {
+function getItems<T>(data: PaginatedResponse<T> | T[]): T[] {
+   if (Array.isArray(data)) return data;
+   if (data && Array.isArray((data as any).items)) return (data as any).items;
+   return [];
+}
+
+function getErrorMessage(err: unknown, fallback: string) {
+   if (typeof err === "object" && err) {
+      const anyErr = err as any;
+      const detail = anyErr?.data?.detail || anyErr?.detail;
+      if (typeof detail === "string" && detail.trim()) return detail;
+      if (typeof anyErr?.message === "string" && anyErr.message.trim()) return anyErr.message;
+   }
+   return fallback;
+}
+
+export function MantenimientosClient({ initialData, equipos, tiposMantenimiento, proveedores }: MantenimientosClientProps) {
    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
    const [selectedMantenimiento, setSelectedMantenimiento] = useState<Mantenimiento | null>(null);
+
+   // Validación de documentos
+   const [hasDocs, setHasDocs] = useState(false);
+   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+
    const router = useRouter();
+   const { toast } = useToast();
 
-   const canSchedule = useHasPermission(['programar_mantenimientos']);
-   const canEdit = useHasPermission(['editar_mantenimientos']);
-   const canDelete = useHasPermission(['eliminar_mantenimientos']);
+   const canSchedule = useHasPermission(["programar_mantenimientos"]);
+   const canEdit = useHasPermission(["editar_mantenimientos"]);
+   const canDelete = useHasPermission(["eliminar_mantenimientos"]);
 
-   const {
-      isAlertOpen, isDeleting, openAlert, setIsAlertOpen, handleDelete, itemToDelete
-   } = useDeleteConfirmation("Mantenimiento", () => router.refresh());
+   const { openAlert } = useDeleteConfirmation("Mantenimiento", () => router.refresh());
 
-   const handleEditClick = (mantenimiento: Mantenimiento) => {
+   const handleEditClick = async (mantenimiento: Mantenimiento) => {
       setSelectedMantenimiento(mantenimiento);
-      setIsEditModalOpen(true);
+      setIsLoadingDetails(true);
+
+      try {
+         // Opción A (mejor si existe en tu backend): endpoint dedicado por mantenimiento
+         // const docs = await api.get<Documentacion[]>(`/documentacion/mantenimiento/${mantenimiento.id}?limit=1`);
+
+         // Opción B (más genérica): lista con filtro por querystring
+         const data = await api.get<PaginatedResponse<Documentacion> | Documentacion[]>(
+            `/documentacion/?mantenimiento_id=${mantenimiento.id}&limit=1`
+         );
+
+         const docs = getItems(data);
+         setHasDocs(docs.length > 0);
+         setIsEditModalOpen(true);
+      } catch (error) {
+         console.error("Error fetching docs", error);
+         toast({
+            variant: "destructive",
+            title: "Error de conexión",
+            description: getErrorMessage(error, "No se pudo verificar la documentación del mantenimiento."),
+         });
+      } finally {
+         setIsLoadingDetails(false);
+      }
    };
 
    const columns: ColumnDef<Mantenimiento>[] = [
@@ -61,7 +104,7 @@ export function MantenimientosClient({
       {
          accessorKey: "fecha_programada",
          header: "Fecha Programada",
-         cell: ({ row }) => format(new Date(row.getValue("fecha_programada")), 'dd/MM/yyyy'),
+         cell: ({ row }) => format(new Date(row.getValue("fecha_programada")), "dd/MM/yyyy"),
       },
       {
          accessorKey: "estado",
@@ -69,50 +112,59 @@ export function MantenimientosClient({
          cell: ({ row }) => {
             const estado = row.getValue("estado") as string;
             let variant: "default" | "secondary" | "destructive" | "outline" = "secondary";
-            if (estado === 'Completado') variant = 'default';
-            if (estado === 'Cancelado') variant = 'destructive';
-            if (estado === 'En Proceso') variant = 'outline';
-
+            if (estado === "Completado") variant = "default";
+            if (estado === "Cancelado") variant = "destructive";
+            if (estado === "En Proceso") variant = "outline";
             return <Badge variant={variant}>{estado}</Badge>;
-         }
+         },
       },
       {
          accessorKey: "tecnico_responsable",
-         header: "Técnico Responsable",
+         header: "Técnico",
       },
       {
          id: "actions",
          cell: ({ row }) => (
             <DropdownMenu>
-               <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+               <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="h-8 w-8 p-0">
+                     {isLoadingDetails && selectedMantenimiento?.id === row.original.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                     ) : (
+                        <MoreHorizontal className="h-4 w-4" />
+                     )}
+                  </Button>
+               </DropdownMenuTrigger>
                <DropdownMenuContent align="end">
                   {canEdit && (
                      <DropdownMenuItem onClick={() => handleEditClick(row.original)}>
-                        <Edit className="mr-2 h-4 w-4" /> Editar
+                        <Edit className="mr-2 h-4 w-4" /> Editar / Cerrar
                      </DropdownMenuItem>
                   )}
                   {canDelete && (
-                     <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => openAlert(row.original.id)}>
-                        <Trash2 className="mr-2 h-4 w-4" />Eliminar
+                     <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => openAlert(row.original.id)}
+                     >
+                        <Trash2 className="mr-2 h-4 w-4" /> Eliminar
                      </DropdownMenuItem>
                   )}
                </DropdownMenuContent>
             </DropdownMenu>
-         )
+         ),
       },
    ];
 
    return (
       <>
-         {/* Modal de Creación */}
+         {/* Modal Crear */}
          <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[500px]">
                <DialogHeader>
                   <DialogTitle>Programar Mantenimiento</DialogTitle>
-                  <DialogDescription>
-                     Completa los detalles para programar un nuevo mantenimiento para un equipo.
-                  </DialogDescription>
+                  <DialogDescription>Agende una nueva intervención técnica.</DialogDescription>
                </DialogHeader>
+
                <MantenimientoForm
                   equipos={equipos}
                   tiposMantenimiento={tiposMantenimiento}
@@ -125,22 +177,25 @@ export function MantenimientosClient({
             </DialogContent>
          </Dialog>
 
-         {/* Modal de Edición */}
+         {/* Modal Editar */}
          {selectedMantenimiento && (
             <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-               <DialogContent className="sm:max-w-[425px]">
+               <DialogContent className="sm:max-w-[600px]">
                   <DialogHeader>
-                     <DialogTitle>Editar Mantenimiento</DialogTitle>
+                     <DialogTitle>Gestión de Mantenimiento</DialogTitle>
                      <DialogDescription>
-                        Actualiza el estado y los detalles de este mantenimiento.
+                        {selectedMantenimiento.equipo.nombre} - {selectedMantenimiento.tipo_mantenimiento.nombre}
                      </DialogDescription>
                   </DialogHeader>
+
                   <EditarMantenimientoForm
                      mantenimiento={selectedMantenimiento}
                      proveedores={proveedores}
+                     tieneDocumentosAdjuntos={hasDocs}
                      onSuccess={() => {
                         setIsEditModalOpen(false);
                         setSelectedMantenimiento(null);
+                        router.refresh();
                      }}
                   />
                </DialogContent>
@@ -154,6 +209,7 @@ export function MantenimientosClient({
                </Button>
             )}
          </div>
+
          <DataTable columns={columns} data={initialData} filterColumn="equipo_nombre" />
       </>
    );

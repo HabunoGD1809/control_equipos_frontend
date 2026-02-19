@@ -1,12 +1,12 @@
 "use client"
 
 import {
-   LayoutDashboard, HardDrive, Settings, History, Package, Wrench, ShieldCheck, Calendar, ShoppingCart, Shield, User, BookUser, Book, ShieldAlert, DatabaseBackup
+   LayoutDashboard, HardDrive, Settings, History, Package, Wrench, ShieldCheck, Calendar, ShoppingCart, Shield, User, BookUser, Book, ShieldAlert, DatabaseBackup, FileText
 } from "lucide-react";
-import { useAuthStore } from "@/store/authStore";
+import { useSession } from "@/contexts/SessionProvider"; // ✅ Cambio aquí
 import { SidebarNav, NavItemProps } from "./SidebarNav";
 
-// --- Estructura de Rutas ---
+// --- Estructura de Rutas (Tu código original) ---
 
 const mainRoutes: NavItemProps[] = [
    { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard", permissions: ["ver_dashboard"] },
@@ -23,12 +23,13 @@ const mainRoutes: NavItemProps[] = [
    {
       label: "Gestión",
       icon: Settings,
-      permissions: ["ver_mantenimientos", "ver_licencias", "ver_reservas", "ver_proveedores"],
+      permissions: ["ver_mantenimientos", "ver_licencias", "ver_reservas", "ver_proveedores", "ver_documentacion"],
       subRoutes: [
          { href: "/mantenimientos", icon: Wrench, label: "Mantenimientos", permissions: ["ver_mantenimientos"] },
          { href: "/licencias", icon: ShieldCheck, label: "Licencias", permissions: ["ver_licencias"] },
          { href: "/reservas", icon: Calendar, label: "Reservas", permissions: ["ver_reservas"] },
          { href: "/proveedores", icon: ShoppingCart, label: "Proveedores", permissions: ["ver_proveedores"] },
+         { href: "/documentacion", icon: FileText, label: "Documentación", permissions: ["ver_documentacion"] },
       ]
    }
 ];
@@ -51,20 +52,10 @@ const adminRoutes: NavItemProps[] = [
 // --- Componente Principal del Sidebar ---
 
 export function Sidebar() {
-   const user = useAuthStore((state) => state.user);
-   const isLoading = useAuthStore((state) => state.isLoading);
+   const { user } = useSession(); // ✅ Usamos el contexto seguro
 
-   if (isLoading) {
-      return (
-         <aside className="hidden md:flex flex-col w-64 bg-card border-r h-full fixed">
-            <div className="p-4 border-b animate-pulse"><div className="h-8 bg-muted rounded"></div></div>
-            <div className="flex-1 px-4 py-4 space-y-2">
-               <div className="h-4 bg-muted rounded w-1/4 mb-4"></div>
-               {[...Array(6)].map((_, i) => <div key={i} className="h-10 bg-muted rounded"></div>)}
-            </div>
-         </aside>
-      );
-   }
+   // Nota: Ya no necesitamos isLoading aquí porque el Layout padre espera a tener los datos
+   // antes de mostrar el dashboard. Si user es null, el layout ya habrá redirigido.
 
    if (!user) return null;
 

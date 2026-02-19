@@ -1,41 +1,43 @@
-"use client"
+"use client";
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, HardDrive, Wrench } from "lucide-react";
+import { FileText, HardDrive, Wrench, Loader2, Search, CalendarClock } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
-import api from "@/lib/api";
-import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/Command";
-import { Button } from "@/components/ui/Button";
 
-interface SearchResult {
-   id: string;
-   tipo: 'equipo' | 'documento' | 'mantenimiento';
-   titulo: string;
-   descripcion: string;
-}
+import {
+   CommandDialog,
+   CommandEmpty,
+   CommandGroup,
+   CommandInput,
+   CommandItem,
+   CommandList,
+   CommandSeparator,
+} from "@/components/ui/Command";
+import { Badge } from "@/components/ui/Badge";
 
-const getIcon = (type: SearchResult['tipo']) => {
-   switch (type) {
-      case 'equipo': return <HardDrive className="mr-2 h-4 w-4" />;
-      case 'documento': return <FileText className="mr-2 h-4 w-4" />;
-      case 'mantenimiento': return <Wrench className="mr-2 h-4 w-4" />;
-      default: return null;
-   }
+import type { GlobalSearchResult } from "@/types/api";
+import { busquedaService } from "@/app/services/globalSearchService";
+
+function getMeta<T = unknown>(meta: GlobalSearchResult["metadata"], key: string): T | undefined {
+   if (!meta || typeof meta !== "object") return undefined;
+   return (meta as Record<string, unknown>)[key] as T | undefined;
 }
 
 export function GlobalSearch() {
    const [open, setOpen] = useState(false);
    const [query, setQuery] = useState("");
-   const [results, setResults] = useState<SearchResult[]>([]);
-   const debouncedQuery = useDebounce(query, 300);
+   const [results, setResults] = useState<GlobalSearchResult[]>([]);
+   const [isLoading, setIsLoading] = useState(false);
+
+   const debouncedQuery = useDebounce(query, 400);
    const router = useRouter();
 
    useEffect(() => {
       const down = (e: KeyboardEvent) => {
          if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
-            setOpen((open) => !open);
+            setOpen((v) => !v);
          }
       };
       document.addEventListener("keydown", down);
@@ -43,59 +45,138 @@ export function GlobalSearch() {
    }, []);
 
    useEffect(() => {
-      const search = async () => {
-         if (debouncedQuery.length > 2) {
-            try {
-               const response = await api.get<SearchResult[]>(`/equipos/search/global?q=${debouncedQuery}`);
-               setResults(response.data);
-            } catch (error) {
-               console.error("Search failed:", error);
-               setResults([]);
-            }
-         } else {
+      const run = async () => {
+         if (debouncedQuery.trim().length < 3) {
             setResults([]);
+            return;
+         }
+
+         setIsLoading(true);
+         try {
+            const data = await busquedaService.global(debouncedQuery.trim());
+            setResults(data);
+         } catch (e) {
+            console.error("Error en búsqueda global:", e);
+            setResults([]);
+         } finally {
+            setIsLoading(false);
          }
       };
-      search();
+
+      run();
    }, [debouncedQuery]);
 
-   const handleSelect = (result: SearchResult) => {
-      const path = result.tipo === 'equipo' ? `/equipos/${result.id}` : `/${result.tipo}s/${result.id}`; // Simplificación
-      router.push(path);
+   const handleSelect = (result: GlobalSearchResult) => {
       setOpen(false);
-   }
+
+      switch (result.tipo) {
+         case "equipo":
+            router.push(`/equipos/${result.id}`);
+            break;
+
+         case "mantenimiento": {
+            const equipoId = getMeta<string>(result.metadata, "equipo_id");
+            if (equipoId) router.push(`/equipos/${equipoId}?tab=mantenimientos`);
+            else router.push(`/mantenimientos?highlight=${result.id}`);
+            break;
+         }
+
+         case "documento": {
+            const equipoId = getMeta<string>(result.metadata, "equipo_id");
+            if (equipoId) router.push(`/equipos/${equipoId}?tab=documentacion`);
+            else router.push(`/documentacion?highlight=${result.id}`);
+            break;
+         }
+      }
+   };
+
+   const renderIcon = (tipo: GlobalSearchResult["tipo"]) => {
+      switch (tipo) {
+         case "equipo":
+            return <HardDrive className="mr-2 h-4 w-4" />;
+         case "documento":
+            return <FileText className="mr-2 h-4 w-4" />;
+         case "mantenimiento":
+            return <Wrench className="mr-2 h-4 w-4" />;
+         default:
+            return <Search className="mr-2 h-4 w-4" />;
+      }
+   };
 
    return (
       <>
-         <Button
-            variant="outline"
-            className="w-full justify-start text-muted-foreground sm:w-40 lg:w-64"
+         <button
             onClick={() => setOpen(true)}
+            className="inline-flex items-center rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-transparent shadow-sm hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2 relative w-full justify-start text-sm text-muted-foreground sm:pr-12 md:w-40 lg:w-64"
          >
-            Buscar...
-            <kbd className="pointer-events-none ml-auto hidden h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex">
+            <span className="hidden lg:inline-flex">Buscar equipos...</span>
+            <span className="inline-flex lg:hidden">Buscar...</span>
+            <kbd className="pointer-events-none absolute right-1.5 top-1.5 hidden h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex">
                <span className="text-xs">⌘</span>K
             </kbd>
-         </Button>
+         </button>
+
+         {/* 👇 Nota: shouldFilter lo arreglamos en Command.tsx (paso 3) */}
          <CommandDialog open={open} onOpenChange={setOpen}>
             <CommandInput
-               placeholder="Buscar equipos, documentos, mantenimientos..."
+               placeholder="Buscar por serie, nombre, documento..."
                value={query}
                onValueChange={setQuery}
             />
             <CommandList>
-               <CommandEmpty>No se encontraron resultados.</CommandEmpty>
+               {isLoading && (
+                  <div className="py-6 text-center text-sm text-muted-foreground flex items-center justify-center">
+                     <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Buscando...
+                  </div>
+               )}
+
+               {!isLoading && results.length === 0 && debouncedQuery.length >= 3 && (
+                  <CommandEmpty>No se encontraron resultados.</CommandEmpty>
+               )}
+
+               {!isLoading && results.length > 0 && (
+                  <CommandGroup heading="Resultados encontrados">
+                     {results.map((result) => {
+                        const estado = getMeta<string>(result.metadata, "estado");
+                        const fecha = getMeta<string>(result.metadata, "fecha_programada");
+                        return (
+                           <CommandItem
+                              key={`${result.tipo}-${result.id}`}
+                              value={`${result.titulo}-${result.id}`}
+                              onSelect={() => handleSelect(result)}
+                              className="cursor-pointer"
+                           >
+                              {renderIcon(result.tipo)}
+                              <div className="flex flex-col">
+                                 <span className="font-medium">{result.titulo}</span>
+                                 <span className="text-xs text-muted-foreground truncate max-w-[300px]">
+                                    {result.descripcion ?? ""}
+                                 </span>
+                              </div>
+
+                              {result.tipo === "equipo" && estado && (
+                                 <Badge variant="outline" className="ml-auto text-xs">
+                                    {estado}
+                                 </Badge>
+                              )}
+
+                              {result.tipo === "mantenimiento" && fecha && (
+                                 <div className="ml-auto flex items-center text-xs text-muted-foreground">
+                                    <CalendarClock className="mr-1 h-3 w-3" />
+                                    {new Date(fecha).toLocaleDateString()}
+                                 </div>
+                              )}
+                           </CommandItem>
+                        );
+                     })}
+                  </CommandGroup>
+               )}
+
+               <CommandSeparator />
+
                {results.length > 0 && (
-                  <CommandGroup heading="Resultados">
-                     {results.map((result) => (
-                        <CommandItem key={result.id} onSelect={() => handleSelect(result)}>
-                           {getIcon(result.tipo)}
-                           <div>
-                              <span>{result.titulo}</span>
-                              <p className="text-xs text-muted-foreground">{result.descripcion}</p>
-                           </div>
-                        </CommandItem>
-                     ))}
+                  <CommandGroup heading="Ayuda">
+                     <CommandItem disabled>Usa las flechas para navegar y Enter para seleccionar</CommandItem>
                   </CommandGroup>
                )}
             </CommandList>

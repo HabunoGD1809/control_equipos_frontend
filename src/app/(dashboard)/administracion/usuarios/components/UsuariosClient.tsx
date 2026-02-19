@@ -1,208 +1,210 @@
-"use client"
+"use client";
 
-import { useState } from "react";
-import { ColumnDef } from "@tanstack/react-table";
-import { PlusCircle, MoreHorizontal, Trash2, KeyRound } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Plus, Pencil, Ban, CheckCircle, Loader2 } from "lucide-react";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import {
-   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle
+   Dialog,
+   DialogContent,
+   DialogHeader,
+   DialogTitle,
 } from "@/components/ui/Dialog";
-import {
-   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger
-} from "@/components/ui/DropdownMenu";
-import {
-   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
-} from "@/components/ui/AlertDialog";
-import { Usuario, Rol } from "@/types/api";
-import { UsuarioForm } from "@/components/features/usuarios/UsuarioForm";
-import api from "@/lib/api";
-import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
+import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/use-toast";
+import { UsuarioForm } from "@/components/features/usuarios/UsuarioForm";
+import { usuariosService } from "@/app/services/usuariosService";
+import { useAuthStore } from "@/store/authStore";
+import type { Usuario } from "@/types/api";
 
-interface UsuariosClientProps {
-   initialData: Usuario[];
-   roles: Rol[];
-}
-
-export const UsuariosClient: React.FC<UsuariosClientProps> = ({ initialData, roles }) => {
-   const [usuarios, setUsuarios] = useState(initialData);
-   const [isModalOpen, setIsModalOpen] = useState(false);
-   const [selectedUser, setSelectedUser] = useState<Usuario | null>(null);
+export function UsuariosClient() {
    const { toast } = useToast();
+   const { isInitialized, isAuthenticated } = useAuthStore();
 
-   // Estado para el modal de reseteo de contraseña
-   const [resetInfo, setResetInfo] = useState<{ username: string, token: string } | null>(null);
-   const [isResetAlertOpen, setIsResetAlertOpen] = useState(false);
-   const [isGeneratingToken, setIsGeneratingToken] = useState(false);
+   const [data, setData] = useState<Usuario[]>([]);
+   const [loading, setLoading] = useState(true);
+   const [isModalOpen, setIsModalOpen] = useState(false);
+   const [selectedUser, setSelectedUser] = useState<Usuario | undefined>(
+      undefined
+   );
 
+   const fetchUsuarios = useCallback(async () => {
+      if (!isInitialized || !isAuthenticated) return;
 
-   const {
-      isAlertOpen,
-      isDeleting,
-      openAlert,
-      setIsAlertOpen,
-      handleDelete,
-      itemToDelete
-   } = useDeleteConfirmation("Usuario", async () => {
-      const response = await api.get('/usuarios/?limit=200');
-      setUsuarios(response.data);
-   });
+      setLoading(true);
+      try {
+         const users = await usuariosService.getAll();
+         setData(users);
+      } catch (error) {
+         console.error(error);
+         toast({
+            variant: "destructive",
+            title: "Error",
+            description: "No se pudieron cargar los usuarios.",
+         });
+      } finally {
+         setLoading(false);
+      }
+   }, [isInitialized, isAuthenticated, toast]);
 
+   useEffect(() => {
+      if (isInitialized && isAuthenticated) {
+         fetchUsuarios();
+      } else if (isInitialized && !isAuthenticated) {
+         setLoading(false);
+      }
+   }, [isInitialized, isAuthenticated, fetchUsuarios]);
 
-   const handleSuccess = async () => {
-      const response = await api.get('/usuarios/?limit=200');
-      setUsuarios(response.data);
-      setIsModalOpen(false);
-      setSelectedUser(null);
-   };
-
-   const openModal = (user: Usuario | null = null) => {
+   const handleEdit = (user: Usuario) => {
       setSelectedUser(user);
       setIsModalOpen(true);
    };
 
-   const handleRequestReset = async (username: string) => {
-      setIsGeneratingToken(true);
+   const handleCreate = () => {
+      setSelectedUser(undefined);
+      setIsModalOpen(true);
+   };
+
+   const handleToggleBloqueo = async (user: Usuario) => {
       try {
-         const response = await api.post('/auth/password-recovery/request-reset', { username });
-         setResetInfo({ username, token: response.data.reset_token });
-         setIsResetAlertOpen(true);
+         const nuevoEstado = !user.bloqueado;
+         await usuariosService.update(user.id, { bloqueado: nuevoEstado });
+         toast({
+            title: "Estado actualizado",
+            description: `Usuario ${user.nombre_usuario} ${nuevoEstado ? "bloqueado" : "desbloqueado"
+               }.`,
+         });
+         fetchUsuarios();
       } catch (error) {
+         console.error(error);
          toast({
             variant: "destructive",
             title: "Error",
-            description: "No se pudo generar el token de reseteo. Verifique sus permisos.",
+            description: "No se pudo actualizar el estado del usuario.",
          });
-      } finally {
-         setIsGeneratingToken(false);
       }
    };
 
-   const copyToClipboard = (text: string) => {
-      navigator.clipboard.writeText(text);
-      toast({ description: "Token copiado al portapapeles." });
+   const handleSuccess = () => {
+      setIsModalOpen(false);
+      fetchUsuarios();
    };
 
-
-   const columns: ColumnDef<Usuario>[] = [
-      { accessorKey: "nombre_usuario", header: "Nombre de Usuario" },
-      { accessorKey: "email", header: "Email" },
+   const columns = [
       {
-         accessorFn: (row) => row.rol.nombre,
-         id: "rol",
-         header: "Rol"
+         accessorKey: "nombre_usuario",
+         header: "Usuario",
+         cell: ({ row }: any) => (
+            <span className="font-medium">{row.original.nombre_usuario}</span>
+         ),
+      },
+      {
+         accessorKey: "email",
+         header: "Email",
+      },
+      {
+         accessorKey: "rol.nombre",
+         header: "Rol",
+         cell: ({ row }: any) => (
+            <Badge variant="outline" className="capitalize">
+               {row.original.rol?.nombre}
+            </Badge>
+         ),
       },
       {
          accessorKey: "bloqueado",
          header: "Estado",
-         cell: ({ row }) => (row.getValue("bloqueado") ? "Bloqueado" : "Activo"),
+         cell: ({ row }: any) => (
+            <Badge
+               variant={row.original.bloqueado ? "destructive" : "outline"}
+               className={
+                  !row.original.bloqueado
+                     ? "bg-green-100 text-green-800 hover:bg-green-100 border-green-200"
+                     : ""
+               }
+            >
+               {row.original.bloqueado ? "Bloqueado" : "Activo"}
+            </Badge>
+         ),
+      },
+      {
+         accessorKey: "ultimo_login",
+         header: "Último Acceso",
+         cell: ({ row }: any) => {
+            const dateStr = row.original.ultimo_login;
+            return dateStr
+               ? format(new Date(dateStr), "dd MMM yyyy HH:mm", { locale: es })
+               : "Nunca";
+         },
       },
       {
          id: "actions",
-         cell: ({ row }) => {
-            const usuario = row.original;
+         cell: ({ row }: any) => {
+            const user = row.original as Usuario;
             return (
-               <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                     <Button variant="ghost" className="h-8 w-8 p-0">
-                        <span className="sr-only">Abrir menú</span>
-                        <MoreHorizontal className="h-4 w-4" />
-                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                     <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                     <DropdownMenuItem onClick={() => openModal(usuario)}>
-                        Editar Usuario
-                     </DropdownMenuItem>
-                     <DropdownMenuItem onClick={() => handleRequestReset(usuario.nombre_usuario)} disabled={isGeneratingToken}>
-                        <KeyRound className="mr-2 h-4 w-4" />
-                        {isGeneratingToken ? "Generando..." : "Resetear Contraseña"}
-                     </DropdownMenuItem>
-                     <DropdownMenuItem
-                        className="text-destructive focus:text-destructive"
-                        onClick={() => openAlert(usuario.id)}
-                     >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Eliminar
-                     </DropdownMenuItem>
-                  </DropdownMenuContent>
-               </DropdownMenu>
+               <div className="flex items-center gap-2 justify-end">
+                  <Button variant="ghost" size="sm" onClick={() => handleEdit(user)}>
+                     <Pencil className="h-4 w-4" />
+                  </Button>
+
+                  <Button
+                     variant="ghost"
+                     size="sm"
+                     onClick={() => handleToggleBloqueo(user)}
+                     className={
+                        user.bloqueado
+                           ? "text-green-600 hover:text-green-700"
+                           : "text-destructive hover:text-destructive"
+                     }
+                  >
+                     {user.bloqueado ? (
+                        <CheckCircle className="h-4 w-4" />
+                     ) : (
+                        <Ban className="h-4 w-4" />
+                     )}
+                  </Button>
+               </div>
             );
          },
       },
    ];
 
+   if (!isInitialized || loading) {
+      return (
+         <div className="flex justify-center p-8">
+            <Loader2 className="animate-spin" />
+         </div>
+      );
+   }
+
    return (
-      <>
-         <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-            <AlertDialogContent>
-               <AlertDialogHeader>
-                  <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                     Esta acción no se puede deshacer. Esto eliminará permanentemente al usuario y todos sus datos asociados.
-                  </AlertDialogDescription>
-               </AlertDialogHeader>
-               <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction
-                     onClick={() => handleDelete(`/usuarios/${itemToDelete}`)}
-                     disabled={isDeleting}
-                     className="bg-destructive hover:bg-destructive/90"
-                  >
-                     {isDeleting ? "Eliminando..." : "Sí, eliminar"}
-                  </AlertDialogAction>
-               </AlertDialogFooter>
-            </AlertDialogContent>
-         </AlertDialog>
-
-         <AlertDialog open={isResetAlertOpen} onOpenChange={setIsResetAlertOpen}>
-            <AlertDialogContent>
-               <AlertDialogHeader>
-                  <AlertDialogTitle>Token de Reseteo Generado</AlertDialogTitle>
-                  <AlertDialogDescription>
-                     Copie este token y entréguelo de forma segura al usuario <strong>{resetInfo?.username}</strong>. El token es válido por 15 minutos.
-                  </AlertDialogDescription>
-               </AlertDialogHeader>
-               <div className="p-4 bg-muted rounded-md font-mono text-sm break-all">
-                  {resetInfo?.token}
-               </div>
-               <AlertDialogFooter>
-                  <Button variant="outline" onClick={() => copyToClipboard(resetInfo?.token || '')}>
-                     Copiar Token
-                  </Button>
-                  <AlertDialogAction onClick={() => setIsResetAlertOpen(false)}>
-                     Cerrar
-                  </AlertDialogAction>
-               </AlertDialogFooter>
-            </AlertDialogContent>
-         </AlertDialog>
-
-
-         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-            <DialogContent>
-               <DialogHeader>
-                  <DialogTitle>{selectedUser ? "Editar Usuario" : "Crear Nuevo Usuario"}</DialogTitle>
-                  <DialogDescription>
-                     {selectedUser ? "Modifica los datos del usuario." : "Completa el formulario para añadir un nuevo usuario."}
-                  </DialogDescription>
-               </DialogHeader>
-               <UsuarioForm
-                  roles={roles}
-                  initialData={selectedUser}
-                  onSuccess={handleSuccess}
-               />
-            </DialogContent>
-         </Dialog>
-
-         <div className="flex justify-end mb-4">
-            <Button onClick={() => openModal()}>
-               <PlusCircle className="mr-2 h-4 w-4" />
-               Añadir Usuario
+      <div className="space-y-4">
+         <div className="flex justify-end">
+            <Button onClick={handleCreate}>
+               <Plus className="mr-2 h-4 w-4" /> Nuevo Usuario
             </Button>
          </div>
 
-         <DataTable columns={columns} data={usuarios} filterColumn="nombre_usuario" />
-      </>
+         <DataTable columns={columns} data={data} />
+
+         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+            <DialogContent className="sm:max-w-125">
+               <DialogHeader>
+                  <DialogTitle>
+                     {selectedUser ? "Editar Usuario" : "Crear Usuario"}
+                  </DialogTitle>
+               </DialogHeader>
+
+               <UsuarioForm
+                  initialData={selectedUser}
+                  onSuccess={handleSuccess}
+                  onCancel={() => setIsModalOpen(false)}
+               />
+            </DialogContent>
+         </Dialog>
+      </div>
    );
-};
+}

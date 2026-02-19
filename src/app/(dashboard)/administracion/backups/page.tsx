@@ -30,7 +30,7 @@ export default async function BackupsPage() {
             </p>
          </div>
          {/* Usa el componente cliente y solo pásale los datos */}
-         <BackupsClient data={logs} />
+         <BackupsClient initialData={logs} />
       </div>
    );
 }

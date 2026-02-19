@@ -1,69 +1,77 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card"
-import { TooltipProps } from "recharts";
-
-interface ChartData {
-   estado_nombre: string;
-   cantidad_equipos: number;
-   estado_color?: string | null;
-}
+import { useMemo } from "react";
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { EquipoPorEstado } from "@/types/api";
 
 interface EquiposPorEstadoChartProps {
-   data: ChartData[];
+   data: EquipoPorEstado[];
 }
 
-type CustomTooltipProps = TooltipProps<number, string>;
+export function EquiposPorEstadoChart({ data }: EquiposPorEstadoChartProps) {
+   // Procesamos los datos para asegurar que siempre haya un color válido
+   const chartData = useMemo(() => {
+      return data.map((item, index) => ({
+         name: item.estado_nombre,
+         value: item.cantidad_equipos,
+         // Usar el color de la BD o un fallback rotativo si es null
+         color: item.estado_color || `hsl(${index * 45}, 70%, 50%)`
+      }));
+   }, [data]);
 
-const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
-   if (active && payload && payload.length) {
+   const totalEquipos = useMemo(() =>
+      data.reduce((acc, curr) => acc + curr.cantidad_equipos, 0)
+      , [data]);
+
+   if (totalEquipos === 0) {
       return (
-         <div className="p-2 bg-background/80 backdrop-blur-sm border rounded-md shadow-lg">
-            <p className="font-bold">{`${payload[0].name}`}</p>
-            <p className="text-sm">{`Equipos: ${payload[0].value}`}</p>
-         </div>
+         <Card className="col-span-4">
+            <CardHeader>
+               <CardTitle>Estado del Inventario</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[300px] flex items-center justify-center text-muted-foreground">
+               No hay equipos registrados.
+            </CardContent>
+         </Card>
       );
    }
-   return null;
-};
-
-export function EquiposPorEstadoChart({ data }: EquiposPorEstadoChartProps) {
-   const chartData = data.filter(item => item.cantidad_equipos > 0);
 
    return (
-      <Card>
+      <Card className="col-span-4">
          <CardHeader>
-            <CardTitle>Distribución de Equipos</CardTitle>
-            <CardDescription>Estado actual de todos los activos registrados.</CardDescription>
+            <CardTitle>Estado del Inventario</CardTitle>
          </CardHeader>
-         <CardContent>
-            <div className="w-full h-[300px]">
-               <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                     <Pie
-                        data={chartData}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        outerRadius={110}
-                        fill="#8884d8"
-                        dataKey="cantidad_equipos"
-                        nameKey="estado_nombre"
-                        stroke="hsl(var(--background))"
-                        strokeWidth={2}
-                     >
-                        {chartData.map((entry, index) => (
-                           <Cell key={`cell-${index}`} fill={entry.estado_color || '#cccccc'} />
-                        ))}
-                     </Pie>
-                     <Tooltip content={<CustomTooltip />} />
-                     <Legend iconSize={10} />
-                  </PieChart>
-               </ResponsiveContainer>
-            </div>
+         <CardContent className="pl-2">
+            <ResponsiveContainer width="100%" height={350}>
+               <PieChart>
+                  <Pie
+                     data={chartData}
+                     dataKey="value"
+                     nameKey="name"
+                     cx="50%"
+                     cy="50%"
+                     innerRadius={60}
+                     outerRadius={100}
+                     paddingAngle={2}
+                     label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  >
+                     {chartData.map((entry, index) => (
+                        <Cell
+                           key={`cell-${index}`}
+                           fill={entry.color}
+                           stroke="transparent"
+                        />
+                     ))}
+                  </Pie>
+                  <Tooltip
+                     formatter={(value: number) => [`${value} Equipos`, 'Cantidad']}
+                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                  />
+                  <Legend verticalAlign="bottom" height={36} iconType="circle" />
+               </PieChart>
+            </ResponsiveContainer>
          </CardContent>
       </Card>
-   )
+   );
 }

@@ -1,50 +1,36 @@
-"use client";
-
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
-import { useAuthStore } from "@/store/authStore";
+import { SessionProvider } from "@/contexts/SessionProvider";
+import { ReactQueryProvider } from "@/contexts/ReactQueryProvider";
+import { serverApi } from "@/lib/http-server";
+import type { Usuario } from "@/types/api";
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
    children,
 }: {
    children: React.ReactNode;
 }) {
-   const { isAuthenticated, isLoading, checkAuthStatus } = useAuthStore();
-   const router = useRouter();
+   let user: Usuario | null = null;
 
-   useEffect(() => {
-      checkAuthStatus();
-   }, [checkAuthStatus]);
-
-   useEffect(() => {
-      if (!isLoading && !isAuthenticated) {
-         router.push('/login');
-      }
-   }, [isLoading, isAuthenticated, router]);
-
-   if (isLoading) {
-      return (
-         <div className="flex h-screen items-center justify-center bg-background">
-            <p className="text-muted-foreground">Cargando sesión...</p>
-         </div>
-      );
-   }
-
-   if (!isAuthenticated) {
-      return null;
+   try {
+      user = await serverApi.get<Usuario>("/usuarios/me");
+   } catch (error) {
+      console.error("Error validando sesión en servidor:", error);
+      redirect("/login");
    }
 
    return (
-      <div className="flex h-screen bg-secondary/20">
-         <Sidebar />
-         <main className="flex-1 flex flex-col md:ml-64">
-            <Header />
-            <div className="flex-1 overflow-y-auto p-6 lg:p-8">
-               {children}
+      <ReactQueryProvider>
+         <SessionProvider user={user}>
+            <div className="flex h-screen bg-secondary/20">
+               <Sidebar />
+               <main className="flex-1 flex flex-col md:ml-64">
+                  <Header />
+                  <div className="flex-1 overflow-y-auto p-6 lg:p-8">{children}</div>
+               </main>
             </div>
-         </main>
-      </div>
+         </SessionProvider>
+      </ReactQueryProvider>
    );
 }

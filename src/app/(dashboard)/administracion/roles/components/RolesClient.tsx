@@ -1,115 +1,148 @@
-"use client"
+"use client";
 
-import { useState } from "react";
-import { ColumnDef } from "@tanstack/react-table";
-import { MoreHorizontal, PlusCircle, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Plus, Pencil, Shield, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/Dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/DropdownMenu";
 import {
-   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
-} from "@/components/ui/AlertDialog";
-import { Rol, Permiso } from "@/types/api";
+   Dialog,
+   DialogContent,
+   DialogHeader,
+   DialogTitle,
+   DialogDescription,
+} from "@/components/ui/Dialog";
+import { useToast } from "@/components/ui/use-toast";
 import { RoleForm } from "@/components/features/roles/RoleForm";
-import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
-import api from "@/lib/api";
+import { rolesService } from "@/app/services/rolesService";
+import { useAuthStore } from "@/store/authStore";
+import type { Rol } from "@/types/api";
 
-interface RolesClientProps {
-   initialData: Rol[];
-   allPermissions: Permiso[];
-}
+export function RolesClient() {
+   const { toast } = useToast();
+   const { isInitialized, isAuthenticated } = useAuthStore();
 
-export const RolesClient: React.FC<RolesClientProps> = ({ initialData, allPermissions }) => {
-   const [roles, setRoles] = useState(initialData);
+   const [data, setData] = useState<Rol[]>([]);
+   const [loading, setLoading] = useState(true);
    const [isModalOpen, setIsModalOpen] = useState(false);
-   const [selectedRole, setSelectedRole] = useState<Rol | null>(null);
+   const [selectedRole, setSelectedRole] = useState<Rol | undefined>(undefined);
 
-   const {
-      isAlertOpen, isDeleting, openAlert, setIsAlertOpen, handleDelete, itemToDelete
-   } = useDeleteConfirmation("Rol", async () => {
-      const response = await api.get('/gestion/roles/');
-      setRoles(response.data);
-   });
+   const fetchRoles = useCallback(async () => {
+      if (!isInitialized || !isAuthenticated) return;
 
-   const handleEdit = (role: Rol) => {
-      setSelectedRole(role);
+      setLoading(true);
+      try {
+         const roles = await rolesService.getAll();
+         setData(roles);
+      } catch (error) {
+         console.error(error);
+         toast({
+            variant: "destructive",
+            title: "Error",
+            description: "Error al cargar roles.",
+         });
+      } finally {
+         setLoading(false);
+      }
+   }, [isInitialized, isAuthenticated, toast]);
+
+   useEffect(() => {
+      if (isInitialized && isAuthenticated) {
+         fetchRoles();
+      } else if (isInitialized && !isAuthenticated) {
+         setLoading(false);
+      }
+   }, [isInitialized, isAuthenticated, fetchRoles]);
+
+   const handleEdit = (rol: Rol) => {
+      setSelectedRole(rol);
       setIsModalOpen(true);
    };
 
-   const handleNew = () => {
-      setSelectedRole(null);
+   const handleCreate = () => {
+      setSelectedRole(undefined);
       setIsModalOpen(true);
    };
 
-   const columns: ColumnDef<Rol>[] = [
-      { accessorKey: "nombre", header: "Rol" },
-      { accessorKey: "descripcion", header: "Descripción" },
+   const handleSuccess = () => {
+      setIsModalOpen(false);
+      fetchRoles();
+   };
+
+   const columns = [
       {
-         id: "permisos",
+         accessorKey: "nombre",
+         header: "Rol",
+         cell: ({ row }: any) => (
+            <div className="flex items-center gap-2">
+               <Shield className="h-4 w-4 text-muted-foreground" />
+               <span className="font-medium capitalize">{row.original.nombre}</span>
+            </div>
+         ),
+      },
+      {
+         accessorKey: "descripcion",
+         header: "Descripción",
+      },
+      {
+         accessorKey: "permisos",
          header: "Permisos",
-         cell: ({ row }) => <span className="font-bold">{row.original.permisos.length}</span>
+         cell: ({ row }: any) => (
+            <span className="text-muted-foreground text-sm">
+               {row.original.permisos?.length || 0} permisos asignados
+            </span>
+         ),
       },
       {
          id: "actions",
-         cell: ({ row }) => (
-            <DropdownMenu>
-               <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
-               <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => handleEdit(row.original)}>Editar Permisos</DropdownMenuItem>
-                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => openAlert(row.original.id)}>
-                     <Trash2 className="mr-2 h-4 w-4" />Eliminar Rol
-                  </DropdownMenuItem>
-               </DropdownMenuContent>
-            </DropdownMenu>
-         )
+         cell: ({ row }: any) => (
+            <div className="flex justify-end">
+               <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleEdit(row.original)}
+               >
+                  <Pencil className="h-4 w-4" />
+               </Button>
+            </div>
+         ),
       },
    ];
 
+   if (!isInitialized || loading) {
+      return (
+         <div className="flex justify-center p-8">
+            <Loader2 className="animate-spin" />
+         </div>
+      );
+   }
+
    return (
-      <>
-         <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-            <AlertDialogContent>
-               <AlertDialogHeader>
-                  <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                     Esta acción no se puede deshacer. Eliminar un rol puede afectar a los usuarios que lo tengan asignado.
-                  </AlertDialogDescription>
-               </AlertDialogHeader>
-               <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => handleDelete(`/gestion/roles/${itemToDelete}`)} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
-                     {isDeleting ? "Eliminando..." : "Sí, eliminar"}
-                  </AlertDialogAction>
-               </AlertDialogFooter>
-            </AlertDialogContent>
-         </AlertDialog>
+      <div className="space-y-4">
+         <div className="flex justify-end">
+            <Button onClick={handleCreate}>
+               <Plus className="mr-2 h-4 w-4" /> Nuevo Rol
+            </Button>
+         </div>
+
+         <DataTable columns={columns} data={data} />
 
          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                <DialogHeader>
-                  <DialogTitle>{selectedRole ? `Editar Rol: ${selectedRole.nombre}` : "Crear Nuevo Rol"}</DialogTitle>
+                  <DialogTitle>{selectedRole ? "Editar Rol" : "Crear Rol"}</DialogTitle>
                   <DialogDescription>
-                     {selectedRole ? "Modifique los detalles y permisos del rol." : "Complete los datos para crear un nuevo rol y asigne sus permisos."}
+                     Configure los detalles y permisos del rol a continuación.
                   </DialogDescription>
                </DialogHeader>
+
                <RoleForm
                   initialData={selectedRole}
-                  allPermissions={allPermissions}
-                  onSuccess={() => setIsModalOpen(false)}
+                  onSuccess={handleSuccess}
+                  onCancel={() => setIsModalOpen(false)}
                />
             </DialogContent>
          </Dialog>
-         <div className="flex justify-end mb-4">
-            <Button onClick={handleNew}>
-               <PlusCircle className="mr-2 h-4 w-4" /> Crear Nuevo Rol
-            </Button>
-         </div>
-         <div className="mt-4">
-            <DataTable columns={columns} data={roles} filterColumn="nombre" />
-         </div>
-      </>
+      </div>
    );
 }

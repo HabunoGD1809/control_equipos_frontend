@@ -1,46 +1,64 @@
-import { cookies } from 'next/headers';
-import { EquipoRead, EstadoEquipo, Proveedor } from "@/types/api";
+import { Suspense } from "react";
+import { Loader2 } from "lucide-react";
+import type { Metadata } from "next";
+
 import { EquiposClient } from "./components/EquiposClient";
+import { equiposServerService } from "@/app/services/equiposService.server";
+import { redirect } from "next/navigation";
 
-// Helper genérico para obtener datos en el servidor
-async function fetchData(endpoint: string) {
-   const accessToken = (await cookies()).get('access_token')?.value;
-   if (!accessToken) return [];
+export const metadata: Metadata = {
+   title: "Gestión de Equipos | Control de Activos",
+   description: "Inventario y gestión de equipos físicos.",
+};
 
-   try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}${endpoint}`, {
-         headers: { 'Authorization': `Bearer ${accessToken}` },
-         cache: 'no-store',
-      });
-      if (!res.ok) {
-         console.error(`Error fetching ${endpoint}: ${res.status} ${res.statusText}`);
-         return [];
-      }
-      return res.json();
-   } catch (error) {
-      console.error(`Error fetching ${endpoint}:`, error);
-      return [];
-   }
+interface PageProps {
+   searchParams: Promise<{ page?: string; q?: string; estado?: string }>;
 }
 
-export default async function EquiposPage() {
-   const [equipos, estados, proveedores] = await Promise.all([
-      fetchData('/equipos/?limit=200') as Promise<EquipoRead[]>,
-      fetchData('/catalogos/estados-equipo/') as Promise<EstadoEquipo[]>,
-      fetchData('/proveedores/') as Promise<Proveedor[]>,
-   ]);
+export default async function EquiposPage({ searchParams }: PageProps) {
+   const params = await searchParams;
 
-   const safeEquipos = Array.isArray(equipos) ? equipos : [];
-   const safeEstados = Array.isArray(estados) ? estados : [];
-   const safeProveedores = Array.isArray(proveedores) ? proveedores : [];
+   const page = Number(params?.page) || 1;
+   const limit = 10;
+   const skip = (page - 1) * limit;
+
+   let initialData;
+   try {
+      initialData = await equiposServerService.getAll({
+         skip,
+         limit,
+         q: params?.q || "",
+         estado_id: params?.estado || "",
+      });
+   } catch (e: unknown) {
+      const err = e as Error & { status?: number };
+      if (err.status === 401) redirect("/login");
+      throw e;
+   }
 
    return (
-      <div className="space-y-8">
-         <EquiposClient
-            initialData={safeEquipos}
-            estados={safeEstados}
-            proveedores={safeProveedores}
-         />
+      <div className="flex-1 space-y-4 p-8 pt-6">
+         <div className="flex items-center justify-between space-y-2">
+            <h2 className="text-3xl font-bold tracking-tight">Equipos</h2>
+         </div>
+
+         <Suspense
+            fallback={
+               <div className="flex justify-center p-10">
+                  <Loader2 className="animate-spin h-8 w-8" />
+               </div>
+            }
+         >
+            <EquiposClient
+               initialData={initialData}
+               initialParams={{
+                  page,
+                  limit,
+                  q: params?.q || "",
+                  estado: params?.estado || "",
+               }}
+            />
+         </Suspense>
       </div>
    );
 }

@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
@@ -8,12 +8,12 @@ import { DataTable } from "@/components/ui/DataTable";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/Dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/DropdownMenu";
 import {
-   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
+   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
 } from "@/components/ui/AlertDialog";
 import { GenericCatalogForm } from "./GenericCatalogForm";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
-import api from "@/lib/api";
-import { useRouter } from "next/navigation";
+import { api } from "@/lib/http";
 
 type GenericItem = {
    id: string;
@@ -33,13 +33,17 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({ data, titl
    const [items, setItems] = useState(data);
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [selectedItem, setSelectedItem] = useState<GenericItem | null>(null);
-   const router = useRouter();
 
    const {
-      isAlertOpen, isDeleting, openAlert, setIsAlertOpen, handleDelete, itemToDelete
+      isAlertOpen,
+      isDeleting,
+      openAlert,
+      setIsAlertOpen,
+      handleDelete,
+      itemToDelete,
    } = useDeleteConfirmation(title, async () => {
-      const response = await api.get(apiEndpoint);
-      setItems(response.data);
+      const fresh = await api.get<GenericItem[]>(apiEndpoint);
+      setItems(fresh);
    });
 
    const handleEdit = (item: GenericItem) => {
@@ -54,21 +58,33 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({ data, titl
 
    const columns: ColumnDef<GenericItem>[] = [
       { accessorKey: "nombre", header: "Nombre" },
-      { accessorKey: "descripcion", header: "Descripción", cell: ({ row }) => (row.original as GenericItem).descripcion || 'N/A' },
+      {
+         accessorKey: "descripcion",
+         header: "Descripción",
+         cell: ({ row }) => (row.original as GenericItem).descripcion || "N/A",
+      },
       {
          id: "actions",
          cell: ({ row }) => (
             <DropdownMenu>
-               <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+               <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="h-8 w-8 p-0">
+                     <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+               </DropdownMenuTrigger>
                <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                   <DropdownMenuItem onClick={() => handleEdit(row.original)}>Editar</DropdownMenuItem>
-                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => openAlert(row.original.id)}>
-                     <Trash2 className="mr-2 h-4 w-4" />Eliminar
+                  <DropdownMenuItem
+                     className="text-destructive focus:text-destructive"
+                     onClick={() => openAlert(row.original.id)}
+                  >
+                     <Trash2 className="mr-2 h-4 w-4" />
+                     Eliminar
                   </DropdownMenuItem>
                </DropdownMenuContent>
             </DropdownMenu>
-         )
+         ),
       },
    ];
 
@@ -84,7 +100,11 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({ data, titl
                </AlertDialogHeader>
                <AlertDialogFooter>
                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => handleDelete(`${apiEndpoint}/${itemToDelete}`)} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
+                  <AlertDialogAction
+                     onClick={() => handleDelete(`${apiEndpoint}/${itemToDelete}`)}
+                     disabled={isDeleting}
+                     className="bg-destructive hover:bg-destructive/90"
+                  >
                      {isDeleting ? "Eliminando..." : "Sí, eliminar"}
                   </AlertDialogAction>
                </AlertDialogFooter>
@@ -100,9 +120,10 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({ data, titl
                   initialData={selectedItem ?? undefined}
                   apiEndpoint={apiEndpoint}
                   formFields={formFields}
-                  onSuccess={() => {
+                  onSuccess={async () => {
                      setIsModalOpen(false);
-                     router.refresh();
+                     const fresh = await api.get<GenericItem[]>(apiEndpoint);
+                     setItems(fresh);
                   }}
                />
             </DialogContent>
@@ -117,4 +138,4 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({ data, titl
          <DataTable columns={columns} data={items} filterColumn="nombre" />
       </>
    );
-}
+};

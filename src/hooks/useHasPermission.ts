@@ -1,28 +1,32 @@
 "use client";
 
-import { useAuthStore } from '@/store/authStore';
-import { useMemo } from 'react';
+import { useMemo } from "react";
+import { useSession } from "@/contexts/SessionProvider";
+
+type PermisoLike = { nombre: string };
+
+// helper: intenta leer permisos aunque el type sea RolResumen
+function extractPermisos(user: any): PermisoLike[] {
+   const permisos = user?.rol?.permisos;
+   return Array.isArray(permisos) ? permisos : [];
+}
 
 export const useHasPermission = (requiredPermissions: string[]): boolean => {
-   const user = useAuthStore((state) => state.user);
+   const { user } = useSession();
 
    const hasPermission = useMemo(() => {
-      if (!user) {
-         return false;
-      }
+      if (!user) return false;
 
-      // El admin siempre tiene acceso a todo.
-      if (user.rol.nombre === 'admin') {
-         return true;
-      }
+      // Admin shortcut
+      if (user.rol?.nombre === "admin") return true;
 
-      if (!user.rol.permisos || user.rol.permisos.length === 0) {
-         return false;
-      }
+      // Si el backend NO incluye permisos en /usuarios/me, esto quedará vacío.
+      const permisos = extractPermisos(user);
 
-      const userPermissions = new Set(user.rol.permisos.map(p => p.nombre));
+      if (permisos.length === 0) return false;
 
-      return requiredPermissions.every(permission => userPermissions.has(permission));
+      const userPermissions = new Set(permisos.map((p: PermisoLike) => p.nombre));
+      return requiredPermissions.every((perm) => userPermissions.has(perm));
    }, [user, requiredPermissions]);
 
    return hasPermission;

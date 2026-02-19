@@ -1,37 +1,47 @@
-"use client"
+"use client";
 
 import { useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { MoreHorizontal, PlusCircle, Trash2, Edit } from "lucide-react";
+import { useRouter } from "next/navigation";
+
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/Dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/DropdownMenu";
-import { Proveedor } from "@/types/api";
+import {
+   Dialog,
+   DialogContent,
+   DialogDescription,
+   DialogHeader,
+   DialogTitle,
+} from "@/components/ui/Dialog";
+import {
+   DropdownMenu,
+   DropdownMenuContent,
+   DropdownMenuItem,
+   DropdownMenuLabel,
+   DropdownMenuTrigger,
+} from "@/components/ui/DropdownMenu";
+
+import type { Proveedor } from "@/types/api";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
-import { useRouter } from "next/navigation";
 import { ProveedorForm } from "@/components/features/proveedores/ProveedorForm";
-import api from "@/lib/api";
 
 interface ProveedoresClientProps {
    initialData: Proveedor[];
 }
 
-export const ProveedoresClient: React.FC<ProveedoresClientProps> = ({ initialData }) => {
+export const ProveedoresClient: React.FC<ProveedoresClientProps> = ({
+   initialData,
+}) => {
    const [isModalOpen, setIsModalOpen] = useState(false);
-   const [selectedProveedor, setSelectedProveedor] = useState<Proveedor | null>(null);
+   const [selectedProveedor, setSelectedProveedor] = useState<Proveedor | null>(
+      null,
+   );
    const router = useRouter();
 
-   const {
-      isAlertOpen,
-      isDeleting,
-      openAlert,
-      setIsAlertOpen,
-      handleDelete,
-      itemToDelete
-   } = useDeleteConfirmation("Proveedor", () => {
-      router.refresh();
-   });
+   const { openAlert } = useDeleteConfirmation("Proveedor", () =>
+      router.refresh(),
+   );
 
    const handleSuccess = () => {
       setIsModalOpen(false);
@@ -82,15 +92,20 @@ export const ProveedoresClient: React.FC<ProveedoresClientProps> = ({ initialDat
    return (
       <>
          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-            <DialogContent className="sm:max-w-[625px]">
+            <DialogContent className="sm:max-w-156.25">
                <DialogHeader>
-                  <DialogTitle>{selectedProveedor ? "Editar Proveedor" : "Crear Nuevo Proveedor"}</DialogTitle>
+                  <DialogTitle>
+                     {selectedProveedor ? "Editar Proveedor" : "Crear Nuevo Proveedor"}
+                  </DialogTitle>
                   <DialogDescription>
-                     {selectedProveedor ? "Modifica los datos del proveedor." : "Completa el formulario para añadir un nuevo proveedor."}
+                     {selectedProveedor
+                        ? "Modifica los datos del proveedor."
+                        : "Completa el formulario para añadir un nuevo proveedor."}
                   </DialogDescription>
                </DialogHeader>
+
                <ProveedorForm
-                  initialData={selectedProveedor}
+                  initialData={selectedProveedor ?? undefined}
                   onSuccess={handleSuccess}
                />
             </DialogContent>

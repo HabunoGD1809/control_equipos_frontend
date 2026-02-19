@@ -1,75 +1,63 @@
-"use client"
+"use client";
 
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import * as z from "zod"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { motion } from "framer-motion"
-import { LogIn, AlertCircle } from "lucide-react"
-import Link from "next/link"
-import { Button } from "@/components/ui/Button"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form"
-import { Input } from "@/components/ui/Input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card"
-import { useToast } from "@/components/ui/use-toast"
-import { useAuthStore } from "@/store/authStore"
-import { loginSchema } from "@/lib/zod"
-import { Token } from "@/types/api"
+import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import { LogIn, AlertCircle, Loader2 } from "lucide-react";
+import Link from "next/link";
 
-type FormValues = z.infer<typeof loginSchema>
+import { Button } from "@/components/ui/Button";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
+import { Input } from "@/components/ui/Input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
+import { useToast } from "@/components/ui/use-toast";
+import { loginSchema } from "@/lib/zod";
+import { loginAction } from "@/actions/auth-actions";
+import { useAuthStore } from "@/store/authStore";
 
-interface ApiError {
-   detail: string
-}
+type FormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
-   const router = useRouter()
-   const { toast } = useToast()
-   const [error, setError] = useState<string | null>(null)
-   const { setTokens, checkAuthStatus } = useAuthStore.getState();
+   const router = useRouter();
+   const { toast } = useToast();
+   const { setUser } = useAuthStore();
+   const [error, setError] = useState<string | null>(null);
+   const [isPending, startTransition] = useTransition();
 
    const form = useForm<FormValues>({
-      resolver: zodResolver(loginSchema),
-      defaultValues: {
-         username: "",
-         password: "",
-      },
-   })
+      resolver: standardSchemaResolver(loginSchema),
+      defaultValues: { username: "", password: "" },
+   });
 
    async function onSubmit(values: FormValues) {
-      setError(null)
-      try {
-         const response = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(values)
-         });
+      setError(null);
 
-         if (!response.ok) {
-            const errorData: ApiError = await response.json();
-            throw new Error(errorData.detail || 'Credenciales incorrectas.');
+      startTransition(async () => {
+         const result = await loginAction(values);
+
+         if (result.error) {
+            setError(result.error);
+            form.setValue("password", "");
+            return;
          }
 
-         const tokens: Token = await response.json();
+         if (result.success) {
+            if (result.user) {
+               setUser(result.user);
+            }
 
-         setTokens({ accessToken: tokens.access_token, refreshToken: tokens.refresh_token });
+            toast({
+               title: "¡Bienvenido!",
+               description: "Has iniciado sesión correctamente.",
+            });
 
-         await checkAuthStatus();
-
-         toast({
-            title: "¡Bienvenido!",
-            description: "Has iniciado sesión correctamente.",
-         })
-
-         router.push("/dashboard")
-         router.refresh()
-
-      } catch (err: any) {
-         const errorMessage = err.message || "Ocurrió un error inesperado."
-         setError(errorMessage)
-         form.setValue("password", "")
-      }
+            router.refresh();
+            router.push("/dashboard");
+         }
+      });
    }
 
    return (
@@ -79,7 +67,7 @@ export default function LoginPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
          >
-            <Card className="w-[400px]">
+            <Card className="w-100">
                <CardHeader className="text-center">
                   <div className="flex justify-center items-center mb-4">
                      <LogIn className="h-10 w-10 text-primary" />
@@ -97,7 +85,7 @@ export default function LoginPage() {
                               <FormItem>
                                  <FormLabel>Nombre de Usuario</FormLabel>
                                  <FormControl>
-                                    <Input placeholder="usuario" {...field} />
+                                    <Input placeholder="usuario" {...field} disabled={isPending} />
                                  </FormControl>
                                  <FormMessage />
                               </FormItem>
@@ -110,7 +98,7 @@ export default function LoginPage() {
                               <FormItem>
                                  <FormLabel>Contraseña</FormLabel>
                                  <FormControl>
-                                    <Input type="password" placeholder="••••••••" {...field} />
+                                    <Input type="password" placeholder="••••••••" {...field} disabled={isPending} />
                                  </FormControl>
                                  <FormMessage />
                               </FormItem>
@@ -122,8 +110,15 @@ export default function LoginPage() {
                               <p>{error}</p>
                            </div>
                         )}
-                        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-                           {form.formState.isSubmitting ? "Ingresando..." : "Ingresar"}
+                        <Button type="submit" className="w-full" disabled={isPending}>
+                           {isPending ? (
+                              <>
+                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                 Ingresando...
+                              </>
+                           ) : (
+                              "Ingresar"
+                           )}
                         </Button>
                      </form>
                   </Form>
@@ -138,5 +133,5 @@ export default function LoginPage() {
             </Card>
          </motion.div>
       </div>
-   )
+   );
 }

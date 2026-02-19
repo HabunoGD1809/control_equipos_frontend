@@ -10,39 +10,44 @@ import { DataTable } from "@/components/ui/DataTable";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/Dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/DropdownMenu";
-import { LicenciaSoftware, SoftwareCatalogo, Proveedor, EquipoSimple, UsuarioSimple } from "@/types/api";
+import { LicenciaSoftware, SoftwareCatalogo, Proveedor, EquipoSimple, UsuarioSimple, AsignacionLicencia } from "@/types/api";
 import { useHasPermission } from "@/hooks/useHasPermission";
 import { SoftwareCatalogoForm } from "@/components/features/licencias/SoftwareCatalogoForm";
 import { LicenciaSoftwareForm } from "@/components/features/licencias/LicenciaSoftwareForm";
 import { AsignarLicenciaForm } from "@/components/features/licencias/AsignarLicenciaForm";
-import api from "@/lib/api";
-import { useToast } from "@/components/ui/use-toast";
+import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
+import { AsignacionesClient } from "./AsignacionesClient";
 import { useRouter } from "next/navigation";
-import { AxiosError } from "axios";
 
 interface LicenciasClientProps {
    initialLicencias: LicenciaSoftware[];
    initialCatalogo: SoftwareCatalogo[];
+   initialAsignaciones: AsignacionLicencia[];
    proveedores: Proveedor[];
    equipos: EquipoSimple[];
    usuarios: UsuarioSimple[];
 }
 
-interface ApiError {
-   detail: string;
-}
-
 type ModalType = 'catalogo' | 'licencia' | 'asignar' | null;
 
-export function LicenciasClient({ initialLicencias, initialCatalogo, proveedores, equipos, usuarios }: LicenciasClientProps) {
+export function LicenciasClient({
+   initialLicencias,
+   initialCatalogo,
+   initialAsignaciones,
+   proveedores,
+   equipos,
+   usuarios
+}: LicenciasClientProps) {
    const [activeTab, setActiveTab] = useState("licencias");
    const [modal, setModal] = useState<{ type: ModalType; data?: LicenciaSoftware | SoftwareCatalogo }>({ type: null });
-   const { toast } = useToast();
    const router = useRouter();
 
    const canManageCatalogo = useHasPermission(['administrar_software_catalogo']);
    const canManageLicencias = useHasPermission(['administrar_licencias']);
    const canAssignLicencias = useHasPermission(['asignar_licencias']);
+
+   const { handleDelete: deleteLicencia } = useDeleteConfirmation("Licencia", () => router.refresh());
+   const { handleDelete: deleteCatalogo } = useDeleteConfirmation("Catálogo", () => router.refresh());
 
    const handleOpenModal = (type: ModalType, data: LicenciaSoftware | SoftwareCatalogo | null = null) => {
       setModal({ type, data: data || undefined });
@@ -50,23 +55,7 @@ export function LicenciasClient({ initialLicencias, initialCatalogo, proveedores
 
    const handleCloseModal = () => {
       setModal({ type: null });
-   };
-
-   const handleDelete = async (type: 'licencia' | 'catalogo', id: string) => {
-      if (!confirm(`¿Estás seguro de que quieres eliminar este elemento? Esta acción no se puede deshacer.`)) {
-         return;
-      }
-
-      try {
-         const url = type === 'licencia' ? `/licencias/${id}` : `/licencias/catalogo/${id}`;
-         await api.delete(url);
-         toast({ title: "Éxito", description: `${type.charAt(0).toUpperCase() + type.slice(1)} eliminada correctamente.` });
-         router.refresh();
-      } catch (error: unknown) {
-         const axiosError = error as AxiosError<ApiError>;
-         const msg = axiosError.response?.data?.detail || `No se pudo eliminar el elemento.`;
-         toast({ variant: "destructive", title: "Error", description: msg });
-      }
+      router.refresh();
    };
 
    const licenciasColumns: ColumnDef<LicenciaSoftware>[] = [
@@ -103,7 +92,7 @@ export function LicenciasClient({ initialLicencias, initialCatalogo, proveedores
                            <Pencil className="mr-2 h-4 w-4" />Editar Licencia
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete('licencia', row.original.id)}>
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteLicencia(`/licencias/${row.original.id}`)}>
                            <Trash2 className="mr-2 h-4 w-4" />Eliminar Licencia
                         </DropdownMenuItem>
                      </>
@@ -127,8 +116,8 @@ export function LicenciasClient({ initialLicencias, initialCatalogo, proveedores
                <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                  {canManageLicencias && <DropdownMenuItem onClick={() => handleOpenModal('catalogo', row.original)}>Editar</DropdownMenuItem>}
-                  {canManageLicencias && <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete('catalogo', row.original.id)}>Eliminar</DropdownMenuItem>}
+                  {canManageCatalogo && <DropdownMenuItem onClick={() => handleOpenModal('catalogo', row.original)}>Editar</DropdownMenuItem>}
+                  {canManageCatalogo && <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteCatalogo(`/licencias/catalogo/${row.original.id}`)}>Eliminar</DropdownMenuItem>}
                </DropdownMenuContent>
             </DropdownMenu>
          )
@@ -161,6 +150,7 @@ export function LicenciasClient({ initialLicencias, initialCatalogo, proveedores
             <div className="flex justify-between items-center mb-4">
                <TabsList>
                   <TabsTrigger value="licencias">Licencias Adquiridas</TabsTrigger>
+                  <TabsTrigger value="asignaciones">Asignaciones</TabsTrigger> {/* NUEVA PESTAÑA */}
                   {canManageCatalogo && <TabsTrigger value="catalogo">Catálogo de Software</TabsTrigger>}
                </TabsList>
                <div className="flex gap-2">
@@ -180,9 +170,14 @@ export function LicenciasClient({ initialLicencias, initialCatalogo, proveedores
             <TabsContent value="licencias">
                <DataTable columns={licenciasColumns} data={initialLicencias} filterColumn="software" />
             </TabsContent>
-            <TabsContent value="catalogo">
-               {canManageCatalogo && <DataTable columns={catalogoColumns} data={initialCatalogo} />}
+            <TabsContent value="asignaciones"> {/* NUEVO CONTENIDO DE PESTAÑA */}
+               <AsignacionesClient data={initialAsignaciones} />
             </TabsContent>
+            {canManageCatalogo && (
+               <TabsContent value="catalogo">
+                  <DataTable columns={catalogoColumns} data={initialCatalogo} filterColumn="nombre" />
+               </TabsContent>
+            )}
          </Tabs>
       </>
    );

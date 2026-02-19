@@ -1,182 +1,364 @@
-"use client"
+"use client";
 
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
+import { useEffect } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
+import { z } from "zod";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { format } from "date-fns";
+import { CalendarIcon, Loader2 } from "lucide-react";
 
-import { useToast } from "@/components/ui/use-toast"; // <-- CAMBIO: Importar el hook de toast del proyecto
+import { movimientoEquipoSchema } from "@/lib/zod";
+import { movimientosService } from "@/app/services/movimientosService";
+import {
+  MovimientoCreate,
+  TipoMovimientoEquipoEnum,
+  EquipoRead,
+  UsuarioSimple,
+} from "@/types/api";
+import { useToast } from "@/components/ui/use-toast";
+import { cn } from "@/lib/utils";
+
 import { Button } from "@/components/ui/Button";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/Form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
-import { MovimientoCreate, EquipoRead, TipoMovimientoEquipoEnum } from "@/types/api";
-import api from "@/lib/api";
+import { Calendar } from "@/components/ui/Calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/Popover";
 
-const formSchema = z.object({
-   equipo_id: z.string().uuid("Por favor, selecciona un equipo."),
-   tipo_movimiento: z.nativeEnum({
-      "Salida Temporal": "Salida Temporal",
-      "Salida Definitiva": "Salida Definitiva",
-      "Entrada": "Entrada",
-      "Asignacion Interna": "Asignacion Interna",
-      "Transferencia Bodega": "Transferencia Bodega",
-   }),
-   destino: z.string().min(3, "El destino debe tener al menos 3 caracteres.").optional().or(z.literal('')),
-   proposito: z.string().min(3, "El propósito es requerido.").optional().or(z.literal('')),
-   observaciones: z.string().optional(),
-});
-
-type MovimientoFormValues = z.infer<typeof formSchema>;
+type MovimientoFormValues = z.infer<typeof movimientoEquipoSchema>;
 
 interface MovimientoFormProps {
-   equipos: EquipoRead[];
-   onSuccess: () => void;
+  equipo?: EquipoRead;
+  equipos?: EquipoRead[];
+  usuarios: UsuarioSimple[];
+  onSuccess?: () => void;
+  onCancel: () => void;
 }
 
-export const MovimientoForm: React.FC<MovimientoFormProps> = ({ equipos, onSuccess }) => {
-   const { toast } = useToast(); // <-- CAMBIO: Usar el hook del proyecto
+export function MovimientoForm({
+  equipo,
+  equipos,
+  usuarios,
+  onSuccess,
+  onCancel,
+}: MovimientoFormProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-   const form = useForm<MovimientoFormValues>({
-      resolver: zodResolver(formSchema),
-      defaultValues: {
-         equipo_id: "",
-         tipo_movimiento: "Asignacion Interna",
-         destino: "",
-         proposito: "",
-         observaciones: "",
-      },
-   });
+  const form = useForm<MovimientoFormValues>({
+    resolver: standardSchemaResolver(movimientoEquipoSchema),
+    defaultValues: {
+      equipo_id: equipo?.id ?? "",
+      tipo_movimiento: undefined,
+      destino: "",
+      proposito: "",
+      observaciones: "",
+      fecha_prevista_retorno: null,
+      usuario_id: null,
+    },
+  });
 
-   const onSubmit = async (data: MovimientoFormValues) => {
-      try {
-         const selectedEquipo = equipos.find(e => e.id === data.equipo_id);
+  // ✅ Reemplazo de watch() (evita warning del React Compiler)
+  const tipoSeleccionado = useWatch({
+    control: form.control,
+    name: "tipo_movimiento",
+  });
 
-         const payload: MovimientoCreate = {
-            ...data,
-            tipo_movimiento: data.tipo_movimiento as TipoMovimientoEquipoEnum,
-            origen: selectedEquipo?.ubicacion_actual || "N/A",
-         };
+  const equipoIdSeleccionado = useWatch({
+    control: form.control,
+    name: "equipo_id",
+  });
 
-         await api.post("/movimientos/", payload);
+  useEffect(() => {
+    if (equipo || !equipos) return;
+    const found = equipos.find((e) => e.id === equipoIdSeleccionado);
+    if (found) {
+      form.setValue("destino", found.ubicacion_actual ?? "Almacén Principal");
+    }
+  }, [equipoIdSeleccionado, equipos, equipo, form]);
 
-         // <-- CAMBIO: Usar el toast del proyecto
-         toast({
-            title: "Éxito",
-            description: "Movimiento registrado correctamente.",
-         });
-         onSuccess();
-      } catch (error) {
-         console.error("[MOVIMIENTO_FORM_SUBMIT]", error);
-         // <-- CAMBIO: Usar el toast del proyecto para errores
-         toast({
-            variant: "destructive",
-            title: "Error",
-            description: "Error al registrar el movimiento. Revisa los datos.",
-         });
-      }
-   };
+  useEffect(() => {
+    if (!tipoSeleccionado) return;
 
-   return (
-      <Form {...form}>
-         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <FormField
-               control={form.control}
-               name="equipo_id"
-               render={({ field }) => (
+    if (tipoSeleccionado === TipoMovimientoEquipoEnum.Entrada) {
+      form.setValue("destino", "Almacén Principal");
+      form.setValue("usuario_id", null);
+      form.setValue("fecha_prevista_retorno", null);
+    } else if (tipoSeleccionado === TipoMovimientoEquipoEnum.AsignacionInterna) {
+      form.setValue("destino", "");
+    }
+  }, [tipoSeleccionado, form]);
+
+  const mutation = useMutation({
+    mutationFn: movimientosService.create,
+    onSuccess: () => {
+      toast({
+        title: "Movimiento registrado",
+        description: "El estado del equipo ha sido actualizado.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["movimientos"] });
+      queryClient.invalidateQueries({ queryKey: ["equipos"] });
+      onSuccess?.();
+    },
+    onError: (error: unknown) => {
+      const detail =
+        error instanceof Error
+          ? error.message
+          : (error as { response?: { data?: { detail?: string } } })?.response
+            ?.data?.detail ?? "Error desconocido";
+      toast({
+        variant: "destructive",
+        title: "Error al registrar movimiento",
+        description: detail,
+      });
+    },
+  });
+
+  const onSubmit = (data: MovimientoFormValues) => {
+    const payload: MovimientoCreate = {
+      equipo_id: data.equipo_id,
+      tipo_movimiento: data.tipo_movimiento,
+      destino: data.destino ?? null,
+      proposito: data.proposito ?? null,
+      observaciones: data.observaciones ?? null,
+      // usuario_id: data.usuario_id ?? null,
+      fecha_prevista_retorno: data.fecha_prevista_retorno
+        ? (data.fecha_prevista_retorno as Date).toISOString()
+        : null,
+    };
+
+    mutation.mutate(payload);
+  };
+
+  if (!equipo && !equipos?.length) {
+    return (
+      <p className="p-4 text-destructive text-sm">
+        Error: No hay equipos disponibles para mover.
+      </p>
+    );
+  }
+
+  const mostrarDestino =
+    tipoSeleccionado &&
+    tipoSeleccionado !== TipoMovimientoEquipoEnum.Entrada &&
+    tipoSeleccionado !== TipoMovimientoEquipoEnum.AsignacionInterna;
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+        {!equipo && equipos && (
+          <FormField
+            control={form.control}
+            name="equipo_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Equipo a mover</FormLabel>
+                <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccione un equipo..." />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {equipos.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.nombre} ({e.numero_serie})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        <FormField
+          control={form.control}
+          name="tipo_movimiento"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Acción a realizar</FormLabel>
+              <Select
+                value={(field.value as string | undefined) ?? ""}
+                onValueChange={field.onChange}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione el tipo de movimiento" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {Object.values(TipoMovimientoEquipoEnum).map((tipo) => (
+                    <SelectItem key={tipo} value={tipo}>
+                      {tipo}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {tipoSeleccionado && (
+                <FormDescription className="text-xs text-primary font-medium">
+                  Estado resultante:{" "}
+                  {movimientosService.predecirEstadoFinal(tipoSeleccionado)}
+                </FormDescription>
+              )}
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {tipoSeleccionado && (
+          <div className="grid grid-cols-1 gap-4 border-l-2 border-primary/20 pl-4 animate-in slide-in-from-left-2 duration-300">
+            {mostrarDestino && (
+              <FormField
+                control={form.control}
+                name="destino"
+                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Equipo</FormLabel>
-                     <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormLabel>
+                      Ubicación destino{" "}
+                      <span className="text-destructive">*</span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Ej: Oficina Cliente..."
+                        {...field}
+                        value={field.value ?? ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {tipoSeleccionado === TipoMovimientoEquipoEnum.AsignacionInterna && (
+              <FormField
+                control={form.control}
+                name="usuario_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      Asignar a empleado{" "}
+                      <span className="text-destructive">*</span>
+                    </FormLabel>
+                    <Select
+                      value={field.value ?? ""}
+                      onValueChange={field.onChange}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Buscar empleado..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="max-h-50">
+                        {usuarios.map((u) => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.nombre_usuario}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {tipoSeleccionado === TipoMovimientoEquipoEnum.SalidaTemporal && (
+              <FormField
+                control={form.control}
+                name="fecha_prevista_retorno"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>
+                      Fecha prevista de retorno{" "}
+                      <span className="text-destructive">*</span>
+                    </FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
                         <FormControl>
-                           <SelectTrigger>
-                              <SelectValue placeholder="Selecciona un equipo..." />
-                           </SelectTrigger>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value
+                              ? format(field.value as Date, "PPP")
+                              : "Seleccionar fecha"}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
                         </FormControl>
-                        <SelectContent>
-                           {equipos.map((equipo) => (
-                              <SelectItem key={equipo.id} value={equipo.id}>
-                                 {equipo.nombre} ({equipo.numero_serie})
-                              </SelectItem>
-                           ))}
-                        </SelectContent>
-                     </Select>
-                     <FormMessage />
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={(field.value as Date) ?? undefined}
+                          onSelect={field.onChange}
+                          disabled={(date) => date < new Date()}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
                   </FormItem>
-               )}
-            />
+                )}
+              />
+            )}
 
             <FormField
-               control={form.control}
-               name="tipo_movimiento"
-               render={({ field }) => (
-                  <FormItem>
-                     <FormLabel>Tipo de Movimiento</FormLabel>
-                     <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                           <SelectTrigger>
-                              <SelectValue placeholder="Selecciona un tipo..." />
-                           </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                           <SelectItem value="Asignacion Interna">Asignación Interna</SelectItem>
-                           <SelectItem value="Salida Temporal">Salida Temporal</SelectItem>
-                           <SelectItem value="Transferencia Bodega">Transferencia a Bodega</SelectItem>
-                           <SelectItem value="Entrada">Entrada</SelectItem>
-                           <SelectItem value="Salida Definitiva">Salida Definitiva</SelectItem>
-                        </SelectContent>
-                     </Select>
-                     <FormMessage />
-                  </FormItem>
-               )}
+              control={form.control}
+              name="proposito"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Propósito</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="Justificación del movimiento..."
+                      {...field}
+                      value={field.value ?? ""}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
+          </div>
+        )}
 
-            <FormField
-               control={form.control}
-               name="destino"
-               render={({ field }) => (
-                  <FormItem>
-                     <FormLabel>Destino</FormLabel>
-                     <FormControl>
-                        <Input placeholder="Ej: 'Juan Pérez', 'Almacén B', 'Reparación externa'" {...field} />
-                     </FormControl>
-                     <FormMessage />
-                  </FormItem>
-               )}
-            />
-
-            <FormField
-               control={form.control}
-               name="proposito"
-               render={({ field }) => (
-                  <FormItem>
-                     <FormLabel>Propósito</FormLabel>
-                     <FormControl>
-                        <Input placeholder="Ej: 'Uso en proyecto X', 'Préstamo', 'Revisión técnica'" {...field} />
-                     </FormControl>
-                     <FormMessage />
-                  </FormItem>
-               )}
-            />
-
-            <FormField
-               control={form.control}
-               name="observaciones"
-               render={({ field }) => (
-                  <FormItem>
-                     <FormLabel>Observaciones</FormLabel>
-                     <FormControl>
-                        <Input placeholder="Añade notas adicionales si es necesario" {...field} />
-                     </FormControl>
-                     <FormMessage />
-                  </FormItem>
-               )}
-            />
-
-            <div className="flex justify-end">
-               <Button type="submit" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? "Registrando..." : "Registrar Movimiento"}
-               </Button>
-            </div>
-         </form>
-      </Form>
-   );
-};
+        <div className="flex justify-end gap-3 pt-4 border-t">
+          <Button type="button" variant="ghost" onClick={onCancel}>
+            Cancelar
+          </Button>
+          <Button
+            type="submit"
+            disabled={mutation.isPending || !tipoSeleccionado}
+          >
+            {mutation.isPending && (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            )}
+            Confirmar
+          </Button>
+        </div>
+      </form>
+    </Form>
+  );
+}

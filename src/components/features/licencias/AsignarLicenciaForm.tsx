@@ -1,21 +1,20 @@
-"use client"
+"use client";
 
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import * as z from "zod"
-import { useRouter } from "next/navigation"
-import { useState } from "react"
-import { Loader2 } from "lucide-react"
-import { AxiosError } from "axios"
+import { useForm } from "react-hook-form";
+import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
+import * as z from "zod";
+import { useState } from "react";
+import { Loader2, Link as LinkIcon, Laptop, User } from "lucide-react";
 
-import { Button } from "@/components/ui/Button"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/RadioGroup"
-import { useToast } from "@/components/ui/use-toast"
-import { asignarLicenciaSchema } from "@/lib/zod"
-import api from "@/lib/api"
-import { EquipoSimple, UsuarioSimple } from "@/types/api"
+import { Button } from "@/components/ui/Button";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
+import { Textarea } from "@/components/ui/Textarea";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/Tabs";
+import { useToast } from "@/components/ui/use-toast";
+import { asignarLicenciaSchema } from "@/lib/zod";
+import { EquipoSimple, UsuarioSimple } from "@/types/api";
+import { licenciasService } from "@/app/services/licenciasService";
 
 interface AsignarLicenciaFormProps {
    licenciaId: string;
@@ -26,38 +25,57 @@ interface AsignarLicenciaFormProps {
 
 type FormValues = z.infer<typeof asignarLicenciaSchema>;
 
-interface ApiError {
-   detail: string;
-}
-
 export function AsignarLicenciaForm({ licenciaId, equipos, usuarios, onSuccess }: AsignarLicenciaFormProps) {
-   const router = useRouter();
    const { toast } = useToast();
    const [isLoading, setIsLoading] = useState(false);
+   const [activeTab, setActiveTab] = useState<"equipo" | "usuario">("equipo");
 
    const form = useForm<FormValues>({
-      resolver: zodResolver(asignarLicenciaSchema),
+      resolver: standardSchemaResolver(asignarLicenciaSchema),
+      defaultValues: {
+         asignar_a: "equipo",
+         equipo_id: null,
+         usuario_id: null,
+         notas: "",
+      },
    });
 
-   const asignarA = form.watch("asignar_a");
+   const handleTabChange = (val: string) => {
+      const newVal = val as "equipo" | "usuario";
+      setActiveTab(newVal);
+      form.setValue("asignar_a", newVal);
 
-   const onSubmit = async (data: FormValues) => {
+      if (newVal === "equipo") form.setValue("usuario_id", null);
+      else form.setValue("equipo_id", null);
+
+      form.clearErrors();
+   };
+
+   const onSubmit = async (values: FormValues) => {
       setIsLoading(true);
       try {
-         const payload = {
+         await licenciasService.asignar({
             licencia_id: licenciaId,
-            equipo_id: data.asignar_a === 'equipo' ? data.equipo_id : null,
-            usuario_id: data.asignar_a === 'usuario' ? data.usuario_id : null,
-            notas: data.notas,
-         };
-         await api.post('/licencias/asignaciones/', payload);
-         toast({ title: "Éxito", description: "Licencia asignada correctamente." });
-         router.refresh();
+            equipo_id: values.asignar_a === "equipo" ? values.equipo_id ?? null : null,
+            usuario_id: values.asignar_a === "usuario" ? values.usuario_id ?? null : null,
+            notas: values.notas ?? null,
+         });
+
+         toast({
+            title: "Licencia Asignada",
+            description: `Se ha vinculado correctamente al ${values.asignar_a}.`,
+         });
+
          onSuccess();
-      } catch (error) {
-         const axiosError = error as AxiosError<ApiError>;
-         const msg = axiosError.response?.data?.detail || "No se pudo asignar la licencia. Verifique la disponibilidad.";
-         toast({ variant: "destructive", title: "Error", description: msg });
+      } catch (err) {
+         const e = err as Error & { status?: number };
+         toast({
+            variant: "destructive",
+            title: "Error",
+            description:
+               e.message ||
+               "No se pudo realizar la asignación. Verifique si ya existe una asignación para este destino.",
+         });
       } finally {
          setIsLoading(false);
       }
@@ -65,53 +83,100 @@ export function AsignarLicenciaForm({ licenciaId, equipos, usuarios, onSuccess }
 
    return (
       <Form {...form}>
-         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pt-4">
+         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+               <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="equipo" className="gap-2">
+                     <Laptop className="h-4 w-4" /> A Equipo
+                  </TabsTrigger>
+                  <TabsTrigger value="usuario" className="gap-2">
+                     <User className="h-4 w-4" /> A Usuario
+                  </TabsTrigger>
+               </TabsList>
+
+               <div className="mt-4 p-4 border rounded-md bg-muted/20">
+                  <TabsContent value="equipo" className="mt-0">
+                     <FormField
+                        control={form.control}
+                        name="equipo_id"
+                        render={({ field }) => (
+                           <FormItem>
+                              <FormLabel>Seleccionar Equipo</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value || ""}>
+                                 <FormControl>
+                                    <SelectTrigger>
+                                       <SelectValue placeholder="Buscar equipo..." />
+                                    </SelectTrigger>
+                                 </FormControl>
+                                 <SelectContent>
+                                    {equipos.map((eq) => (
+                                       <SelectItem key={eq.id} value={eq.id}>
+                                          {eq.nombre} - {eq.numero_serie}
+                                       </SelectItem>
+                                    ))}
+                                 </SelectContent>
+                              </Select>
+                              <FormMessage />
+                           </FormItem>
+                        )}
+                     />
+                  </TabsContent>
+
+                  <TabsContent value="usuario" className="mt-0">
+                     <FormField
+                        control={form.control}
+                        name="usuario_id"
+                        render={({ field }) => (
+                           <FormItem>
+                              <FormLabel>Seleccionar Usuario</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value || ""}>
+                                 <FormControl>
+                                    <SelectTrigger>
+                                       <SelectValue placeholder="Buscar usuario..." />
+                                    </SelectTrigger>
+                                 </FormControl>
+                                 <SelectContent>
+                                    {usuarios.map((u) => (
+                                       <SelectItem key={u.id} value={u.id}>
+                                          {u.nombre_usuario}
+                                       </SelectItem>
+                                    ))}
+                                 </SelectContent>
+                              </Select>
+                              <FormMessage />
+                           </FormItem>
+                        )}
+                     />
+                  </TabsContent>
+               </div>
+            </Tabs>
+
             <FormField
                control={form.control}
-               name="asignar_a"
+               name="notas"
                render={({ field }) => (
-                  <FormItem className="space-y-3">
-                     <FormLabel>Asignar A:</FormLabel>
+                  <FormItem>
+                     <FormLabel>Notas de Asignación</FormLabel>
                      <FormControl>
-                        <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4">
-                           <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="equipo" /></FormControl><FormLabel className="font-normal">Equipo</FormLabel></FormItem>
-                           <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="usuario" /></FormControl><FormLabel className="font-normal">Usuario</FormLabel></FormItem>
-                        </RadioGroup>
+                        <Textarea
+                           placeholder="Ej: Instalado remotamente, Ticket #555"
+                           {...field}
+                           value={field.value || ""}
+                        />
                      </FormControl>
                      <FormMessage />
                   </FormItem>
                )}
             />
 
-            {asignarA === 'equipo' && (
-               <FormField control={form.control} name="equipo_id" render={({ field }) => (
-                  <FormItem><FormLabel>Equipo</FormLabel>
-                     <Select onValueChange={field.onChange} defaultValue={field.value ?? ""}>
-                        <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un equipo..." /></SelectTrigger></FormControl>
-                        <SelectContent>{equipos.map(e => <SelectItem key={e.id} value={e.id}>{e.nombre} ({e.numero_serie})</SelectItem>)}</SelectContent>
-                     </Select><FormMessage />
-                  </FormItem>
-               )} />
-            )}
-
-            {asignarA === 'usuario' && (
-               <FormField control={form.control} name="usuario_id" render={({ field }) => (
-                  <FormItem><FormLabel>Usuario</FormLabel>
-                     <Select onValueChange={field.onChange} defaultValue={field.value ?? ""}>
-                        <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un usuario..." /></SelectTrigger></FormControl>
-                        <SelectContent>{usuarios.map(u => <SelectItem key={u.id} value={u.id}>{u.nombre_usuario}</SelectItem>)}</SelectContent>
-                     </Select><FormMessage />
-                  </FormItem>
-               )} />
-            )}
-
-            <div className="flex justify-end pt-4">
+            <div className="flex justify-end pt-2">
                <Button type="submit" disabled={isLoading}>
                   {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Asignar Licencia
+                  <LinkIcon className="mr-2 h-4 w-4" />
+                  Confirmar Asignación
                </Button>
             </div>
          </form>
       </Form>
-   )
+   );
 }

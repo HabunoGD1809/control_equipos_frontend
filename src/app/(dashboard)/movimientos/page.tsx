@@ -1,5 +1,4 @@
 import { cookies } from "next/headers";
-import { Movimiento, EquipoRead } from "@/types/api";
 import { MovimientosClient } from "./components/MovimientosClient";
 
 async function getMovimientosPageData() {
@@ -16,7 +15,7 @@ async function getMovimientosPageData() {
    try {
       const [movimientosRes, equiposRes] = await Promise.all([
          fetch(`${baseUrl}/movimientos/?limit=200`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/equipos/?limit=1000`, { headers, cache: 'no-store' }) // Traemos todos los equipos para el formulario
+         fetch(`${baseUrl}/equipos/?limit=500`, { headers, cache: 'no-store' })
       ]);
 
       const movimientos = movimientosRes.ok ? await movimientosRes.json() : [];

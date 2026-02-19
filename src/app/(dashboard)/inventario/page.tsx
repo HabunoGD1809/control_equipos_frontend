@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { InventarioStock, TipoItemInventario, Proveedor, EquipoSimple } from '@/types/api';
+import { InventarioStock, TipoItemInventario, Proveedor, EquipoSimple, InventarioMovimiento } from '@/types/api';
 import { InventarioClient } from './components/InventarioClient';
 
 async function fetchData(endpoint: string) {
@@ -23,11 +23,12 @@ async function fetchData(endpoint: string) {
 }
 
 export default async function InventarioPage() {
-   const [stockData, tiposData, proveedores, equipos] = await Promise.all([
+   const [stockData, tiposData, proveedores, equipos, movimientosData] = await Promise.all([
       fetchData('/inventario/stock/?limit=200') as Promise<InventarioStock[]>,
       fetchData('/inventario/tipos/?limit=200') as Promise<TipoItemInventario[]>,
       fetchData('/proveedores/?limit=500') as Promise<Proveedor[]>,
       fetchData('/equipos/?limit=500') as Promise<EquipoSimple[]>,
+      fetchData('/inventario/movimientos/?limit=200') as Promise<InventarioMovimiento[]>,
    ]);
 
    return (
@@ -43,6 +44,7 @@ export default async function InventarioPage() {
             initialTiposData={Array.isArray(tiposData) ? tiposData : []}
             proveedores={Array.isArray(proveedores) ? proveedores : []}
             equipos={Array.isArray(equipos) ? equipos : []}
+            initialMovimientosData={Array.isArray(movimientosData) ? movimientosData : []}
          />
       </div>
    );

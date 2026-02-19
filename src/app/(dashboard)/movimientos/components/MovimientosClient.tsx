@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
@@ -8,25 +8,50 @@ import { es } from "date-fns/locale";
 
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/Dialog";
-import { Movimiento, EquipoRead } from "@/types/api";
-import { MovimientoForm } from "@/components/features/movimientos/MovimientoForm";
-import api from "@/lib/api";
+import {
+   Dialog,
+   DialogContent,
+   DialogHeader,
+   DialogTitle,
+   DialogDescription,
+} from "@/components/ui/Dialog";
 import { Badge } from "@/components/ui/Badge";
+
+import type {
+   Movimiento,
+   EquipoRead,
+   UsuarioSimple,
+   PaginatedResponse,
+} from "@/types/api";
+import { MovimientoForm } from "@/components/features/movimientos/MovimientoForm";
+import { api } from "@/lib/http";
 
 interface MovimientosClientProps {
    initialData: Movimiento[];
    equipos: EquipoRead[];
+   usuarios: UsuarioSimple[];
 }
 
-export const MovimientosClient: React.FC<MovimientosClientProps> = ({ initialData, equipos }) => {
+function getItems<T>(data: PaginatedResponse<T> | T[]): T[] {
+   if (Array.isArray(data)) return data;
+   if (data && Array.isArray((data as any).items)) return (data as any).items;
+   return [];
+}
+
+export const MovimientosClient: React.FC<MovimientosClientProps> = ({
+   initialData,
+   equipos,
+   usuarios,
+}) => {
    const [movimientos, setMovimientos] = useState(initialData);
    const [isModalOpen, setIsModalOpen] = useState(false);
 
    const handleSuccess = async () => {
       try {
-         const response = await api.get('/movimientos/?limit=200');
-         setMovimientos(response.data);
+         const data = await api.get<PaginatedResponse<Movimiento> | Movimiento[]>(
+            "/movimientos/?limit=200",
+         );
+         setMovimientos(getItems(data));
          setIsModalOpen(false);
       } catch (error) {
          console.error("Error al refrescar los movimientos", error);
@@ -34,35 +59,26 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({ initialDat
    };
 
    const columns: ColumnDef<Movimiento>[] = [
-      {
-         accessorFn: (row) => row.equipo.nombre,
-         header: "Equipo",
-      },
-      {
-         accessorKey: "tipo_movimiento",
-         header: "Tipo",
-      },
-      {
-         accessorKey: "destino",
-         header: "Destino",
-      },
-      {
-         accessorKey: "proposito",
-         header: "Propósito",
-      },
+      { accessorFn: (row) => row.equipo.nombre, header: "Equipo" },
+      { accessorKey: "tipo_movimiento", header: "Tipo" },
+      { accessorKey: "destino", header: "Destino" },
+      { accessorKey: "proposito", header: "Propósito" },
       {
          accessorKey: "fecha_hora",
          header: "Fecha",
-         cell: ({ row }) => format(new Date(row.getValue("fecha_hora")), "Pp", { locale: es }),
+         cell: ({ row }) =>
+            format(new Date(row.getValue("fecha_hora")), "Pp", { locale: es }),
       },
       {
          accessorKey: "estado",
          header: "Estado",
-         cell: ({ row }) => <Badge variant="outline">{row.getValue("estado")}</Badge>
+         cell: ({ row }) => (
+            <Badge variant="outline">{row.getValue("estado")}</Badge>
+         ),
       },
       {
          id: "actions",
-         cell: ({ row }) => (
+         cell: () => (
             <Button variant="ghost" className="h-8 w-8 p-0">
                <span className="sr-only">Abrir menú</span>
                <MoreHorizontal className="h-4 w-4" />
@@ -78,10 +94,17 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({ initialDat
                <DialogHeader>
                   <DialogTitle>Registrar Nuevo Movimiento</DialogTitle>
                   <DialogDescription>
-                     Completa el formulario para registrar una nueva asignación, salida o transferencia de un equipo.
+                     Completa el formulario para registrar una nueva asignación, salida
+                     o transferencia.
                   </DialogDescription>
                </DialogHeader>
-               <MovimientoForm equipos={equipos} onSuccess={handleSuccess} />
+
+               <MovimientoForm
+                  equipos={equipos}
+                  usuarios={usuarios}
+                  onSuccess={handleSuccess}
+                  onCancel={() => setIsModalOpen(false)}
+               />
             </DialogContent>
          </Dialog>
 

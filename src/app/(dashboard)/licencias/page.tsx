@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 import { LicenciasClient } from "./components/LicenciasClient";
-import { LicenciaSoftware, SoftwareCatalogo, Proveedor, EquipoSimple, UsuarioSimple } from "@/types/api";
+import { LicenciaSoftware, SoftwareCatalogo, Proveedor, EquipoSimple, UsuarioSimple, AsignacionLicencia } from "@/types/api";
 
 async function fetchData(endpoint: string) {
    const accessToken = (await cookies()).get('access_token')?.value;
@@ -23,12 +23,13 @@ async function fetchData(endpoint: string) {
 }
 
 export default async function LicenciasPage() {
-   const [licencias, catalogo, proveedores, equipos, usuarios] = await Promise.all([
+   const [licencias, catalogo, proveedores, equipos, usuarios, asignaciones] = await Promise.all([
       fetchData('/licencias/?limit=200') as Promise<LicenciaSoftware[]>,
       fetchData('/licencias/catalogo/?limit=200') as Promise<SoftwareCatalogo[]>,
       fetchData('/proveedores/?limit=500') as Promise<Proveedor[]>,
       fetchData('/equipos/?limit=500') as Promise<EquipoSimple[]>,
       fetchData('/usuarios/?limit=200') as Promise<UsuarioSimple[]>,
+      fetchData('/licencias/asignaciones/?limit=200') as Promise<AsignacionLicencia[]>,
    ]);
 
    const safeLicencias = Array.isArray(licencias) ? licencias : [];
@@ -36,6 +37,7 @@ export default async function LicenciasPage() {
    const safeProveedores = Array.isArray(proveedores) ? proveedores : [];
    const safeEquipos = Array.isArray(equipos) ? equipos : [];
    const safeUsuarios = Array.isArray(usuarios) ? usuarios : [];
+   const safeAsignaciones = Array.isArray(asignaciones) ? asignaciones : [];
 
    return (
       <div className="space-y-8">
@@ -48,6 +50,7 @@ export default async function LicenciasPage() {
          <LicenciasClient
             initialLicencias={safeLicencias}
             initialCatalogo={safeCatalogo}
+            initialAsignaciones={safeAsignaciones}
             proveedores={safeProveedores}
             equipos={safeEquipos}
             usuarios={safeUsuarios}

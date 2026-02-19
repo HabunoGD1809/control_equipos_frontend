@@ -1,21 +1,35 @@
-"use client"
+"use client";
 
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import * as z from "zod"
-import { useRouter } from "next/navigation"
-import { useState } from "react"
-import { Loader2 } from "lucide-react"
+import { useMemo } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
+import * as z from "zod";
+import { Loader2, UploadCloud } from "lucide-react";
 
-import { Button } from "@/components/ui/Button"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form"
-import { Input } from "@/components/ui/Input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select"
-import { Textarea } from "@/components/ui/Textarea"
-import { useToast } from "@/components/ui/use-toast"
-import { documentoSchema } from "@/lib/zod"
-import api from "@/lib/api"
-import { TipoDocumento } from "@/types/api"
+import { Button } from "@/components/ui/Button";
+import {
+   Form,
+   FormControl,
+   FormField,
+   FormItem,
+   FormLabel,
+   FormMessage,
+   FormDescription,
+} from "@/components/ui/Form";
+import { Input } from "@/components/ui/Input";
+import {
+   Select,
+   SelectContent,
+   SelectItem,
+   SelectTrigger,
+   SelectValue,
+} from "@/components/ui/Select";
+import { Textarea } from "@/components/ui/Textarea";
+import { useToast } from "@/components/ui/use-toast";
+
+import { TipoDocumento } from "@/types/api";
+import { createDocumentoSchema, MIME_TYPE_MAP } from "@/lib/zod";
+import { documentosService } from "@/app/services/documentosService";
 
 interface UploadDocumentoFormProps {
    equipoId: string;
@@ -23,80 +37,192 @@ interface UploadDocumentoFormProps {
    onSuccess: () => void;
 }
 
-type FormValues = z.infer<typeof documentoSchema>;
+type UploadDocumentoValues = z.infer<ReturnType<typeof createDocumentoSchema>>;
 
-export function UploadDocumentoForm({ equipoId, tiposDocumento, onSuccess }: UploadDocumentoFormProps) {
-   const router = useRouter();
+export function UploadDocumentoForm({
+   equipoId,
+   tiposDocumento,
+   onSuccess,
+}: UploadDocumentoFormProps) {
    const { toast } = useToast();
-   const [isLoading, setIsLoading] = useState(false);
 
-   const form = useForm<FormValues>({
-      resolver: zodResolver(documentoSchema),
+   const dynamicSchema = useMemo(
+      () => createDocumentoSchema(tiposDocumento),
+      [tiposDocumento]
+   );
+
+   const form = useForm<UploadDocumentoValues>({
+      resolver: standardSchemaResolver(dynamicSchema),
+      defaultValues: {
+         titulo: "",
+         tipo_documento_id: "",
+         descripcion: "",
+         file: undefined,
+      },
    });
 
-   const onSubmit = async (data: FormValues) => {
-      setIsLoading(true);
-      const formData = new FormData();
-      formData.append('titulo', data.titulo);
-      formData.append('tipo_documento_id', data.tipo_documento_id);
-      if (data.descripcion) formData.append('descripcion', data.descripcion);
-      formData.append('file', data.file);
-      formData.append('equipo_id', equipoId);
+   // ✅ Reemplazo de watch() (evita warning del React Compiler)
+   const selectedTipoId = useWatch({
+      control: form.control,
+      name: "tipo_documento_id",
+   });
 
+   const acceptedExtensions = useMemo(() => {
+      if (!selectedTipoId) return undefined;
+
+      const tipo = tiposDocumento.find((t) => t.id === selectedTipoId);
+      if (!tipo?.formato_permitido || tipo.formato_permitido.length === 0)
+         return undefined;
+
+      const mimes = tipo.formato_permitido.flatMap(
+         (ext) => MIME_TYPE_MAP[ext.toLowerCase()] || []
+      );
+      const exts = tipo.formato_permitido.map((ext) => `.${ext.toLowerCase()}`);
+
+      return [...mimes, ...exts].join(",");
+   }, [selectedTipoId, tiposDocumento]);
+
+   const onSubmit = async (values: UploadDocumentoValues) => {
       try {
-         await api.post('/documentacion/', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
+         await documentosService.upload({
+            equipo_id: equipoId,
+            titulo: values.titulo,
+            tipo_documento_id: values.tipo_documento_id,
+            descripcion: values.descripcion || null,
+            file: values.file,
          });
-         toast({ title: "Éxito", description: "Documento subido correctamente." });
-         router.refresh();
+
+         toast({
+            title: "Documento subido",
+            description: "El archivo se ha almacenado correctamente.",
+         });
+
+         form.reset();
          onSuccess();
-      } catch (error) {
-         console.error("Error al subir documento:", error);
-         toast({ variant: "destructive", title: "Error", description: "No se pudo subir el documento." });
-      } finally {
-         setIsLoading(false);
+      } catch (err) {
+         const e = err as Error & { status?: number };
+         toast({
+            variant: "destructive",
+            title: "Error de subida",
+            description:
+               e.message ||
+               "Verifique que el formato coincida con el Tipo de Documento seleccionado.",
+         });
       }
    };
 
    return (
       <Form {...form}>
-         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pt-4">
-            <FormField control={form.control} name="titulo" render={({ field }) => (
-               <FormItem><FormLabel>Título del Documento</FormLabel><FormControl><Input placeholder="Ej: Factura de compra" {...field} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="tipo_documento_id" render={({ field }) => (
-               <FormItem>
-                  <FormLabel>Tipo de Documento</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                     <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un tipo..." /></SelectTrigger></FormControl>
-                     <SelectContent>{tiposDocumento.map(t => <SelectItem key={t.id} value={t.id}>{t.nombre}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <FormMessage />
-               </FormItem>
-            )} />
-            <FormField control={form.control} name="file" render={({ field: { onChange, ...props } }) => (
-               <FormItem>
-                  <FormLabel>Archivo</FormLabel>
-                  <FormControl>
-                     <Input type="file" {...props} onChange={(e) => onChange(e.target.files?.[0])} />
-                  </FormControl>
-                  <FormMessage />
-               </FormItem>
-            )} />
-            <FormField control={form.control} name="descripcion" render={({ field }) => (
-               <FormItem>
-                  <FormLabel>Descripción (Opcional)</FormLabel>
-                  <FormControl><Textarea placeholder="Añada una breve descripción del contenido del archivo..." {...field} value={field.value ?? ""} /></FormControl>
-                  <FormMessage />
-               </FormItem>
-            )} />
-            <div className="flex justify-end pt-4">
-               <Button type="submit" disabled={isLoading}>
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+               control={form.control}
+               name="titulo"
+               render={({ field }) => (
+                  <FormItem>
+                     <FormLabel>Título del Documento</FormLabel>
+                     <FormControl>
+                        <Input placeholder="Ej: Factura de Compra #123" {...field} />
+                     </FormControl>
+                     <FormMessage />
+                  </FormItem>
+               )}
+            />
+
+            <FormField
+               control={form.control}
+               name="tipo_documento_id"
+               render={({ field }) => (
+                  <FormItem>
+                     <FormLabel>Tipo de Documento</FormLabel>
+
+                     <Select
+                        value={field.value ?? ""}
+                        onValueChange={(val) => {
+                           field.onChange(val);
+                           form.setValue("file", undefined);
+                        }}
+                     >
+                        <FormControl>
+                           <SelectTrigger>
+                              <SelectValue placeholder="Seleccione categoría..." />
+                           </SelectTrigger>
+                        </FormControl>
+
+                        <SelectContent>
+                           {tiposDocumento.map((tipo) => (
+                              <SelectItem key={tipo.id} value={tipo.id}>
+                                 {tipo.nombre}{" "}
+                                 {tipo.requiere_verificacion ? "(Req. Verificación)" : ""}
+                              </SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
+
+                     <FormMessage />
+                  </FormItem>
+               )}
+            />
+
+            <FormField
+               control={form.control}
+               name="file"
+               render={({ field: { onChange, ...fieldProps } }) => (
+                  <FormItem>
+                     <FormLabel>Archivo</FormLabel>
+                     <FormControl>
+                        <Input
+                           {...fieldProps}
+                           type="file"
+                           accept={acceptedExtensions}
+                           disabled={!selectedTipoId}
+                           onChange={(event) => onChange(event.target.files?.[0])}
+                        />
+                     </FormControl>
+
+                     <FormDescription>
+                        {selectedTipoId
+                           ? `Formatos permitidos: ${tiposDocumento
+                              .find((t) => t.id === selectedTipoId)
+                              ?.formato_permitido?.join(", ") || "Todos"
+                           }`
+                           : "Seleccione un tipo de documento primero."}{" "}
+                        (Máx 10 MB)
+                     </FormDescription>
+
+                     <FormMessage />
+                  </FormItem>
+               )}
+            />
+
+            <FormField
+               control={form.control}
+               name="descripcion"
+               render={({ field }) => (
+                  <FormItem>
+                     <FormLabel>Descripción (Opcional)</FormLabel>
+                     <FormControl>
+                        <Textarea
+                           {...field}
+                           value={field.value || ""}
+                           placeholder="Detalles adicionales..."
+                        />
+                     </FormControl>
+                     <FormMessage />
+                  </FormItem>
+               )}
+            />
+
+            <div className="flex justify-end">
+               <Button type="submit" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting ? (
+                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                     <UploadCloud className="mr-2 h-4 w-4" />
+                  )}
                   Subir Archivo
                </Button>
             </div>
          </form>
       </Form>
-   )
+   );
 }

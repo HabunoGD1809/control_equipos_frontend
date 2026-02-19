@@ -5,22 +5,21 @@ import { useRouter } from 'next/navigation';
 import moment from 'moment';
 import 'moment/locale/es';
 import { Calendar as BigCalendar, momentLocalizer, View } from 'react-big-calendar';
-import 'react-big-calendar/lib/css/react-big-calendar.css';
 
-import { ReservaEquipo, EquipoSimple, EstadoReservaEnum } from '@/types/api';
+import { ReservaEquipo, EquipoSimple, EstadoReserva } from '@/types/api';
+import { EstadoReservaEnum } from '@/types/api';
 import { useAuthStore } from '@/store/authStore';
 import { useHasPermission } from '@/hooks/useHasPermission';
 import { Button } from '@/components/ui/Button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/AlertDialog';
 import { useToast } from '@/components/ui/use-toast';
 import api from '@/lib/api';
 import { ReservaForm } from '@/components/features/reservas/ReservaForm';
-import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/lib/utils';
 import { Check, Truck, X, Undo2 } from 'lucide-react';
+import { CheckInModal } from './CheckInModal';
+import { CheckOutModal } from './CheckOutModal';
 
-// Configuración de localización del calendario
 moment.locale('es');
 const localizer = momentLocalizer(moment);
 
@@ -46,13 +45,11 @@ export function ReservasClient({ initialEvents, equipos }: {
    initialEvents: ReservaEquipo[];
    equipos: EquipoSimple[];
 }) {
-   const [events, setEvents] = useState<ReservaEquipo[]>(initialEvents);
+   const [events] = useState<ReservaEquipo[]>(initialEvents);
    const [selectedReserva, setSelectedReserva] = useState<ReservaEquipo | null>(null);
    const [isModalOpen, setIsModalOpen] = useState(false);
-   const [isAlertOpen, setIsAlertOpen] = useState(false);
-   const [alertConfig, setAlertConfig] = useState<{ title: string; description: string; onConfirm: () => void }>({
-      title: '', description: '', onConfirm: () => { }
-   });
+   const [isCheckInOpen, setIsCheckInOpen] = useState(false);
+   const [isCheckOutOpen, setIsCheckOutOpen] = useState(false);
    const [isLoading, setIsLoading] = useState(false);
 
    const router = useRouter();
@@ -70,17 +67,14 @@ export function ReservasClient({ initialEvents, equipos }: {
    const [date, setDate] = useState(new Date());
    const [view, setView] = useState<View>('month');
 
-   const onNavigate = useCallback((newDate: Date) => {
-      setDate(newDate);
-   }, []);
-   const onView = useCallback((newView: View) => {
-      setView(newView);
-   }, []);
+   const onNavigate = useCallback((newDate: Date) => setDate(newDate), []);
+   const onView = useCallback((newView: View) => setView(newView), []);
 
    const handleSelectEvent = (event: ReservaEquipo) => {
       setSelectedReserva(event);
       setIsModalOpen(true);
    };
+
    const handleSelectSlot = () => {
       setSelectedReserva(null);
       setIsModalOpen(true);
@@ -88,34 +82,20 @@ export function ReservasClient({ initialEvents, equipos }: {
 
    const handleSuccess = () => {
       setIsModalOpen(false);
+      setIsCheckInOpen(false);
+      setIsCheckOutOpen(false);
       setSelectedReserva(null);
       router.refresh();
    };
 
-   const updateEstado = async (resId: string, estado: EstadoReservaEnum, notas?: string) => {
+   const updateEstado = async (resId: string, estado: EstadoReserva) => {
       setIsLoading(true);
       try {
-         await api.patch(`/reservas/${resId}/estado`, { estado, notas_administrador: notas });
+         await api.patch(`/reservas/${resId}/estado`, { estado });
          toast({ title: 'Éxito', description: `Reserva ${estado.toLowerCase()}.` });
          handleSuccess();
       } catch {
          toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar el estado.' });
-      } finally {
-         setIsLoading(false);
-      }
-   };
-
-   const handleCheckInOut = async (resId: string, action: 'check-in' | 'check-out') => {
-      setIsLoading(true);
-      const payload = action === 'check-in'
-         ? { check_in_time: new Date().toISOString() }
-         : { check_out_time: new Date().toISOString() };
-      try {
-         await api.patch(`/reservas/${resId}/check-in-out`, payload);
-         toast({ title: 'Éxito', description: `Check-${action} realizado correctamente.` });
-         handleSuccess();
-      } catch {
-         toast({ variant: 'destructive', title: 'Error', description: `No se pudo realizar el check-${action}.` });
       } finally {
          setIsLoading(false);
       }
@@ -136,23 +116,20 @@ export function ReservasClient({ initialEvents, equipos }: {
 
    return (
       <>
-         {/* AlertDialog */}
-         <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-            <AlertDialogContent>
-               <AlertDialogHeader>
-                  <AlertDialogTitle>{alertConfig.title}</AlertDialogTitle>
-                  <AlertDialogDescription>{alertConfig.description}</AlertDialogDescription>
-               </AlertDialogHeader>
-               <AlertDialogFooter>
-                  <AlertDialogCancel>Volver</AlertDialogCancel>
-                  <AlertDialogAction onClick={alertConfig.onConfirm} disabled={isLoading}>
-                     {isLoading ? 'Procesando...' : 'Confirmar'}
-                  </AlertDialogAction>
-               </AlertDialogFooter>
-            </AlertDialogContent>
-         </AlertDialog>
+         <CheckInModal
+            isOpen={isCheckInOpen}
+            onClose={() => setIsCheckInOpen(false)}
+            reserva={selectedReserva}
+            onSuccess={handleSuccess}
+         />
+         <CheckOutModal
+            isOpen={isCheckOutOpen}
+            onClose={() => setIsCheckOutOpen(false)}
+            reserva={selectedReserva}
+            onSuccess={handleSuccess}
+         />
 
-         {/* Modal Reserva */}
+         {/* Modal Principal */}
          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
             <DialogContent className="sm:max-w-2xl">
                <DialogHeader>
@@ -164,34 +141,36 @@ export function ReservasClient({ initialEvents, equipos }: {
                   )}
                </DialogHeader>
 
-               <ReservaForm initialData={selectedReserva} equipos={equipos} onSuccess={handleSuccess} />
+               <ReservaForm initialData={selectedReserva || undefined} equipos={equipos} onSuccess={handleSuccess} />
 
                {selectedReserva && (
                   <div className="pt-6 border-t mt-6">
                      <h3 className="text-lg font-semibold mb-2">Acciones</h3>
                      <div className="flex flex-wrap gap-2">
-                        {canManage && selectedReserva.estado === 'Pendiente Aprobacion' && (
+                        {canManage && selectedReserva.estado === EstadoReservaEnum.PendienteAprobacion && (
                            <>
-                              <Button size="sm" onClick={() => updateEstado(selectedReserva.id, 'Confirmada')} disabled={isLoading}>
+                              <Button size="sm" onClick={() => updateEstado(selectedReserva.id, EstadoReservaEnum.Confirmada)} disabled={isLoading}>
                                  <Check className="mr-2 h-4 w-4" /> Aprobar
                               </Button>
-                              <Button size="sm" variant="destructive" onClick={() => updateEstado(selectedReserva.id, 'Rechazada')} disabled={isLoading}>
+                              <Button size="sm" variant="destructive" onClick={() => updateEstado(selectedReserva.id, EstadoReservaEnum.Rechazada)} disabled={isLoading}>
                                  <X className="mr-2 h-4 w-4" /> Rechazar
                               </Button>
                            </>
                         )}
-                        {canManage && selectedReserva.estado === 'Confirmada' && (
-                           <Button size="sm" onClick={() => handleCheckInOut(selectedReserva.id, 'check-in')} disabled={isLoading}>
-                              <Truck className="mr-2 h-4 w-4" /> Realizar Check-in
+
+                        {canManage && selectedReserva.estado === EstadoReservaEnum.Confirmada && (
+                           <Button size="sm" onClick={() => { setIsModalOpen(false); setIsCheckInOpen(true); }} disabled={isLoading}>
+                              <Truck className="mr-2 h-4 w-4" /> Realizar Check-in (Entrega)
                            </Button>
                         )}
-                        {canManage && selectedReserva.estado === 'En Curso' && (
-                           <Button size="sm" onClick={() => handleCheckInOut(selectedReserva.id, 'check-out')} disabled={isLoading}>
-                              <Undo2 className="mr-2 h-4 w-4" /> Realizar Check-out
+                        {canManage && selectedReserva.estado === EstadoReservaEnum.EnCurso && (
+                           <Button size="sm" onClick={() => { setIsModalOpen(false); setIsCheckOutOpen(true); }} disabled={isLoading}>
+                              <Undo2 className="mr-2 h-4 w-4" /> Realizar Check-out (Devolución)
                            </Button>
                         )}
+
                         {user?.id === selectedReserva.usuario_solicitante_id &&
-                           (selectedReserva.estado === 'Pendiente Aprobacion' || selectedReserva.estado === 'Confirmada') && (
+                           (selectedReserva.estado === EstadoReservaEnum.PendienteAprobacion || selectedReserva.estado === EstadoReservaEnum.Confirmada) && (
                               <Button size="sm" variant="outline" onClick={() => handleCancel(selectedReserva.id)} disabled={isLoading}>
                                  <X className="mr-2 h-4 w-4" /> Cancelar mi Reserva
                               </Button>
@@ -202,7 +181,6 @@ export function ReservasClient({ initialEvents, equipos }: {
             </DialogContent>
          </Dialog>
 
-         {/* Calendario */}
          <div className="p-4 bg-card rounded-lg shadow-sm" style={{ height: '75vh' }}>
             <BigCalendar
                localizer={localizer}

@@ -1,4 +1,4 @@
-import api from '@/lib/api';
+import { api } from '@/lib/http';
 import type { BackupLog, PaginatedResponse } from '@/types/api';
 
 export const backupsService = {
@@ -11,7 +11,7 @@ export const backupsService = {
             backup_type: (params?.backup_type && params.backup_type !== 'all') ? params.backup_type : undefined,
          };
 
-         const { data } = await api.get<PaginatedResponse<BackupLog> | BackupLog[]>('/backups/logs', {
+         const data = await api.get<PaginatedResponse<BackupLog> | BackupLog[]>('/backups/logs', {
             params: safeParams
          });
 
@@ -25,12 +25,10 @@ export const backupsService = {
    },
 
    getLogById: async (id: string): Promise<BackupLog> => {
-      const { data } = await api.get<BackupLog>(`/backups/logs/${id}`);
-      return data;
+      return await api.get<BackupLog>(`/backups/logs/${id}`);
    },
 
    triggerBackup: async (): Promise<{ message: string; job_id: string }> => {
-      const { data } = await api.post<{ message: string; job_id: string }>('/backups/run', {});
-      return data;
+      return await api.post<{ message: string; job_id: string }>('/backups/run', {});
    }
 };

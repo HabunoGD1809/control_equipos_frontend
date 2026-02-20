@@ -3,6 +3,7 @@ type Primitive = string | number | boolean;
 interface FetchOptions extends Omit<RequestInit, "headers"> {
    params?: Record<string, Primitive | null | undefined>;
    headers?: Record<string, string>;
+   _retry?: boolean;
 }
 
 const PROXY_PREFIX = "/api/proxy";
@@ -19,7 +20,6 @@ function buildQuery(params?: FetchOptions["params"]) {
 }
 
 async function getServerOrigin(): Promise<string> {
-   // Import dinámico: evita que el bundle de client intente incluir next/headers
    const { headers } = await import("next/headers");
    const h = await headers();
 
@@ -27,14 +27,13 @@ async function getServerOrigin(): Promise<string> {
    const host = h.get("x-forwarded-host") ?? h.get("host");
 
    if (!host) {
-      // fallback seguro: si no hay host, al menos no crashear con "Invalid URL"
       return "http://localhost:3000";
    }
    return `${proto}://${host}`;
 }
 
 async function http<T>(path: string, options: FetchOptions = {}): Promise<T> {
-   const { params, headers, ...rest } = options;
+   const { params, headers, _retry, ...rest } = options;
 
    const cleanPath = path.startsWith("/") ? path : `/${path}`;
    const qs = buildQuery(params);
@@ -42,13 +41,10 @@ async function http<T>(path: string, options: FetchOptions = {}): Promise<T> {
 
    const isServer = typeof window === "undefined";
 
-   // URL absoluta en server, relativa en client
    const url = isServer
       ? new URL(proxyPath, await getServerOrigin()).toString()
       : proxyPath;
 
-   // ✅ Forward cookies when running on the server (SSR / Server Components)
-   // Without this, /api/proxy won't receive the user's auth cookies and will 401.
    let cookieHeader: string | null = null;
    if (isServer) {
       const { headers: nextHeaders } = await import("next/headers");
@@ -56,7 +52,7 @@ async function http<T>(path: string, options: FetchOptions = {}): Promise<T> {
       cookieHeader = h.get("cookie");
    }
 
-   const res = await fetch(url, {
+   const fetchOptions: RequestInit = {
       ...rest,
       headers: {
          "Content-Type": "application/json",
@@ -64,7 +60,49 @@ async function http<T>(path: string, options: FetchOptions = {}): Promise<T> {
          ...(headers ?? {}),
       },
       cache: rest.cache ?? "no-store",
-   });
+   };
+
+   let res = await fetch(url, fetchOptions);
+
+   // 🚨 INTERCEPTOR DE REFESH TOKEN 🚨
+   if (res.status === 401 && !_retry) {
+      // 1. Evitamos bucles infinitos marcando el intento
+      options._retry = true;
+
+      try {
+         // 2. Intentamos refrescar el token a través de un endpoint local o del action
+         // Como tu proxy intercepta todo, usaremos un endpoint dedicado en tu Next API 
+         // para que él maneje las cookies de forma segura.
+         const refreshUrl = isServer
+            ? new URL("/api/auth/refresh", await getServerOrigin()).toString()
+            : "/api/auth/refresh";
+
+         const refreshRes = await fetch(refreshUrl, {
+            method: "POST",
+            headers: cookieHeader ? { cookie: cookieHeader } : {},
+         });
+
+         if (refreshRes.ok) {
+            // 3. El token se refrescó exitosamente (las nuevas cookies se setearon).
+            // Reintentamos la petición original.
+
+            // Si estamos en el server, debemos actualizar el cookieHeader 
+            // con las nuevas cookies recibidas (si fuera necesario, aunque next/headers 
+            // no expone un setter directo en medio de un fetch, por lo general en el 
+            // cliente es automático).
+            res = await fetch(url, fetchOptions);
+         } else {
+            // El refresh token expiró o es inválido. Redirigimos al login.
+            if (!isServer && typeof window !== "undefined") {
+               window.location.href = "/login";
+            }
+         }
+      } catch (refreshError) {
+         if (!isServer && typeof window !== "undefined") {
+            window.location.href = "/login";
+         }
+      }
+   }
 
    if (!res.ok) {
       let message = `HTTP ${res.status}`;
@@ -80,6 +118,12 @@ async function http<T>(path: string, options: FetchOptions = {}): Promise<T> {
       } catch {
          // ignore parsing errors
       }
+
+      // Si a pesar del intento de refresh sigue dando 401, expulsamos al usuario
+      if (res.status === 401 && !isServer && typeof window !== "undefined") {
+         window.location.href = "/login";
+      }
+
       const err = new Error(message) as Error & { status?: number };
       err.status = res.status;
       throw err;
@@ -89,7 +133,6 @@ async function http<T>(path: string, options: FetchOptions = {}): Promise<T> {
 
    const ct = res.headers.get("content-type") || "";
    if (!ct.includes("application/json")) {
-      // si algún endpoint devuelve texto
       return (await res.text()) as unknown as T;
    }
 

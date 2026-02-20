@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Check } from "lucide-react";
+import { Bell, Check, ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/DropdownMenu";
 import { notificacionesService } from "@/app/services/notificacionesService";
 import { useSession } from "@/contexts/SessionProvider";
+import { Notificacion } from "@/types/api";
 
 export function Notifications() {
    const router = useRouter();
@@ -44,11 +45,20 @@ export function Notifications() {
       mutationFn: () => notificacionesService.marcarTodasComoLeidas(),
       onSuccess: async () => {
          await Promise.all([
-            qc.invalidateQueries({ queryKey: ["notificaciones", "latest"] }),
-            qc.invalidateQueries({ queryKey: ["notificaciones", "unreadCount"] }),
+            qc.invalidateQueries({ queryKey: ["notificaciones"] }),
          ]);
       },
    });
+
+   const getUrlReferencia = (notif: Notificacion) => {
+      if (!notif.referencia_tabla || !notif.referencia_id) return null;
+      switch (notif.referencia_tabla) {
+         case "equipos": return `/equipos/${notif.referencia_id}`;
+         case "reservas_equipo": return `/reservas`;
+         case "mantenimiento": return `/mantenimientos`;
+         default: return null;
+      }
+   };
 
    if (!enabled) {
       return (
@@ -64,8 +74,8 @@ export function Notifications() {
             <Button variant="outline" size="icon" className="relative">
                <Bell className="h-[1.2rem] w-[1.2rem]" />
                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white">
-                     {unreadCount}
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white shadow-sm">
+                     {unreadCount > 99 ? "99+" : unreadCount}
                   </span>
                )}
             </Button>
@@ -79,10 +89,14 @@ export function Notifications() {
                   <Button
                      variant="ghost"
                      size="sm"
-                     onClick={() => markAllMutation.mutate()}
+                     className="text-xs text-muted-foreground hover:text-primary p-0 h-auto"
+                     onClick={(e) => {
+                        e.stopPropagation();
+                        markAllMutation.mutate();
+                     }}
                      disabled={markAllMutation.isPending}
                   >
-                     <Check className="h-4 w-4 mr-1" />
+                     <Check className="h-3 w-3 mr-1" />
                      Marcar todas leídas
                   </Button>
                )}
@@ -91,23 +105,36 @@ export function Notifications() {
             <DropdownMenuSeparator />
 
             {notifications.length > 0 ? (
-               notifications.map((notif) => (
-                  <DropdownMenuItem key={notif.id} className="flex flex-col items-start gap-1">
-                     <p className="text-sm font-medium">{notif.mensaje}</p>
-                     <p className="text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(notif.created_at), { addSuffix: true, locale: es })}
-                        {isFetching ? " · actualizando..." : ""}
-                     </p>
-                  </DropdownMenuItem>
-               ))
+               <div className="max-h-75 overflow-y-auto">
+                  {notifications.map((notif) => {
+                     const url = getUrlReferencia(notif);
+                     return (
+                        <DropdownMenuItem
+                           key={notif.id}
+                           className={`flex flex-col items-start gap-1 cursor-pointer border-b last:border-0 ${!notif.leido ? "bg-primary/5" : ""}`}
+                           onClick={() => url ? router.push(url) : null}
+                        >
+                           <div className="flex justify-between w-full items-start">
+                              <p className={`text-sm ${!notif.leido ? "font-semibold" : "font-medium"}`}>
+                                 {notif.mensaje}
+                              </p>
+                              {url && <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0 mt-1" />}
+                           </div>
+                           <p className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(new Date(notif.created_at), { addSuffix: true, locale: es })}
+                           </p>
+                        </DropdownMenuItem>
+                     );
+                  })}
+               </div>
             ) : (
-               <p className="p-4 text-sm text-center text-muted-foreground">No hay notificaciones nuevas.</p>
+               <p className="p-4 text-sm text-center text-muted-foreground">No hay notificaciones recientes.</p>
             )}
 
             <DropdownMenuSeparator />
 
-            <DropdownMenuItem onClick={() => router.push("/notificaciones")} className="justify-center">
-               Ver todas las notificaciones
+            <DropdownMenuItem onClick={() => router.push("/notificaciones")} className="justify-center font-medium cursor-pointer">
+               Ver historial completo
             </DropdownMenuItem>
          </DropdownMenuContent>
       </DropdownMenu>

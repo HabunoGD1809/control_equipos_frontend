@@ -1,18 +1,9 @@
 "use client"
 
 import { useRouter } from "next/navigation";
-import { InventarioStock } from "@/types/api";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-
-interface ItemBajoStock extends InventarioStock {
-   tipo_item: {
-      nombre: string;
-      stock_minimo: number;
-   };
-   cantidad_actual: number;
-}
-
+import type { ItemBajoStock } from "@/app/services/inventarioService";
 
 interface ItemsBajoStockListProps {
    items: ItemBajoStock[];
@@ -33,11 +24,11 @@ export function ItemsBajoStockList({ items }: ItemsBajoStockListProps) {
                   <p className="text-sm font-medium leading-none truncate">
                      {item.tipo_item.nombre}
                   </p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground mt-1">
                      Ubicación: {item.ubicacion}
                   </p>
                </div>
-               <div className="text-right">
+               <div className="text-right flex flex-col items-end">
                   <Badge variant="destructive" className="mb-1">
                      {item.cantidad_actual} / {item.tipo_item.stock_minimo}
                   </Badge>

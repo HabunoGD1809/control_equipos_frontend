@@ -51,22 +51,30 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuc
    const onSubmit = async (data: FormValues) => {
       setIsLoading(true);
       try {
+         const payload = {
+            ...data,
+            descripcion: data.descripcion?.trim() ? data.descripcion : null,
+            color_hex: data.color_hex?.trim() ? data.color_hex : null,
+            periodicidad_dias: (data.periodicidad_dias && data.periodicidad_dias > 0) ? data.periodicidad_dias : null,
+         };
+
          if (isEditing) {
-            await api.put(`${apiEndpoint}/${initialData.id}`, data);
+            await api.put(`${apiEndpoint}/${initialData.id}`, payload);
             toast({ title: "Éxito", description: "Ítem actualizado correctamente." });
          } else {
-            await api.post(apiEndpoint, data);
+            await api.post(apiEndpoint, payload);
             toast({ title: "Éxito", description: "Ítem creado correctamente." });
          }
          router.refresh();
          onSuccess();
-      } catch (err) {
-         const e = err as Error & { status?: number };
-         toast({
-            variant: "destructive",
-            title: "Error",
-            description: e.message || "No se pudo guardar el ítem.",
-         });
+      } catch (err: any) {
+         const detail = err?.response?.data?.detail || err?.message || "";
+
+         if (detail.includes("uq_")) {
+            form.setError("nombre", { type: "manual", message: "Este nombre ya existe en el catálogo." });
+         } else {
+            toast({ variant: "destructive", title: "Error", description: detail || "No se pudo guardar el ítem." });
+         }
       } finally {
          setIsLoading(false);
       }
@@ -81,7 +89,7 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuc
                   name="nombre"
                   render={({ field }) => (
                      <FormItem>
-                        <FormLabel>Nombre</FormLabel>
+                        <FormLabel>Nombre <span className="text-destructive">*</span></FormLabel>
                         <FormControl>
                            <Input {...field} value={field.value ?? ""} />
                         </FormControl>
@@ -118,7 +126,7 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuc
                            <FormControl>
                               <Input placeholder="#4CAF50" {...field} value={field.value ?? ""} />
                            </FormControl>
-                           <div className="w-10 h-10 rounded border" style={{ backgroundColor: field.value || "#ffffff" }} />
+                           <div className="w-10 h-10 rounded border shrink-0" style={{ backgroundColor: field.value || "#ffffff" }} />
                         </div>
                         <FormMessage />
                      </FormItem>
@@ -136,6 +144,8 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuc
                         <FormControl>
                            <Input
                               type="number"
+                              min="1"
+                              placeholder="Ej: 90"
                               value={field.value ?? ""}
                               onChange={(e) => {
                                  const n = e.target.valueAsNumber;

@@ -32,7 +32,9 @@ import { createDocumentoSchema, MIME_TYPE_MAP } from "@/lib/zod";
 import { documentosService } from "@/app/services/documentosService";
 
 interface UploadDocumentoFormProps {
-   equipoId: string;
+   equipoId?: string;
+   mantenimientoId?: string;
+   licenciaId?: string;
    tiposDocumento: TipoDocumento[];
    onSuccess: () => void;
 }
@@ -41,6 +43,8 @@ type UploadDocumentoValues = z.infer<ReturnType<typeof createDocumentoSchema>>;
 
 export function UploadDocumentoForm({
    equipoId,
+   mantenimientoId,
+   licenciaId,
    tiposDocumento,
    onSuccess,
 }: UploadDocumentoFormProps) {
@@ -55,13 +59,12 @@ export function UploadDocumentoForm({
       resolver: standardSchemaResolver(dynamicSchema),
       defaultValues: {
          titulo: "",
-         tipo_documento_id: "",
+         tipo_documento_id: undefined,
          descripcion: "",
          file: undefined,
       },
    });
 
-   // ✅ Reemplazo de watch() (evita warning del React Compiler)
    const selectedTipoId = useWatch({
       control: form.control,
       name: "tipo_documento_id",
@@ -85,7 +88,9 @@ export function UploadDocumentoForm({
    const onSubmit = async (values: UploadDocumentoValues) => {
       try {
          await documentosService.upload({
-            equipo_id: equipoId,
+            equipo_id: equipoId || null,
+            mantenimiento_id: mantenimientoId || null,
+            licencia_id: licenciaId || null,
             titulo: values.titulo,
             tipo_documento_id: values.tipo_documento_id,
             descripcion: values.descripcion || null,
@@ -106,7 +111,7 @@ export function UploadDocumentoForm({
             title: "Error de subida",
             description:
                e.message ||
-               "Verifique que el formato coincida con el Tipo de Documento seleccionado.",
+               "Verifique que el formato coincida con el Tipo de Documento seleccionado y no supere los 10MB.",
          });
       }
    };
@@ -119,7 +124,7 @@ export function UploadDocumentoForm({
                name="titulo"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Título del Documento</FormLabel>
+                     <FormLabel>Título del Documento <span className="text-destructive">*</span></FormLabel>
                      <FormControl>
                         <Input placeholder="Ej: Factura de Compra #123" {...field} />
                      </FormControl>
@@ -133,13 +138,13 @@ export function UploadDocumentoForm({
                name="tipo_documento_id"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Tipo de Documento</FormLabel>
+                     <FormLabel>Tipo de Documento <span className="text-destructive">*</span></FormLabel>
 
                      <Select
-                        value={field.value ?? ""}
+                        value={field.value || undefined}
                         onValueChange={(val) => {
                            field.onChange(val);
-                           form.setValue("file", undefined);
+                           form.setValue("file", undefined); // Reset file on type change
                         }}
                      >
                         <FormControl>
@@ -168,7 +173,7 @@ export function UploadDocumentoForm({
                name="file"
                render={({ field: { onChange, ...fieldProps } }) => (
                   <FormItem>
-                     <FormLabel>Archivo</FormLabel>
+                     <FormLabel>Archivo <span className="text-destructive">*</span></FormLabel>
                      <FormControl>
                         <Input
                            {...fieldProps}
@@ -204,7 +209,8 @@ export function UploadDocumentoForm({
                         <Textarea
                            {...field}
                            value={field.value || ""}
-                           placeholder="Detalles adicionales..."
+                           placeholder="Detalles adicionales sobre el archivo..."
+                           className="resize-none"
                         />
                      </FormControl>
                      <FormMessage />
@@ -212,7 +218,7 @@ export function UploadDocumentoForm({
                )}
             />
 
-            <div className="flex justify-end">
+            <div className="flex justify-end pt-2">
                <Button type="submit" disabled={form.formState.isSubmitting}>
                   {form.formState.isSubmitting ? (
                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/Input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
 import { useToast } from "@/components/ui/use-toast";
 import { softwareCatalogoSchema } from "@/lib/zod";
-import { SoftwareCatalogo } from "@/types/api";
+import { SoftwareCatalogo, TipoLicenciaSoftwareEnum, MetricaLicenciamientoEnum } from "@/types/api";
 import { licenciasService } from "@/app/services/licenciasService";
 
 interface SoftwareCatalogoFormProps {
@@ -35,10 +35,10 @@ export function SoftwareCatalogoForm({ initialData, onSuccess }: SoftwareCatalog
          nombre: initialData?.nombre ?? "",
          version: initialData?.version ?? "",
          fabricante: initialData?.fabricante ?? "",
-         tipo_licencia: (initialData as any)?.tipo_licencia ?? "",
-         metrica_licenciamiento: (initialData as any)?.metrica_licenciamiento ?? "",
-         descripcion: (initialData as any)?.descripcion ?? "",
-      } as any,
+         tipo_licencia: initialData?.tipo_licencia ?? undefined,
+         metrica_licenciamiento: initialData?.metrica_licenciamiento ?? undefined,
+         descripcion: initialData?.descripcion ?? "",
+      },
    });
 
    const onSubmit = async (data: FormValues) => {
@@ -114,16 +114,17 @@ export function SoftwareCatalogoForm({ initialData, onSuccess }: SoftwareCatalog
                   render={({ field }) => (
                      <FormItem>
                         <FormLabel>Tipo de Licencia</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value ?? ""}>
-                           <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un tipo..." /></SelectTrigger></FormControl>
+                        <Select
+                           value={field.value ?? undefined}
+                           onValueChange={field.onChange}
+                        >
+                           <FormControl>
+                              <SelectTrigger><SelectValue placeholder="Seleccione un tipo..." /></SelectTrigger>
+                           </FormControl>
                            <SelectContent>
-                              <SelectItem value="Perpetua">Perpetua</SelectItem>
-                              <SelectItem value="Suscripción Anual">Suscripción Anual</SelectItem>
-                              <SelectItem value="Suscripción Mensual">Suscripción Mensual</SelectItem>
-                              <SelectItem value="OEM">OEM</SelectItem>
-                              <SelectItem value="Freeware">Freeware</SelectItem>
-                              <SelectItem value="Open Source">Open Source</SelectItem>
-                              <SelectItem value="Otra">Otra</SelectItem>
+                              {Object.values(TipoLicenciaSoftwareEnum).map((v) => (
+                                 <SelectItem key={v} value={v}>{v}</SelectItem>
+                              ))}
                            </SelectContent>
                         </Select>
                         <FormMessage />
@@ -137,16 +138,17 @@ export function SoftwareCatalogoForm({ initialData, onSuccess }: SoftwareCatalog
                   render={({ field }) => (
                      <FormItem>
                         <FormLabel>Métrica</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value ?? ""}>
-                           <FormControl><SelectTrigger><SelectValue placeholder="Seleccione una métrica..." /></SelectTrigger></FormControl>
+                        <Select
+                           value={field.value ?? undefined}
+                           onValueChange={field.onChange}
+                        >
+                           <FormControl>
+                              <SelectTrigger><SelectValue placeholder="Seleccione una métrica..." /></SelectTrigger>
+                           </FormControl>
                            <SelectContent>
-                              <SelectItem value="Por Dispositivo">Por Dispositivo</SelectItem>
-                              <SelectItem value="Por Usuario Nominal">Por Usuario Nominal</SelectItem>
-                              <SelectItem value="Por Usuario Concurrente">Por Usuario Concurrente</SelectItem>
-                              <SelectItem value="Por Core">Por Core</SelectItem>
-                              <SelectItem value="Por Servidor">Por Servidor</SelectItem>
-                              <SelectItem value="Gratuita">Gratuita</SelectItem>
-                              <SelectItem value="Otra">Otra</SelectItem>
+                              {Object.values(MetricaLicenciamientoEnum).map((v) => (
+                                 <SelectItem key={v} value={v}>{v}</SelectItem>
+                              ))}
                            </SelectContent>
                         </Select>
                         <FormMessage />

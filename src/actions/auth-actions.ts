@@ -27,6 +27,7 @@ export async function loginAction(values: z.infer<typeof loginSchema>) {
    if (!parsed.success) return { error: "Datos inválidos" };
 
    const { username, password } = parsed.data;
+   // OAuth2PasswordBearer exige strictly application/x-www-form-urlencoded
    const params = new URLSearchParams();
    params.append("username", username);
    params.append("password", password);
@@ -40,7 +41,7 @@ export async function loginAction(values: z.infer<typeof loginSchema>) {
       });
 
       if (!res.ok) {
-         return { error: "Credenciales incorrectas o error en el servidor" };
+         return { error: "Credenciales incorrectas o usuario bloqueado" };
       }
 
       const tokens = await res.json();
@@ -95,12 +96,23 @@ export async function requestPasswordResetAction(
    const parsed = resetPasswordRequestSchema.safeParse(values);
    if (!parsed.success) return { error: "Datos inválidos" };
 
+   // 🚨 CORRECCIÓN CRÍTICA: El backend exige Autenticación para este endpoint (Solo Admin)
+   const cookieStore = await cookies();
+   const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
+
+   if (!token) {
+      return { error: "Acceso denegado. Solo un administrador autenticado puede generar un token." };
+   }
+
    try {
       const res = await fetch(
          `${API_URL}/auth/password-recovery/request-reset`,
          {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+               "Content-Type": "application/json",
+               "Authorization": `Bearer ${token}`
+            },
             body: JSON.stringify(parsed.data),
             cache: "no-store",
          }
@@ -108,7 +120,7 @@ export async function requestPasswordResetAction(
 
       if (!res.ok) {
          const errorData = await res.json().catch(() => ({}));
-         return { error: errorData.detail || "Error al solicitar recuperación." };
+         return { error: errorData.detail || "Error al solicitar recuperación. Verifique si el usuario existe." };
       }
 
       const data: ResetTokenResponse = await res.json();
@@ -125,6 +137,7 @@ export async function confirmPasswordResetAction(
    const parsed = resetPasswordConfirmSchema.safeParse(values);
    if (!parsed.success) return { error: "Datos inválidos" };
 
+   // El backend no recibe confirm_password, se filtra
    const { confirm_password, ...payload } = parsed.data;
 
    try {
@@ -140,7 +153,7 @@ export async function confirmPasswordResetAction(
 
       if (!res.ok) {
          const errorData = await res.json().catch(() => ({}));
-         return { error: errorData.detail || "Error al restablecer contraseña." };
+         return { error: errorData.detail || "Token inválido o expirado." };
       }
 
       return { success: true };
@@ -158,7 +171,8 @@ export async function changePasswordAction(
 
    const cookieStore = await cookies();
    const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
-   if (!token) return { error: "No estás autenticado" };
+
+   if (!token) return { error: "Sesión expirada. Inicie sesión nuevamente." };
 
    try {
       const res = await fetch(`${API_URL}/auth/change-password`, {
@@ -176,7 +190,7 @@ export async function changePasswordAction(
 
       if (!res.ok) {
          const errorData = await res.json().catch(() => ({}));
-         return { error: errorData.detail || "Error al cambiar la contraseña." };
+         return { error: errorData.detail || "La contraseña actual es incorrecta." };
       }
 
       return { success: true };

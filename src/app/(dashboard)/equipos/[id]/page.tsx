@@ -21,52 +21,63 @@ interface PageProps {
 
 type LicenciaAsignacion = { licencia: LicenciaSoftware };
 
+function unwrap<T>(data: any): T[] {
+   if (!data) return [];
+   if (Array.isArray(data)) return data;
+   if (typeof data === "object" && "items" in data && Array.isArray(data.items)) {
+      return data.items;
+   }
+   return [];
+}
+
 async function getData(id: string) {
    try {
       const [
          equipo,
-         componentes,
-         padres,
-         mantenimientos,
-         documentos,
-         movimientos,
-         asignaciones,
-         equiposDisponibles,
-         tiposMantenimiento,
-         tiposDocumento,
-         proveedores,
+         compRes,
+         padresRes,
+         mtoRes,
+         docsRes,
+         movRes,
+         asigRes,
+         equiposRes,
+         tiposMtoRes,
+         tiposDocRes,
+         provRes,
       ] = await Promise.all([
          serverApi.get<EquipoRead>(`/equipos/${id}`),
 
-         serverApi.get<ComponenteInfo[]>(`/equipos/${id}/componentes`).catch(() => []),
-         serverApi.get<PadreInfo[]>(`/equipos/${id}/parte_de`).catch(() => []),
+         serverApi.get<any>(`/equipos/${id}/componentes`).catch(() => []),
+         serverApi.get<any>(`/equipos/${id}/parte_de`).catch(() => []),
 
-         serverApi.get<Mantenimiento[]>(`/mantenimientos/?equipo_id=${id}&limit=100`).catch(() => []),
-         serverApi.get<Documentacion[]>(`/documentacion/equipo/${id}?limit=100`).catch(() => []),
-         serverApi.get<Movimiento[]>(`/movimientos/?equipo_id=${id}&limit=100`).catch(() => []),
+         serverApi.get<any>(`/mantenimientos/?equipo_id=${id}&limit=100`).catch(() => []),
 
-         serverApi.get<LicenciaAsignacion[]>(`/licencias/asignaciones/?equipo_id=${id}&limit=100`).catch(() => []),
+         serverApi.get<any>(`/documentacion/equipo/${id}?limit=100`).catch(() => []),
+         serverApi.get<any>(`/movimientos/?equipo_id=${id}&limit=100`).catch(() => []),
 
-         serverApi.get<EquipoSimple[]>(`/equipos/?limit=500`).catch(() => []),
-         serverApi.get<TipoMantenimiento[]>(`/catalogos/tipos-mantenimiento/`).catch(() => []),
-         serverApi.get<TipoDocumento[]>(`/catalogos/tipos-documento/`).catch(() => []),
-         serverApi.get<Proveedor[]>(`/proveedores/?limit=500`).catch(() => []),
+         serverApi.get<any>(`/licencias/asignaciones/?equipo_id=${id}&limit=100`).catch(() => []),
+
+         serverApi.get<any>(`/equipos/?limit=500`).catch(() => []),
+         serverApi.get<any>(`/catalogos/tipos-mantenimiento/`).catch(() => []),
+         serverApi.get<any>(`/catalogos/tipos-documento/`).catch(() => []),
+         serverApi.get<any>(`/proveedores/?limit=500`).catch(() => []),
       ]);
 
-      const licencias = (asignaciones ?? []).map((a) => a.licencia);
+      const asignaciones = unwrap<LicenciaAsignacion>(asigRes);
+      const licencias = asignaciones.map((a) => a.licencia);
 
       return {
          equipo,
-         componentes,
-         padres,
-         mantenimientos,
-         documentos,
-         movimientos,
+         componentes: unwrap<ComponenteInfo>(compRes),
+         padres: unwrap<PadreInfo>(padresRes),
+         mantenimientos: unwrap<Mantenimiento>(mtoRes),
+         documentos: unwrap<Documentacion>(docsRes),
+         movimientos: unwrap<Movimiento>(movRes),
          licencias,
-         equiposDisponibles,
-         tiposMantenimiento,
-         tiposDocumento,
-         proveedores,
+         equiposDisponibles: unwrap<EquipoSimple>(equiposRes),
+         tiposMantenimiento: unwrap<TipoMantenimiento>(tiposMtoRes),
+         tiposDocumento: unwrap<TipoDocumento>(tiposDocRes),
+         proveedores: unwrap<Proveedor>(provRes),
       };
    } catch (e: unknown) {
       const err = e as Error & { status?: number };

@@ -1,7 +1,7 @@
 "use client";
 
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import * as z from "zod";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -14,18 +14,14 @@ import { Textarea } from "@/components/ui/Textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { Documentacion, EstadoDocumentoEnum } from "@/types/api";
 import { documentosService } from "@/app/services/documentosService";
+import { documentacionVerifySchema } from "@/lib/zod";
 
 interface VerifyDocumentoFormProps {
    documento: Documentacion;
    onSuccess: () => void;
 }
 
-const verifySchema = z.object({
-   estado: z.enum([EstadoDocumentoEnum.Verificado, EstadoDocumentoEnum.Rechazado]),
-   notas_verificacion: z.string().optional().nullable(),
-});
-
-type FormValues = z.infer<typeof verifySchema>;
+type FormValues = z.infer<typeof documentacionVerifySchema>;
 
 export function VerifyDocumentoForm({ documento, onSuccess }: VerifyDocumentoFormProps) {
    const router = useRouter();
@@ -33,12 +29,14 @@ export function VerifyDocumentoForm({ documento, onSuccess }: VerifyDocumentoFor
    const [isLoading, setIsLoading] = useState(false);
 
    const form = useForm<FormValues>({
-      resolver: standardSchemaResolver(verifySchema),
+      resolver: standardSchemaResolver(documentacionVerifySchema),
       defaultValues: {
          estado: EstadoDocumentoEnum.Verificado,
          notas_verificacion: documento.notas_verificacion || "",
       },
    });
+
+   const estadoActual = useWatch({ control: form.control, name: "estado" });
 
    const onSubmit = async (data: FormValues) => {
       setIsLoading(true);
@@ -71,7 +69,7 @@ export function VerifyDocumentoForm({ documento, onSuccess }: VerifyDocumentoFor
                name="estado"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Nuevo Estado</FormLabel>
+                     <FormLabel>Nuevo Estado <span className="text-destructive">*</span></FormLabel>
                      <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                            <SelectTrigger>
@@ -93,10 +91,13 @@ export function VerifyDocumentoForm({ documento, onSuccess }: VerifyDocumentoFor
                name="notas_verificacion"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Notas de Verificación (Opcional)</FormLabel>
+                     <FormLabel>
+                        Notas de Verificación
+                        {estadoActual === EstadoDocumentoEnum.Rechazado && <span className="text-destructive ml-1">*</span>}
+                     </FormLabel>
                      <FormControl>
                         <Textarea
-                           placeholder="Ej: Falta firma del gerente."
+                           placeholder={estadoActual === EstadoDocumentoEnum.Rechazado ? "Obligatorio: Indique por qué se rechaza el documento..." : "Ej: Documento validado y conforme."}
                            {...field}
                            value={field.value ?? ""}
                         />

@@ -1,4 +1,4 @@
-import api from '@/lib/api';
+import { api } from '@/lib/http';
 import type { AuditLog, PaginatedResponse } from '@/types/api';
 
 export const auditService = {
@@ -8,8 +8,7 @@ export const auditService = {
       username?: string;
       table_name?: string
    }): Promise<PaginatedResponse<AuditLog>> => {
-      // Backend: GET /auditoria/
-      const { data } = await api.get<PaginatedResponse<AuditLog>>('/auditoria/', { params });
+      const data = await api.get<PaginatedResponse<AuditLog>>('/auditoria/', { params });
 
       if (Array.isArray(data)) {
          return {
@@ -22,12 +21,11 @@ export const auditService = {
       return data;
    },
 
-   // Implementación faltante que causaba el error
    getByEntity: async (tableName: string, entityId: string): Promise<PaginatedResponse<AuditLog>> => {
-      const { data } = await api.get<PaginatedResponse<AuditLog>>('/auditoria/', {
+      const data = await api.get<PaginatedResponse<AuditLog>>('/auditoria/', {
          params: {
             table_name: tableName,
-            record_pk_value: entityId, // El backend usa este campo para filtrar por ID
+            record_pk_value: entityId,
             limit: 50
          }
       });

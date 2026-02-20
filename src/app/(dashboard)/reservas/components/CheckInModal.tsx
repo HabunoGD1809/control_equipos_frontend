@@ -42,7 +42,7 @@ export function CheckInModal({ reserva, isOpen, onClose, onSuccess }: CheckInMod
 
          return reservasService.registrarCheckInOut(reserva.id, {
             check_in_time: new Date().toISOString(),
-            notas_devolucion: values.notas_devolucion
+            notas_devolucion: values.notas_devolucion || null
          });
       },
       onSuccess: () => {
@@ -51,9 +51,9 @@ export function CheckInModal({ reserva, isOpen, onClose, onSuccess }: CheckInMod
             description: "El equipo ha sido marcado como devuelto (Check-In)."
          });
          queryClient.invalidateQueries({ queryKey: ["reservas"] });
+         form.reset();
          onClose();
          onSuccess?.();
-         form.reset();
       },
       onError: (error: any) => {
          toast({
@@ -69,32 +69,33 @@ export function CheckInModal({ reserva, isOpen, onClose, onSuccess }: CheckInMod
    };
 
    return (
-      <Dialog open={isOpen} onOpenChange={onClose}>
-         <DialogContent className="sm:max-w-106.25">
+      <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+         <DialogContent className="sm:max-w-md">
             <DialogHeader>
                <DialogTitle className="flex items-center gap-2">
-                  <LogIn className="h-5 w-5 text-green-600" />
+                  <LogIn className="h-5 w-5 text-emerald-600" />
                   Registrar Devolución (Check-In)
                </DialogTitle>
                <DialogDescription>
-                  Confirme la recepción del equipo <strong>{reserva?.equipo.nombre}</strong>.
-                  Esto finalizará la reserva.
+                  Confirme la recepción del equipo <strong className="text-foreground">{reserva?.equipo.nombre}</strong>.
+                  Esto finalizará la reserva y liberará el equipo para otros usuarios.
                </DialogDescription>
             </DialogHeader>
 
             <Form {...form}>
-               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-2">
                   <FormField
                      control={form.control}
                      name="notas_devolucion"
                      render={({ field }) => (
                         <FormItem>
-                           <FormLabel>Notas de Devolución / Estado Final</FormLabel>
+                           <FormLabel>Notas de Devolución / Estado Final (Opcional)</FormLabel>
                            <FormControl>
                               <Textarea
-                                 placeholder="¿El equipo regresó en buen estado? ¿Hubo incidencias?"
-                                 className="resize-none"
+                                 placeholder="¿El equipo regresó en buen estado? Especifique si faltan cables o hay daños."
+                                 className="resize-none min-h-25"
                                  {...field}
+                                 value={field.value ?? ""}
                               />
                            </FormControl>
                            <FormMessage />
@@ -106,7 +107,7 @@ export function CheckInModal({ reserva, isOpen, onClose, onSuccess }: CheckInMod
                      <Button type="button" variant="outline" onClick={onClose} disabled={mutation.isPending}>
                         Cancelar
                      </Button>
-                     <Button type="submit" disabled={mutation.isPending} className="bg-green-600 hover:bg-green-700 text-white">
+                     <Button type="submit" disabled={mutation.isPending} className="bg-emerald-600 hover:bg-emerald-700 text-white">
                         {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Confirmar Devolución
                      </Button>

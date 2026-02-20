@@ -13,7 +13,7 @@ import { useHasPermission } from '@/hooks/useHasPermission';
 import { Button } from '@/components/ui/Button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
 import { useToast } from '@/components/ui/use-toast';
-import api from '@/lib/api';
+import { api } from '@/lib/http';
 import { ReservaForm } from '@/components/features/reservas/ReservaForm';
 import { cn } from '@/lib/utils';
 import { Check, Truck, X, Undo2 } from 'lucide-react';
@@ -104,7 +104,7 @@ export function ReservasClient({ initialEvents, equipos }: {
    const handleCancel = async (resId: string) => {
       setIsLoading(true);
       try {
-         await api.post(`/reservas/${resId}/cancelar`);
+         await api.post(`/reservas/${resId}/cancelar`, {});
          toast({ title: 'Éxito', description: 'Reserva cancelada.' });
          handleSuccess();
       } catch {

@@ -159,7 +159,7 @@ export function MantenimientosClient({ initialData, equipos, tiposMantenimiento,
       <>
          {/* Modal Crear */}
          <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="sm:max-w-125">
                <DialogHeader>
                   <DialogTitle>Programar Mantenimiento</DialogTitle>
                   <DialogDescription>Agende una nueva intervención técnica.</DialogDescription>
@@ -180,7 +180,7 @@ export function MantenimientosClient({ initialData, equipos, tiposMantenimiento,
          {/* Modal Editar */}
          {selectedMantenimiento && (
             <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-               <DialogContent className="sm:max-w-[600px]">
+               <DialogContent className="sm:max-w-150">
                   <DialogHeader>
                      <DialogTitle>Gestión de Mantenimiento</DialogTitle>
                      <DialogDescription>

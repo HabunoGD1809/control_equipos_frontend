@@ -19,6 +19,7 @@ import {
    FormMessage,
 } from "@/components/ui/Form";
 import { Input } from "@/components/ui/Input";
+import { Textarea } from "@/components/ui/Textarea";
 import {
    Select,
    SelectContent,
@@ -89,27 +90,30 @@ export function EquipoForm({
    });
 
    const fechaAdquisicion = form.watch("fecha_adquisicion");
-
-   // Fecha de hoy normalizada a inicio del día — evita bugs al navegar meses
    const today = startOfDay(new Date());
 
    const handleNumeroSerieChange = (
       e: React.ChangeEvent<HTMLInputElement>,
       fieldChange: (val: string) => void
    ) => {
-      let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
-      if (value.length > 3) value = value.slice(0, 3) + "-" + value.slice(3);
-      if (value.length > 7) value = value.slice(0, 7) + "-" + value.slice(7);
-      fieldChange(value.slice(0, 11));
+      const value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "");
+      fieldChange(value);
    };
 
    const onSubmit: SubmitHandler<EquipoFormValues> = async (data) => {
       setIsLoading(true);
       try {
          const formatDate = (d?: Date | null) => (d ? format(d, "yyyy-MM-dd") : null);
+         const emptyToNull = (str?: string | null) => (str?.trim() === "" ? null : str);
 
          const payload: EquipoCreate = {
             ...data,
+            codigo_interno: emptyToNull(data.codigo_interno),
+            marca: emptyToNull(data.marca),
+            modelo: emptyToNull(data.modelo),
+            ubicacion_actual: emptyToNull(data.ubicacion_actual),
+            centro_costo: emptyToNull(data.centro_costo),
+            notas: emptyToNull(data.notas),
             proveedor_id:
                !data.proveedor_id || data.proveedor_id === ("none" as any)
                   ? null
@@ -194,11 +198,10 @@ export function EquipoForm({
                            <FormLabel>Número de Serie <span className="text-destructive">*</span></FormLabel>
                            <FormControl>
                               <Input
-                                 placeholder="XXX-XXX-XXX"
+                                 placeholder="EJ: AB-123-XYZ"
                                  {...field}
                                  className="font-mono uppercase"
                                  onChange={(e) => handleNumeroSerieChange(e, field.onChange)}
-                                 maxLength={11}
                               />
                            </FormControl>
                            <FormMessage />
@@ -265,6 +268,20 @@ export function EquipoForm({
                            <FormLabel>Modelo</FormLabel>
                            <FormControl>
                               <Input placeholder="Ej: XPS 15" {...field} value={field.value ?? ""} />
+                           </FormControl>
+                           <FormMessage />
+                        </FormItem>
+                     )}
+                  />
+
+                  <FormField
+                     control={form.control}
+                     name="ubicacion_actual"
+                     render={({ field }) => (
+                        <FormItem className="md:col-span-2 lg:col-span-3">
+                           <FormLabel>Ubicación Actual</FormLabel>
+                           <FormControl>
+                              <Input placeholder="Ej: Almacén Principal, Oficina 102..." {...field} value={field.value ?? ""} />
                            </FormControl>
                            <FormMessage />
                         </FormItem>
@@ -389,6 +406,25 @@ export function EquipoForm({
                            <FormLabel>Centro de Costo</FormLabel>
                            <FormControl>
                               <Input placeholder="Ej: IT-001" {...field} value={field.value ?? ""} />
+                           </FormControl>
+                           <FormMessage />
+                        </FormItem>
+                     )}
+                  />
+
+                  <FormField
+                     control={form.control}
+                     name="notas"
+                     render={({ field }) => (
+                        <FormItem className="md:col-span-2 lg:col-span-3">
+                           <FormLabel>Notas / Observaciones</FormLabel>
+                           <FormControl>
+                              <Textarea
+                                 placeholder="Detalles adicionales sobre el equipo..."
+                                 className="resize-none"
+                                 {...field}
+                                 value={field.value ?? ""}
+                              />
                            </FormControl>
                            <FormMessage />
                         </FormItem>

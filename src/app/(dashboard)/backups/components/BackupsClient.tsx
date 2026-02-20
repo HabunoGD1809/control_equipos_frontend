@@ -124,7 +124,7 @@ export function BackupsClient({ initialData }: BackupsClientProps) {
 
             if (error) {
                return (
-                  <span className="text-xs text-red-500 max-w-[200px] truncate" title={error}>
+                  <span className="text-xs text-red-500 max-w-50 truncate" title={error}>
                      {error}
                   </span>
                );
@@ -132,7 +132,7 @@ export function BackupsClient({ initialData }: BackupsClientProps) {
 
             const filename = path?.split("/").pop();
             return (
-               <span className="text-xs font-mono text-muted-foreground max-w-[200px] truncate" title={path || ""}>
+               <span className="text-xs font-mono text-muted-foreground max-w-50 truncate" title={path || ""}>
                   {filename || "--"}
                </span>
             );

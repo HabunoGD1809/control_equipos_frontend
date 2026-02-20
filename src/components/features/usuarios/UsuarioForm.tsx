@@ -72,7 +72,6 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
       fetchRoles();
    }, [isInitialized, isAuthenticated, toast]);
 
-   // ── Formulario CREACIÓN ──────────────────────────────────────────────────────
    const createForm = useForm<CreateValues>({
       resolver: standardSchemaResolver(usuarioCreateSchema),
       defaultValues: {
@@ -83,7 +82,6 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
       },
    });
 
-   // ── Formulario EDICIÓN ───────────────────────────────────────────────────────
    const updateForm = useForm<UpdateValues>({
       resolver: standardSchemaResolver(usuarioUpdateSchema),
       defaultValues: {
@@ -96,22 +94,33 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
       },
    });
 
+   const handleApiError = (error: unknown, isUpdate: boolean) => {
+      const detail = (error as any)?.response?.data?.detail || (error as any)?.message || "";
+      const formToUse = isUpdate ? updateForm : createForm;
+
+      if (detail.includes("uq_usuarios_email")) {
+         formToUse.setError("email", { message: "Este email ya está en uso." });
+      } else if (detail.includes("uq_usuarios_nombre_usuario")) {
+         formToUse.setError("nombre_usuario", { message: "Este nombre de usuario ya existe." });
+      } else {
+         toast({ variant: "destructive", title: "Error", description: detail || "Error inesperado." });
+      }
+   };
+
    const handleCreate = async (data: CreateValues) => {
       setIsSubmitting(true);
       try {
          await usuariosService.create({
             nombre_usuario: data.nombre_usuario,
-            email: data.email || null,
+            // Aseguramos null estricto si está vacío para pasar la Regex constraint
+            email: data.email?.trim() ? data.email : null,
             password: data.password,
             rol_id: data.rol_id,
          });
          toast({ title: "Éxito", description: "Usuario creado correctamente." });
          onSuccess();
       } catch (error: unknown) {
-         const detail =
-            (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-            "No se pudo crear el usuario.";
-         toast({ variant: "destructive", title: "Error", description: detail });
+         handleApiError(error, false);
       } finally {
          setIsSubmitting(false);
       }
@@ -121,21 +130,24 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
       if (!initialData) return;
       setIsSubmitting(true);
       try {
-         await usuariosService.update(initialData.id, {
+         const payload: any = {
             nombre_usuario: data.nombre_usuario ?? undefined,
-            email: data.email || null,
-            password: data.password || null,
+            email: data.email?.trim() ? data.email : null,
             rol_id: data.rol_id ?? undefined,
             bloqueado: data.bloqueado,
             requiere_cambio_contrasena: data.requiere_cambio_contrasena,
-         });
+         };
+
+         // 🚨 CRÍTICO: Si no escriben contraseña, omitimos la propiedad. NO enviamos null.
+         if (data.password && data.password.trim() !== "") {
+            payload.password = data.password;
+         }
+
+         await usuariosService.update(initialData.id, payload);
          toast({ title: "Éxito", description: "Usuario actualizado correctamente." });
          onSuccess();
       } catch (error: unknown) {
-         const detail =
-            (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-            "No se pudo actualizar el usuario.";
-         toast({ variant: "destructive", title: "Error", description: detail });
+         handleApiError(error, true);
       } finally {
          setIsSubmitting(false);
       }
@@ -149,140 +161,27 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
       );
    }
 
-   // ─── RENDER EDICIÓN ──────────────────────────────────────────────────────────
-
-   if (isEditing) {
-      return (
-         <Form {...updateForm}>
-            <form onSubmit={updateForm.handleSubmit(handleUpdate)} className="space-y-4 pt-2">
-               <FormField
-                  control={updateForm.control}
-                  name="nombre_usuario"
-                  render={({ field }) => (
-                     <FormItem>
-                        <FormLabel>Nombre de Usuario</FormLabel>
-                        <FormControl>
-                           <Input placeholder="ej. jperez" {...field} value={field.value ?? ""} />
-                        </FormControl>
-                        <FormMessage />
-                     </FormItem>
-                  )}
-               />
-               <FormField
-                  control={updateForm.control}
-                  name="email"
-                  render={({ field }) => (
-                     <FormItem>
-                        <FormLabel>Email <span className="text-muted-foreground text-xs">(opcional)</span></FormLabel>
-                        <FormControl>
-                           <Input type="email" placeholder="ej. jperez@empresa.com" {...field} value={field.value ?? ""} />
-                        </FormControl>
-                        <FormMessage />
-                     </FormItem>
-                  )}
-               />
-               <FormField
-                  control={updateForm.control}
-                  name="password"
-                  render={({ field }) => (
-                     <FormItem>
-                        <FormLabel>
-                           Nueva Contraseña{" "}
-                           <span className="text-muted-foreground text-xs">(dejar vacío para no cambiar)</span>
-                        </FormLabel>
-                        <FormControl>
-                           <Input type="password" placeholder="Mínimo 8 caracteres" {...field} value={field.value ?? ""} />
-                        </FormControl>
-                        <FormMessage />
-                     </FormItem>
-                  )}
-               />
-               <FormField
-                  control={updateForm.control}
-                  name="rol_id"
-                  render={({ field }) => (
-                     <FormItem>
-                        <FormLabel>Rol</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value} disabled={loadingRoles}>
-                           <FormControl>
-                              <SelectTrigger>
-                                 <SelectValue placeholder={loadingRoles ? "Cargando roles..." : "Seleccione un rol"} />
-                              </SelectTrigger>
-                           </FormControl>
-                           <SelectContent>
-                              {roles.map((r) => (
-                                 <SelectItem key={r.id} value={r.id}>{r.nombre}</SelectItem>
-                              ))}
-                           </SelectContent>
-                        </Select>
-                        <FormMessage />
-                     </FormItem>
-                  )}
-               />
-               <FormField
-                  control={updateForm.control}
-                  name="bloqueado"
-                  render={({ field }) => (
-                     <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                        <div>
-                           <FormLabel className="text-sm font-medium">Cuenta Bloqueada</FormLabel>
-                           <p className="text-xs text-muted-foreground">El usuario no podrá iniciar sesión.</p>
-                        </div>
-                        <FormControl>
-                           <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
-                        </FormControl>
-                     </FormItem>
-                  )}
-               />
-               <FormField
-                  control={updateForm.control}
-                  name="requiere_cambio_contrasena"
-                  render={({ field }) => (
-                     <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                        <div>
-                           <FormLabel className="text-sm font-medium">Requiere Cambio de Contraseña</FormLabel>
-                           <p className="text-xs text-muted-foreground">Se solicitará al próximo inicio de sesión.</p>
-                        </div>
-                        <FormControl>
-                           <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
-                        </FormControl>
-                     </FormItem>
-                  )}
-               />
-               <div className="flex justify-end gap-2 pt-2">
-                  <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
-                     Cancelar
-                  </Button>
-                  <Button type="submit" disabled={isSubmitting}>
-                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                     Guardar Cambios
-                  </Button>
-               </div>
-            </form>
-         </Form>
-      );
-   }
-
-   // ─── RENDER CREACIÓN ─────────────────────────────────────────────────────────
+   const FormComponent = isEditing ? updateForm : createForm;
+   const submitHandler = isEditing ? handleUpdate : handleCreate;
 
    return (
-      <Form {...createForm}>
-         <form onSubmit={createForm.handleSubmit(handleCreate)} className="space-y-4 pt-2">
+      <Form {...(FormComponent as any)}>
+         <form onSubmit={FormComponent.handleSubmit(submitHandler as any)} className="space-y-4 pt-2">
             <FormField
-               control={createForm.control}
+               control={FormComponent.control}
                name="nombre_usuario"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Nombre de Usuario</FormLabel>
+                     <FormLabel>Nombre de Usuario <span className="text-destructive">*</span></FormLabel>
                      <FormControl>
-                        <Input placeholder="ej. jperez" {...field} />
+                        <Input placeholder="ej. jperez" {...field} value={field.value ?? ""} />
                      </FormControl>
                      <FormMessage />
                   </FormItem>
                )}
             />
             <FormField
-               control={createForm.control}
+               control={FormComponent.control}
                name="email"
                render={({ field }) => (
                   <FormItem>
@@ -295,25 +194,28 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
                )}
             />
             <FormField
-               control={createForm.control}
+               control={FormComponent.control}
                name="password"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Contraseña</FormLabel>
+                     <FormLabel>
+                        {isEditing ? "Nueva Contraseña" : "Contraseña"} <span className="text-destructive">{!isEditing && "*"}</span>
+                        {isEditing && <span className="text-muted-foreground text-xs ml-1">(dejar vacío para no cambiar)</span>}
+                     </FormLabel>
                      <FormControl>
-                        <Input type="password" placeholder="Mínimo 8 caracteres" {...field} />
+                        <Input type="password" placeholder="Mínimo 8 caracteres" {...field} value={field.value ?? ""} />
                      </FormControl>
                      <FormMessage />
                   </FormItem>
                )}
             />
             <FormField
-               control={createForm.control}
+               control={FormComponent.control}
                name="rol_id"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Rol</FormLabel>
-                     <Select onValueChange={field.onChange} defaultValue={field.value} disabled={loadingRoles}>
+                     <FormLabel>Rol <span className="text-destructive">*</span></FormLabel>
+                     <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingRoles}>
                         <FormControl>
                            <SelectTrigger>
                               <SelectValue placeholder={loadingRoles ? "Cargando roles..." : "Seleccione un rol"} />
@@ -329,13 +231,49 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
                   </FormItem>
                )}
             />
+
+            {isEditing && (
+               <>
+                  <FormField
+                     control={updateForm.control}
+                     name="bloqueado"
+                     render={({ field }) => (
+                        <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                           <div>
+                              <FormLabel className="text-sm font-medium">Cuenta Bloqueada</FormLabel>
+                              <p className="text-xs text-muted-foreground">El usuario no podrá iniciar sesión.</p>
+                           </div>
+                           <FormControl>
+                              <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+                           </FormControl>
+                        </FormItem>
+                     )}
+                  />
+                  <FormField
+                     control={updateForm.control}
+                     name="requiere_cambio_contrasena"
+                     render={({ field }) => (
+                        <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                           <div>
+                              <FormLabel className="text-sm font-medium">Forzar Cambio de Contraseña</FormLabel>
+                              <p className="text-xs text-muted-foreground">Se solicitará al próximo inicio de sesión.</p>
+                           </div>
+                           <FormControl>
+                              <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+                           </FormControl>
+                        </FormItem>
+                     )}
+                  />
+               </>
+            )}
+
             <div className="flex justify-end gap-2 pt-2">
                <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
                   Cancelar
                </Button>
                <Button type="submit" disabled={isSubmitting || loadingRoles}>
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Crear Usuario
+                  {isEditing ? "Guardar Cambios" : "Crear Usuario"}
                </Button>
             </div>
          </form>

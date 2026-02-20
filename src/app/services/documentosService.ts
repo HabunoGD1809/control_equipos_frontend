@@ -2,6 +2,7 @@ import { api } from "@/lib/http";
 import type {
    Documentacion,
    DocumentacionVerify,
+   DocumentacionUpdate,
    PaginatedResponse,
 } from "@/types/api";
 
@@ -31,14 +32,25 @@ export const documentosService = {
       return unwrapItems(data);
    },
 
+   async getByEquipo(equipoId: string, params?: { skip?: number; limit?: number }): Promise<Documentacion[]> {
+      const data = await api.get<PaginatedResponse<Documentacion> | Documentacion[]>(`/documentacion/equipo/${equipoId}`, { params });
+      return unwrapItems(data);
+   },
+
+   async getByMantenimiento(mantenimientoId: string, params?: { skip?: number; limit?: number }): Promise<Documentacion[]> {
+      const data = await api.get<PaginatedResponse<Documentacion> | Documentacion[]>(`/documentacion/mantenimiento/${mantenimientoId}`, { params });
+      return unwrapItems(data);
+   },
+
+   async getByLicencia(licenciaId: string, params?: { skip?: number; limit?: number }): Promise<Documentacion[]> {
+      const data = await api.get<PaginatedResponse<Documentacion> | Documentacion[]>(`/documentacion/licencia/${licenciaId}`, { params });
+      return unwrapItems(data);
+   },
+
    getById(id: string): Promise<Documentacion> {
       return api.get<Documentacion>(`/documentacion/${id}`);
    },
 
-   /**
-    * Sube un documento (multipart/form-data).
-    * Requiere el patch de http.ts para FormData (recomendado).
-    */
    async upload(payload: {
       titulo: string;
       tipo_documento_id: string;
@@ -53,21 +65,17 @@ export const documentosService = {
       formData.append("tipo_documento_id", payload.tipo_documento_id);
       formData.append("file", payload.file);
 
-      if (payload.descripcion)
-         formData.append("descripcion", payload.descripcion);
+      if (payload.descripcion) formData.append("descripcion", payload.descripcion);
       if (payload.equipo_id) formData.append("equipo_id", payload.equipo_id);
-      if (payload.mantenimiento_id)
-         formData.append("mantenimiento_id", payload.mantenimiento_id);
-      if (payload.licencia_id)
-         formData.append("licencia_id", payload.licencia_id);
+      if (payload.mantenimiento_id) formData.append("mantenimiento_id", payload.mantenimiento_id);
+      if (payload.licencia_id) formData.append("licencia_id", payload.licencia_id);
 
-      // NO pongas Content-Type manualmente con FormData.
       return api.post<Documentacion>("/documentacion/", formData);
    },
 
    update(
       id: string,
-      payload: { titulo?: string; descripcion?: string },
+      payload: DocumentacionUpdate,
    ): Promise<Documentacion> {
       return api.put<Documentacion>(`/documentacion/${id}`, payload);
    },

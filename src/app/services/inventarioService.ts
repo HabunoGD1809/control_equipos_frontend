@@ -5,16 +5,18 @@ import type {
    InventarioMovimiento,
    PaginatedResponse,
    InventarioMovimientoCreate,
+   TipoItemInventarioSimple,
 } from "@/types/api";
 
 export interface StockDetailsUpdate {
    lote?: string;
-   fecha_caducidad?: string | null; // ISO Date string o null
+   fecha_caducidad?: string | null;
    notas?: string;
 }
 
-// Mejor que "any[]": define el shape cuando lo sepas. Por ahora unknown[]
-type ItemsBajoStock = unknown[];
+export interface ItemBajoStock extends Omit<InventarioStock, "tipo_item"> {
+   tipo_item: TipoItemInventarioSimple & { stock_minimo: number };
+}
 
 type TipoItemCreate = Omit<
    TipoItemInventario,
@@ -43,15 +45,15 @@ export const inventarioService = {
 
    // --- Stock ---
    getStock(params?: { tipo_item_id?: string; ubicacion?: string }): Promise<InventarioStock[]> {
-      return api.get<InventarioStock[]>("/inventario/stock", { params });
+      return api.get<InventarioStock[]>("/inventario/stock/", { params });
    },
 
    getStockTotal(tipoItemId: string): Promise<{ total: number }> {
       return api.get<{ total: number }>(`/inventario/stock/item/${tipoItemId}/total`);
    },
 
-   getItemsBajoStock(): Promise<ItemsBajoStock> {
-      return api.get<ItemsBajoStock>("/inventario/tipos/bajo-stock/");
+   getItemsBajoStock(): Promise<ItemBajoStock[]> {
+      return api.get<ItemBajoStock[]>("/inventario/tipos/bajo-stock/");
    },
 
    updateStockDetails(stockId: string, payload: StockDetailsUpdate): Promise<InventarioStock> {

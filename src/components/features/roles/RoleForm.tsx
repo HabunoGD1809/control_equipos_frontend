@@ -65,7 +65,8 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
             toast({
                variant: "destructive",
                title: "Error de carga",
-               description: "No se pudieron cargar los permisos. Verifique conexión.",
+               description:
+                  "No se pudieron cargar los permisos. Verifique conexión.",
             }),
          )
          .finally(() => setLoadingPermisos(false));
@@ -76,7 +77,7 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
       try {
          const payload = {
             nombre: data.nombre,
-            descripcion: data.descripcion ?? undefined,
+            descripcion: data.descripcion?.trim() ? data.descripcion : undefined,
             permiso_ids: data.permiso_ids,
          };
 
@@ -96,9 +97,20 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
          }
       } catch (error: unknown) {
          const detail =
-            (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-            "Ocurrió un error inesperado.";
-         toast({ variant: "destructive", title: "Error al guardar", description: detail });
+            (error as any)?.response?.data?.detail || (error as any)?.message || "";
+
+         if (detail.includes("uq_roles_nombre")) {
+            form.setError("nombre", {
+               type: "manual",
+               message: "Este nombre de rol ya existe.",
+            });
+         } else {
+            toast({
+               variant: "destructive",
+               title: "Error al guardar",
+               description: detail || "Ocurrió un error inesperado.",
+            });
+         }
       } finally {
          setIsLoading(false);
       }
@@ -132,7 +144,9 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
                   name="nombre"
                   render={({ field }) => (
                      <FormItem>
-                        <FormLabel>Nombre del Rol</FormLabel>
+                        <FormLabel>
+                           Nombre del Rol <span className="text-destructive">*</span>
+                        </FormLabel>
                         <FormControl>
                            <Input placeholder="Ej: supervisor_almacen" {...field} />
                         </FormControl>
@@ -149,7 +163,7 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
                         <FormLabel>Descripción</FormLabel>
                         <FormControl>
                            <Textarea
-                              placeholder="Descripción..."
+                              placeholder="Breve detalle de las funciones del rol..."
                               {...field}
                               value={field.value ?? ""}
                            />
@@ -166,7 +180,6 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
                      <Shield className="h-5 w-5 text-primary" />
                      <h3 className="font-medium text-lg">Permisos del Sistema</h3>
                   </div>
-
                   {loadingPermisos ? (
                      <div className="flex items-center justify-center py-8">
                         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -178,7 +191,10 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
                   ) : (
                      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                         {Object.entries(permisoGroups).map(([groupName, permisos]) => (
-                           <div key={groupName} className="space-y-3 border p-4 rounded-lg">
+                           <div
+                              key={groupName}
+                              className="space-y-3 border p-4 rounded-lg"
+                           >
                               <h4 className="font-semibold capitalize text-sm text-muted-foreground border-b pb-2">
                                  Módulo: {groupName}
                               </h4>
@@ -197,7 +213,9 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
                                                    field.onChange(
                                                       checked
                                                          ? [...field.value, permiso.id]
-                                                         : field.value.filter((v) => v !== permiso.id),
+                                                         : field.value.filter(
+                                                            (v) => v !== permiso.id,
+                                                         ),
                                                    )
                                                 }
                                              />
@@ -220,8 +238,11 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
                         ))}
                      </div>
                   )}
-
-                  <FormMessage>{form.formState.errors.permiso_ids?.message}</FormMessage>
+                  {form.formState.errors.permiso_ids?.message && (
+                     <p className="text-sm font-medium text-destructive mt-2">
+                        {form.formState.errors.permiso_ids.message}
+                     </p>
+                  )}{" "}
                </CardContent>
             </Card>
 

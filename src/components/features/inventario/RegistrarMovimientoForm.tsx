@@ -1,9 +1,9 @@
 "use client";
 
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import * as z from "zod";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Loader2, ArrowRightLeft, PackageMinus, PackagePlus } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
@@ -19,7 +19,7 @@ import { inventarioService } from "@/app/services/inventarioService";
 interface RegistrarMovimientoFormProps {
    tiposItem: TipoItemInventarioSimple[];
    equipos: EquipoSimple[];
-   stockData: InventarioStock[]; // ✅ agregado
+   stockData: InventarioStock[];
    onSuccess: () => void;
 }
 
@@ -32,40 +32,58 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
    const form = useForm<FormValues>({
       resolver: standardSchemaResolver(inventarioMovimientoSchema),
       defaultValues: {
-         tipo_item_id: undefined, // ✅ undefined en vez de "" para evitar el error de Radix
+         tipo_item_id: undefined,
          tipo_movimiento: TipoMovimientoInvEnum.EntradaCompra,
          cantidad: 1,
          lote_origen: "N/A",
          lote_destino: "N/A",
          costo_unitario: 0,
          notas: "",
+         ubicacion_origen: "",
+         ubicacion_destino: "",
       },
    });
 
-   const tipoMovimiento = form.watch("tipo_movimiento");
+   const tipoMovimiento = useWatch({ control: form.control, name: "tipo_movimiento" });
+   const tipoItemId = useWatch({ control: form.control, name: "tipo_item_id" });
+   const ubicacionOrigenSel = useWatch({ control: form.control, name: "ubicacion_origen" });
+
    const tipoStr = tipoMovimiento as string;
 
-   const isEntrada = (
-      [TipoMovimientoInvEnum.EntradaCompra, TipoMovimientoInvEnum.DevolucionInterna] as string[]
-   ).includes(tipoStr);
-
-   const isSalida = (
-      [TipoMovimientoInvEnum.SalidaUso, TipoMovimientoInvEnum.SalidaDescarte] as string[]
-   ).includes(tipoStr);
-
-   const isTransferencia = (
-      [TipoMovimientoInvEnum.TransferenciaSalida, TipoMovimientoInvEnum.TransferenciaEntrada] as string[]
-   ).includes(tipoStr);
-
+   const isEntrada = ([TipoMovimientoInvEnum.EntradaCompra, TipoMovimientoInvEnum.DevolucionInterna] as string[]).includes(tipoStr);
+   const isSalida = ([TipoMovimientoInvEnum.SalidaUso, TipoMovimientoInvEnum.SalidaDescarte] as string[]).includes(tipoStr);
+   const isTransferencia = ([TipoMovimientoInvEnum.TransferenciaSalida, TipoMovimientoInvEnum.TransferenciaEntrada] as string[]).includes(tipoStr);
    const isAjuste = tipoStr.includes("Ajuste");
+
+   // Lógica de seguridad para el origen basado en el Stock real
+   const stockDisponibleDelItem = useMemo(() => {
+      return stockData.filter(s => s.tipo_item_id === tipoItemId && s.cantidad_actual > 0);
+   }, [stockData, tipoItemId]);
+
+   const ubicacionesOrigenDisponibles = useMemo(() => {
+      return Array.from(new Set(stockDisponibleDelItem.map(s => s.ubicacion)));
+   }, [stockDisponibleDelItem]);
+
+   const lotesOrigenDisponibles = useMemo(() => {
+      return stockDisponibleDelItem
+         .filter(s => s.ubicacion === ubicacionOrigenSel)
+         .map(s => s.lote || "N/A");
+   }, [stockDisponibleDelItem, ubicacionOrigenSel]);
 
    const onSubmit = async (values: FormValues) => {
       setIsLoading(true);
       try {
          const payload: any = { ...values };
 
-         if (isEntrada) delete payload.ubicacion_origen;
-         if (isSalida) delete payload.ubicacion_destino;
+         // Limpieza de payload cruzado para evitar conflictos
+         if (isEntrada) {
+            delete payload.ubicacion_origen;
+            delete payload.lote_origen;
+         }
+         if (isSalida) {
+            delete payload.ubicacion_destino;
+            delete payload.lote_destino;
+         }
 
          await inventarioService.registrarMovimiento(payload);
 
@@ -84,7 +102,7 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
             variant: "destructive",
             title: "Error de Validación",
             description: msg.includes("Stock insuficiente")
-               ? "No hay suficiente stock en la ubicación de origen."
+               ? "No hay suficiente stock en la ubicación de origen seleccionada."
                : msg,
          });
       } finally {
@@ -101,10 +119,14 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                name="tipo_item_id"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Item de Inventario</FormLabel>
+                     <FormLabel>Item de Inventario <span className="text-destructive">*</span></FormLabel>
                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value ?? undefined} // ✅ nunca string vacío
+                        onValueChange={(val) => {
+                           field.onChange(val);
+                           form.setValue("ubicacion_origen", ""); // Reset origen al cambiar ítem
+                           form.setValue("lote_origen", "N/A");
+                        }}
+                        value={field.value ?? undefined}
                      >
                         <FormControl>
                            <SelectTrigger>
@@ -129,7 +151,7 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                name="tipo_movimiento"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Tipo de Movimiento</FormLabel>
+                     <FormLabel>Tipo de Movimiento <span className="text-destructive">*</span></FormLabel>
                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                            <SelectTrigger>
@@ -155,7 +177,7 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                   name="cantidad"
                   render={({ field }) => (
                      <FormItem>
-                        <FormLabel>Cantidad</FormLabel>
+                        <FormLabel>Cantidad <span className="text-destructive">*</span></FormLabel>
                         <FormControl>
                            <Input
                               type="number"
@@ -180,16 +202,20 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                         <FormItem>
                            <FormLabel>Costo Unitario</FormLabel>
                            <FormControl>
-                              <Input
-                                 type="number"
-                                 min="0"
-                                 step="0.01"
-                                 value={field.value ?? 0}
-                                 onChange={(e) => {
-                                    const n = e.target.valueAsNumber;
-                                    field.onChange(Number.isFinite(n) ? n : 0);
-                                 }}
-                              />
+                              <div className="relative">
+                                 <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
+                                 <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    className="pl-7"
+                                    value={field.value ?? 0}
+                                    onChange={(e) => {
+                                       const n = e.target.valueAsNumber;
+                                       field.onChange(Number.isFinite(n) ? n : 0);
+                                    }}
+                                 />
+                              </div>
                            </FormControl>
                            <FormMessage />
                         </FormItem>
@@ -198,18 +224,28 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                {(isSalida || isTransferencia || isAjuste) && (
-                  <div className="space-y-2">
+                  <div className="space-y-4 bg-muted/30 p-3 rounded-md border">
                      <FormField
                         control={form.control}
                         name="ubicacion_origen"
                         render={({ field }) => (
                            <FormItem>
-                              <FormLabel>Ubicación Origen</FormLabel>
-                              <FormControl>
-                                 <Input placeholder="Ej: Almacén A1" {...field} value={field.value || ""} />
-                              </FormControl>
+                              <FormLabel>Ubicación Origen <span className="text-destructive">*</span></FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value || undefined} disabled={!tipoItemId || ubicacionesOrigenDisponibles.length === 0}>
+                                 <FormControl>
+                                    <SelectTrigger>
+                                       <SelectValue placeholder="Seleccione origen..." />
+                                    </SelectTrigger>
+                                 </FormControl>
+                                 <SelectContent>
+                                    {ubicacionesOrigenDisponibles.map((ub) => (
+                                       <SelectItem key={ub} value={ub}>{ub}</SelectItem>
+                                    ))}
+                                 </SelectContent>
+                              </Select>
+                              <FormDescription className="text-xs">Solo muestra ubicaciones con stock.</FormDescription>
                               <FormMessage />
                            </FormItem>
                         )}
@@ -220,10 +256,18 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                         render={({ field }) => (
                            <FormItem>
                               <FormLabel>Lote Origen</FormLabel>
-                              <FormControl>
-                                 <Input placeholder="N/A" {...field} />
-                              </FormControl>
-                              <FormDescription className="text-xs">Deje N/A si no aplica</FormDescription>
+                              <Select onValueChange={field.onChange} value={field.value || undefined} disabled={!ubicacionOrigenSel}>
+                                 <FormControl>
+                                    <SelectTrigger>
+                                       <SelectValue placeholder="Seleccione lote..." />
+                                    </SelectTrigger>
+                                 </FormControl>
+                                 <SelectContent>
+                                    {lotesOrigenDisponibles.map((lote) => (
+                                       <SelectItem key={lote} value={lote}>{lote}</SelectItem>
+                                    ))}
+                                 </SelectContent>
+                              </Select>
                               <FormMessage />
                            </FormItem>
                         )}
@@ -232,15 +276,15 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                )}
 
                {(isEntrada || isTransferencia || isAjuste) && (
-                  <div className="space-y-2">
+                  <div className="space-y-4 bg-primary/5 p-3 rounded-md border border-primary/20">
                      <FormField
                         control={form.control}
                         name="ubicacion_destino"
                         render={({ field }) => (
                            <FormItem>
-                              <FormLabel>Ubicación Destino</FormLabel>
+                              <FormLabel>Ubicación Destino <span className="text-destructive">*</span></FormLabel>
                               <FormControl>
-                                 <Input placeholder="Ej: Estante 3" {...field} value={field.value || ""} />
+                                 <Input placeholder="Ej: Almacén Principal, Estante 3" {...field} value={field.value || ""} />
                               </FormControl>
                               <FormMessage />
                            </FormItem>
@@ -272,7 +316,7 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                         <FormLabel>Equipo Asociado (Opcional)</FormLabel>
                         <Select
                            onValueChange={field.onChange}
-                           value={field.value ?? undefined} // ✅ nunca string vacío
+                           value={field.value ?? undefined}
                         >
                            <FormControl>
                               <SelectTrigger>
@@ -282,7 +326,7 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                            <SelectContent>
                               {equipos.map((eq) => (
                                  <SelectItem key={eq.id} value={eq.id}>
-                                    {eq.nombre}
+                                    {eq.nombre} ({eq.numero_serie})
                                  </SelectItem>
                               ))}
                            </SelectContent>
@@ -300,10 +344,10 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                   name="motivo_ajuste"
                   render={({ field }) => (
                      <FormItem>
-                        <FormLabel>Motivo del Ajuste</FormLabel>
+                        <FormLabel>Motivo del Ajuste <span className="text-destructive">*</span></FormLabel>
                         <FormControl>
                            <Textarea
-                              placeholder="Justifique la diferencia de inventario..."
+                              placeholder="Justifique la diferencia de inventario (mín. 5 caracteres)..."
                               {...field}
                               value={field.value || ""}
                            />
@@ -319,9 +363,9 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                name="notas"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Notas</FormLabel>
+                     <FormLabel>Notas Generales</FormLabel>
                      <FormControl>
-                        <Textarea {...field} value={field.value || ""} />
+                        <Textarea placeholder="Observaciones adicionales..." {...field} value={field.value || ""} />
                      </FormControl>
                      <FormMessage />
                   </FormItem>

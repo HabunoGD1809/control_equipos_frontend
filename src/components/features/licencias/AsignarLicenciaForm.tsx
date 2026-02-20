@@ -7,11 +7,13 @@ import { useState } from "react";
 import { Loader2, Link as LinkIcon, Laptop, User } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/Tabs";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { useToast } from "@/components/ui/use-toast";
+
 import { asignarLicenciaSchema } from "@/lib/zod";
 import { EquipoSimple, UsuarioSimple } from "@/types/api";
 import { licenciasService } from "@/app/services/licenciasService";
@@ -37,6 +39,7 @@ export function AsignarLicenciaForm({ licenciaId, equipos, usuarios, onSuccess }
          equipo_id: null,
          usuario_id: null,
          notas: "",
+         instalado: true,
       },
    });
 
@@ -45,8 +48,11 @@ export function AsignarLicenciaForm({ licenciaId, equipos, usuarios, onSuccess }
       setActiveTab(newVal);
       form.setValue("asignar_a", newVal);
 
-      if (newVal === "equipo") form.setValue("usuario_id", null);
-      else form.setValue("equipo_id", null);
+      if (newVal === "equipo") {
+         form.setValue("usuario_id", null);
+      } else {
+         form.setValue("equipo_id", null);
+      }
 
       form.clearErrors();
    };
@@ -59,6 +65,7 @@ export function AsignarLicenciaForm({ licenciaId, equipos, usuarios, onSuccess }
             equipo_id: values.asignar_a === "equipo" ? values.equipo_id ?? null : null,
             usuario_id: values.asignar_a === "usuario" ? values.usuario_id ?? null : null,
             notas: values.notas ?? null,
+            instalado: values.instalado,
          });
 
          toast({
@@ -71,7 +78,7 @@ export function AsignarLicenciaForm({ licenciaId, equipos, usuarios, onSuccess }
          const e = err as Error & { status?: number };
          toast({
             variant: "destructive",
-            title: "Error",
+            title: "Error de asignación",
             description:
                e.message ||
                "No se pudo realizar la asignación. Verifique si ya existe una asignación para este destino.",
@@ -94,7 +101,7 @@ export function AsignarLicenciaForm({ licenciaId, equipos, usuarios, onSuccess }
                   </TabsTrigger>
                </TabsList>
 
-               <div className="mt-4 p-4 border rounded-md bg-muted/20">
+               <div className="mt-4 p-4 border rounded-md bg-muted/20 space-y-4">
                   <TabsContent value="equipo" className="mt-0">
                      <FormField
                         control={form.control}
@@ -148,6 +155,27 @@ export function AsignarLicenciaForm({ licenciaId, equipos, usuarios, onSuccess }
                         )}
                      />
                   </TabsContent>
+
+                  <FormField
+                     control={form.control}
+                     name="instalado"
+                     render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 shadow-sm">
+                           <FormControl>
+                              <Checkbox
+                                 checked={field.value}
+                                 onCheckedChange={field.onChange}
+                              />
+                           </FormControl>
+                           <div className="space-y-1 leading-none">
+                              <FormLabel>Software Instalado</FormLabel>
+                              <FormDescription>
+                                 Marque esta opción si el software ya fue instalado físicamente o activado.
+                              </FormDescription>
+                           </div>
+                        </FormItem>
+                     )}
+                  />
                </div>
             </Tabs>
 

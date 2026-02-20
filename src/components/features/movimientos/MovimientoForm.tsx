@@ -65,6 +65,7 @@ export function MovimientoForm({
     defaultValues: {
       equipo_id: equipo?.id ?? "",
       tipo_movimiento: undefined,
+      origen: equipo?.ubicacion_actual ?? "",
       destino: "",
       proposito: "",
       observaciones: "",
@@ -73,7 +74,6 @@ export function MovimientoForm({
     },
   });
 
-  // ✅ Reemplazo de watch() (evita warning del React Compiler)
   const tipoSeleccionado = useWatch({
     control: form.control,
     name: "tipo_movimiento",
@@ -84,32 +84,43 @@ export function MovimientoForm({
     name: "equipo_id",
   });
 
+  // Al cambiar de equipo, actualizamos automáticamente el origen
   useEffect(() => {
     if (equipo || !equipos) return;
     const found = equipos.find((e) => e.id === equipoIdSeleccionado);
     if (found) {
-      form.setValue("destino", found.ubicacion_actual ?? "Almacén Principal");
+      form.setValue("origen", found.ubicacion_actual ?? "Almacén Principal");
+      // Reseteamos el destino si cambiamos de equipo, salvo que ya esté manipulado
     }
   }, [equipoIdSeleccionado, equipos, equipo, form]);
 
+  // Al cambiar el tipo de movimiento, autocompletamos campos según reglas de negocio
   useEffect(() => {
     if (!tipoSeleccionado) return;
+
+    const eq = equipo || (equipos && equipos.find((e) => e.id === form.getValues("equipo_id")));
+    const locActual = eq?.ubicacion_actual || "Almacén Principal";
+
+    // El origen siempre debe ser la ubicación actual
+    form.setValue("origen", locActual);
 
     if (tipoSeleccionado === TipoMovimientoEquipoEnum.Entrada) {
       form.setValue("destino", "Almacén Principal");
       form.setValue("usuario_id", null);
       form.setValue("fecha_prevista_retorno", null);
     } else if (tipoSeleccionado === TipoMovimientoEquipoEnum.AsignacionInterna) {
+      // Para asignación interna, el destino se debe llenar obligatoriamente
+      // (ej. "Oficina de Finanzas")
       form.setValue("destino", "");
     }
-  }, [tipoSeleccionado, form]);
+  }, [tipoSeleccionado, form, equipo, equipos]);
 
   const mutation = useMutation({
     mutationFn: movimientosService.create,
     onSuccess: () => {
       toast({
         title: "Movimiento registrado",
-        description: "El estado del equipo ha sido actualizado.",
+        description: "El estado del equipo ha sido actualizado exitosamente.",
       });
       queryClient.invalidateQueries({ queryKey: ["movimientos"] });
       queryClient.invalidateQueries({ queryKey: ["equipos"] });
@@ -130,13 +141,19 @@ export function MovimientoForm({
   });
 
   const onSubmit = (data: MovimientoFormValues) => {
+    // Obtenemos el nombre del usuario seleccionado para mandarlo como "recibido_por", 
+    // ya que la API no acepta "usuario_id" en la creación del movimiento.
+    const selectedUser = usuarios.find((u) => u.id === data.usuario_id);
+
     const payload: MovimientoCreate = {
       equipo_id: data.equipo_id,
       tipo_movimiento: data.tipo_movimiento,
-      destino: data.destino ?? null,
-      proposito: data.proposito ?? null,
-      observaciones: data.observaciones ?? null,
-      // usuario_id: data.usuario_id ?? null,
+      origen: data.origen || null,
+      destino: data.destino || null,
+      proposito: data.proposito || null,
+      observaciones: data.observaciones || null,
+      // La API acepta string en recibido_por
+      recibido_por: selectedUser ? selectedUser.nombre_usuario : null,
       fecha_prevista_retorno: data.fecha_prevista_retorno
         ? (data.fecha_prevista_retorno as Date).toISOString()
         : null,
@@ -153,10 +170,9 @@ export function MovimientoForm({
     );
   }
 
+  // Corregido: Mostrar destino siempre que NO sea Entrada (AsignacionInterna SÍ requiere destino visible)
   const mostrarDestino =
-    tipoSeleccionado &&
-    tipoSeleccionado !== TipoMovimientoEquipoEnum.Entrada &&
-    tipoSeleccionado !== TipoMovimientoEquipoEnum.AsignacionInterna;
+    tipoSeleccionado && tipoSeleccionado !== TipoMovimientoEquipoEnum.Entrada;
 
   return (
     <Form {...form}>
@@ -225,6 +241,28 @@ export function MovimientoForm({
 
         {tipoSeleccionado && (
           <div className="grid grid-cols-1 gap-4 border-l-2 border-primary/20 pl-4 animate-in slide-in-from-left-2 duration-300">
+
+            {/* Campo Origen en modo ReadOnly (Transparencia para el usuario) */}
+            <FormField
+              control={form.control}
+              name="origen"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Ubicación origen</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      value={field.value ?? ""}
+                      readOnly
+                      className="bg-muted"
+                      tabIndex={-1}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             {mostrarDestino && (
               <FormField
                 control={form.control}
@@ -237,11 +275,12 @@ export function MovimientoForm({
                     </FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="Ej: Oficina Cliente..."
+                        placeholder="Ej: Oficina Cliente, Departamento de Finanzas..."
                         {...field}
                         value={field.value ?? ""}
                       />
                     </FormControl>
+                    <FormDescription>El lugar físico donde quedará el equipo.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

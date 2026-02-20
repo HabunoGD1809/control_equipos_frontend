@@ -187,14 +187,11 @@ export const equipoSchema = z
       .min(2)
       .max(255),
     numero_serie: requiredString("El número de serie es requerido.").regex(
-      // /^[A-Z0-9]+-[A-Z0-9]+-[A-Z0-9]+$/,
-      /^[A-Z0-9]{3}-[A-Z0-9]{3}-[A-Z0-9]{3}$/,
-      // v4: .regex() segundo argumento puede ser string directamente (sin objeto)
-      "Formato estricto: XXX-000-XXX (Solo Mayúsculas, Números y Guiones)",
+      /^[A-Z0-9]+-[A-Z0-9]+-[A-Z0-9]+$/,
+      "Formato estricto: Bloques alfanuméricos separados por guiones (Ej: AB-1234-X)",
     ),
     codigo_interno: z.string().max(100).optional().nullable(),
     estado_id: requiredUuid("Debe seleccionar un estado."),
-    // v4: z.string().pipe(z.uuid()) → z.guid()
     proveedor_id: z.guid().optional().nullable(),
     ubicacion_actual: z.string().max(255).optional().nullable(),
     marca: z.string().max(100).optional().nullable(),
@@ -210,7 +207,6 @@ export const equipoSchema = z
     centro_costo: z.string().max(100).optional().nullable(),
     notas: z.string().optional().nullable(),
   })
-  // v4: .superRefine() → .check()
   .check((ctx) => {
     const data = ctx.value;
     const now = new Date();
@@ -450,7 +446,6 @@ export const asignarLicenciaSchema = z
     asignar_a: z.enum(["equipo", "usuario"], {
       error: "Seleccione un destino.",
     }),
-    // v4: z.string().pipe(z.uuid()) → z.guid()
     equipo_id: z.guid().optional().nullable(),
     usuario_id: z.guid().optional().nullable(),
     notas: z.string().optional().nullable(),
@@ -463,6 +458,10 @@ export const asignarLicenciaSchema = z
   .refine((data) => data.asignar_a !== "usuario" || !!data.usuario_id, {
     message: "Seleccione un usuario.",
     path: ["usuario_id"],
+  })
+  .refine((data) => !(data.equipo_id && data.usuario_id), {
+    message: "Violación de restricción: No puede estar asignado a un equipo y a un usuario al mismo tiempo.",
+    path: ["asignar_a"],
   });
 
 // ─── USUARIOS Y ROLES ───────────────────────────────────────────────────────
@@ -581,14 +580,12 @@ export const movimientoEquipoSchema = z
     proposito: z.string().optional().nullable(),
     observaciones: z.string().optional().nullable(),
     fecha_prevista_retorno: z.date().optional().nullable(),
-    // v4: z.string().pipe(z.uuid()) → z.guid()
     usuario_id: z.guid().optional().nullable(),
+    origen: z.string().optional().nullable(),
   })
-  // v4: .superRefine() → .check()
   .check((ctx) => {
     const data = ctx.value;
 
-    // Regla de BD: Constraint 'check_retorno_salida_temporal'
     if (
       data.tipo_movimiento === TipoMovimientoEquipoEnum.SalidaTemporal &&
       !data.fecha_prevista_retorno
@@ -601,8 +598,6 @@ export const movimientoEquipoSchema = z
       });
     }
 
-    // Regla de BD: Constraint 'check_origen_destino_asignacion'
-    // La asignación interna requiere destino Y usuario (para tracking de ubicación)
     if (data.tipo_movimiento === TipoMovimientoEquipoEnum.AsignacionInterna) {
       if (!data.usuario_id) {
         ctx.issues.push({
@@ -620,9 +615,16 @@ export const movimientoEquipoSchema = z
           input: data.destino,
         });
       }
+      if (!data.origen || data.origen.length < 3) {
+        ctx.issues.push({
+          code: "custom",
+          message: "Ubicación de origen requerida para asignaciones.",
+          path: ["origen"],
+          input: data.origen,
+        });
+      }
     }
 
-    // Reglas de negocio adicionales para salidas definitivas
     const salidасConDestinoRequerido = [
       TipoMovimientoEquipoEnum.SalidaDefinitiva,
       TipoMovimientoEquipoEnum.TransferenciaBodega,

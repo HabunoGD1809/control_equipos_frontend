@@ -46,6 +46,15 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
    const [availabilityError, setAvailabilityError] = useState<string | null>(null);
 
    const defaultValues = useMemo<FormValues>(() => {
+      // Función para estabilizar el componente Select alineándolo a bloques de 30 mins
+      const formatTimeOption = (date: Date) => {
+         const m = date.getMinutes();
+         const h = date.getHours();
+         const mRound = m >= 15 && m < 45 ? 30 : 0;
+         const hRound = m >= 45 ? (h + 1) % 24 : h;
+         return `${String(hRound).padStart(2, "0")}:${String(mRound).padStart(2, "0")}`;
+      };
+
       if (initialData) {
          const start = new Date(initialData.fecha_hora_inicio);
          const end = new Date(initialData.fecha_hora_fin);
@@ -54,9 +63,9 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
             proposito: initialData.proposito ?? "",
             notas: initialData.notas ?? "",
             fecha_inicio: start,
-            hora_inicio: format(start, "HH:mm"),
+            hora_inicio: formatTimeOption(start),
             fecha_fin: end,
-            hora_fin: format(end, "HH:mm"),
+            hora_fin: formatTimeOption(end),
          };
       }
       return {
@@ -80,14 +89,14 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
          return await reservasService.create(payload);
       },
       onSuccess: (data) => {
-         toast({ title: "Éxito", description: "Reserva solicitada correctamente." });
+         toast({ title: "Éxito", description: "Reserva gestionada correctamente." });
          queryClient.invalidateQueries({ queryKey: ["reservas"] });
          onSuccess(data);
       },
       onError: (err: unknown) => {
-         const e = err as Error & { status?: number };
-         if (e.status === 409) {
-            setAvailabilityError("Conflicto de horario detectado por el servidor.");
+         const e = err as Error & { status?: number, response?: any };
+         if (e.status === 409 || e.response?.status === 409) {
+            setAvailabilityError("El sistema ha detectado un conflicto de horario (El equipo fue reservado en este instante).");
             return;
          }
          toast({ variant: "destructive", title: "Error", description: e.message || "No se pudo procesar la solicitud." });
@@ -103,6 +112,7 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
       const fecha_hora_inicio = setMinutes(setHours(data.fecha_inicio, sh), sm);
       const fecha_hora_fin = setMinutes(setHours(data.fecha_fin, eh), em);
 
+      // Validación previa del lado del cliente
       const hasConflict = await checkOverlap({
          equipoId: data.equipo_id,
          startDate: fecha_hora_inicio,
@@ -144,7 +154,7 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
                name="equipo_id"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Equipo a Reservar</FormLabel>
+                     <FormLabel>Equipo a Reservar <span className="text-destructive">*</span></FormLabel>
                      <Select
                         onValueChange={(val) => {
                            field.onChange(val);
@@ -175,7 +185,7 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
                   name="fecha_inicio"
                   render={({ field }) => (
                      <FormItem className="flex flex-col">
-                        <FormLabel>Fecha de Inicio</FormLabel>
+                        <FormLabel>Fecha de Inicio <span className="text-destructive">*</span></FormLabel>
                         <Popover>
                            <PopoverTrigger asChild>
                               <FormControl>
@@ -202,7 +212,7 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
                   name="hora_inicio"
                   render={({ field }) => (
                      <FormItem>
-                        <FormLabel>Hora de Inicio</FormLabel>
+                        <FormLabel>Hora de Inicio <span className="text-destructive">*</span></FormLabel>
                         <Select onValueChange={field.onChange} value={field.value}>
                            <FormControl>
                               <SelectTrigger><SelectValue placeholder="HH:MM" /></SelectTrigger>
@@ -225,7 +235,7 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
                   name="fecha_fin"
                   render={({ field }) => (
                      <FormItem className="flex flex-col">
-                        <FormLabel>Fecha de Fin</FormLabel>
+                        <FormLabel>Fecha de Fin <span className="text-destructive">*</span></FormLabel>
                         <Popover>
                            <PopoverTrigger asChild>
                               <FormControl>
@@ -252,7 +262,7 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
                   name="hora_fin"
                   render={({ field }) => (
                      <FormItem>
-                        <FormLabel>Hora de Fin</FormLabel>
+                        <FormLabel>Hora de Fin <span className="text-destructive">*</span></FormLabel>
                         <Select onValueChange={field.onChange} value={field.value}>
                            <FormControl>
                               <SelectTrigger><SelectValue placeholder="HH:MM" /></SelectTrigger>
@@ -274,9 +284,9 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
                name="proposito"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Propósito de la Reserva</FormLabel>
+                     <FormLabel>Propósito de la Reserva <span className="text-destructive">*</span></FormLabel>
                      <FormControl>
-                        <Textarea placeholder="Ej: Evento de marketing..." {...field} value={field.value ?? ""} />
+                        <Textarea placeholder="Ej: Evento de marketing..." {...field} value={field.value ?? ""} className="resize-none" />
                      </FormControl>
                      <FormMessage />
                   </FormItem>
@@ -290,7 +300,7 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
                   <FormItem>
                      <FormLabel>Notas Adicionales (Opcional)</FormLabel>
                      <FormControl>
-                        <Textarea placeholder="Requerimientos especiales..." {...field} value={field.value ?? ""} />
+                        <Textarea placeholder="Requerimientos especiales..." {...field} value={field.value ?? ""} className="resize-none" />
                      </FormControl>
                      <FormMessage />
                   </FormItem>

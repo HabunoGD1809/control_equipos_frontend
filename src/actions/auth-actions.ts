@@ -27,7 +27,6 @@ export async function loginAction(values: z.infer<typeof loginSchema>) {
    if (!parsed.success) return { error: "Datos inválidos" };
 
    const { username, password } = parsed.data;
-   // OAuth2PasswordBearer exige strictly application/x-www-form-urlencoded
    const params = new URLSearchParams();
    params.append("username", username);
    params.append("password", password);
@@ -96,7 +95,6 @@ export async function requestPasswordResetAction(
    const parsed = resetPasswordRequestSchema.safeParse(values);
    if (!parsed.success) return { error: "Datos inválidos" };
 
-   // 🚨 CORRECCIÓN CRÍTICA: El backend exige Autenticación para este endpoint (Solo Admin)
    const cookieStore = await cookies();
    const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
 

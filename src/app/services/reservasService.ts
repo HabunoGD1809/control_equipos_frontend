@@ -2,6 +2,7 @@ import { api } from "@/lib/http";
 import type {
    ReservaEquipo,
    ReservaEquipoCreate,
+   ReservaEquipoUpdate,
    ReservaEquipoUpdateEstado,
    ReservaEquipoCheckInOut,
    PaginatedResponse,
@@ -38,6 +39,9 @@ export const reservasService = {
 
    create: (payload: ReservaEquipoCreate): Promise<ReservaEquipo> =>
       api.post<ReservaEquipo>("/reservas/", payload),
+
+   update: (id: string, payload: ReservaEquipoUpdate): Promise<ReservaEquipo> =>
+      api.put<ReservaEquipo>(`/reservas/${id}`, payload),
 
    cambiarEstado: (
       id: string,

@@ -55,7 +55,7 @@ export function DatePickerField({
                      setOpen(false); // ✅ cierra al seleccionar
                   }}
                   disabled={disabled}
-                  initialFocus
+                  autoFocus
                />
             </PopoverContent>
          </Popover>

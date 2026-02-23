@@ -1,36 +1,29 @@
-import { cookies } from "next/headers";
 import { MovimientosClient } from "./components/MovimientosClient";
+import { movimientosServerService } from "@/app/services/movimientosService.server";
+import { equiposServerService } from "@/app/services/equiposService.server";
+import { usuariosServerService } from "@/app/services/usuariosService.server";
 
 async function getMovimientosPageData() {
-   const cookieStore = await cookies();
-   const accessToken = cookieStore.get('access_token')?.value;
-
-   if (!accessToken) {
-      return { movimientos: [], equipos: [] };
-   }
-
-   const headers = { 'Authorization': `Bearer ${accessToken}` };
-   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-
    try {
-      const [movimientosRes, equiposRes] = await Promise.all([
-         fetch(`${baseUrl}/movimientos/?limit=200`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/equipos/?limit=500`, { headers, cache: 'no-store' })
+      const [movimientos, equiposData, usuarios] = await Promise.all([
+         movimientosServerService.getAll({ limit: 200 }),
+         equiposServerService.getAll({ limit: 500 }),
+         usuariosServerService.getAll({ limit: 200 }),
       ]);
 
-      const movimientos = movimientosRes.ok ? await movimientosRes.json() : [];
-      const equipos = equiposRes.ok ? await equiposRes.json() : [];
-
-      return { movimientos, equipos };
-
+      return {
+         movimientos,
+         equipos: equiposData.items,
+         usuarios,
+      };
    } catch (error) {
       console.error("[GET_MOVIMIENTOS_PAGE_DATA_ERROR]", error);
-      return { movimientos: [], equipos: [] };
+      return { movimientos: [], equipos: [], usuarios: [] };
    }
 }
 
 export default async function MovimientosPage() {
-   const { movimientos, equipos } = await getMovimientosPageData();
+   const { movimientos, equipos, usuarios } = await getMovimientosPageData();
 
    return (
       <div className="space-y-8">
@@ -40,7 +33,11 @@ export default async function MovimientosPage() {
                Consulta y registra todos los movimientos y asignaciones de equipos.
             </p>
          </div>
-         <MovimientosClient initialData={movimientos} equipos={equipos} />
+         <MovimientosClient
+            initialData={movimientos}
+            equipos={equipos}
+            usuarios={usuarios}
+         />
       </div>
    );
 }

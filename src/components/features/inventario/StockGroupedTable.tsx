@@ -103,7 +103,7 @@ export function StockGroupedTable({ data }: StockGroupedTableProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[50px]"></TableHead>
+              <TableHead className="w-12.5"></TableHead>
               <TableHead>Ítem</TableHead>
               <TableHead className="hidden md:table-cell">Marca / Modelo</TableHead>
               <TableHead className="text-center">Total Disponible</TableHead>
@@ -187,7 +187,7 @@ export function StockGroupedTable({ data }: StockGroupedTableProps) {
                                 <TableHead className="text-xs h-8">Lote</TableHead>
                                 <TableHead className="text-xs h-8">Caducidad</TableHead>
                                 <TableHead className="text-xs h-8 text-right">Cant.</TableHead>
-                                <TableHead className="text-xs h-8 w-[50px]"></TableHead> {/* Columna Acciones */}
+                                <TableHead className="text-xs h-8 w-12.5"></TableHead> {/* Columna Acciones */}
                               </TableRow>
                             </TableHeader>
                             <TableBody>

@@ -5,6 +5,8 @@ import type {
    InventarioMovimiento,
    PaginatedResponse,
    InventarioMovimientoCreate,
+   TipoItemInventarioCreate,
+   TipoItemInventarioUpdate,
    TipoItemInventarioSimple,
 } from "@/types/api";
 
@@ -18,13 +20,6 @@ export interface ItemBajoStock extends Omit<InventarioStock, "tipo_item"> {
    tipo_item: TipoItemInventarioSimple & { stock_minimo: number };
 }
 
-type TipoItemCreate = Omit<
-   TipoItemInventario,
-   "id" | "proveedor_preferido" | "created_at" | "updated_at"
-> & {
-   proveedor_preferido_id?: string | null;
-};
-
 export const inventarioService = {
    // --- Tipos ---
    getTipos(): Promise<TipoItemInventario[]> {
@@ -35,11 +30,11 @@ export const inventarioService = {
       return api.get<TipoItemInventario>(`/inventario/tipos/${id}`);
    },
 
-   createTipo(payload: TipoItemCreate): Promise<TipoItemInventario> {
+   createTipo(payload: TipoItemInventarioCreate): Promise<TipoItemInventario> {
       return api.post<TipoItemInventario>("/inventario/tipos/", payload);
    },
 
-   updateTipo(id: string, payload: Partial<TipoItemCreate>): Promise<TipoItemInventario> {
+   updateTipo(id: string, payload: TipoItemInventarioUpdate): Promise<TipoItemInventario> {
       return api.put<TipoItemInventario>(`/inventario/tipos/${id}`, payload);
    },
 

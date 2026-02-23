@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useState, useMemo } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
-import { Loader2, Shield } from "lucide-react";
+import { Loader2, Shield, CheckSquare } from "lucide-react";
 
 import { rolSchema } from "@/lib/zod";
 import { rolesService } from "@/app/services/rolesService";
 import { useAuthStore } from "@/store/authStore";
 import type { Rol, Permiso } from "@/types/api";
 import { useToast } from "@/components/ui/use-toast";
+import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/Button";
 import {
@@ -46,6 +47,9 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
    const [permisosDisponibles, setPermisosDisponibles] = useState<Permiso[]>([]);
    const [loadingPermisos, setLoadingPermisos] = useState(true);
 
+   // 🚀 REGLA DE NEGOCIO: Proteger el nombre del rol 'admin'
+   const isAdminRole = initialData?.nombre.toLowerCase() === "admin";
+
    const form = useForm<RoleFormValues>({
       resolver: standardSchemaResolver(rolSchema),
       defaultValues: {
@@ -53,6 +57,12 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
          descripcion: initialData?.descripcion ?? "",
          permiso_ids: initialData?.permisos?.map((p) => p.id) ?? [],
       },
+   });
+
+   // Observamos los permisos seleccionados para la lógica de "Seleccionar Todo"
+   const selectedPermisos = useWatch({
+      control: form.control,
+      name: "permiso_ids",
    });
 
    useEffect(() => {
@@ -118,14 +128,38 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
 
    const handleCancel = () => (onCancel ? onCancel() : router.back());
 
-   const permisoGroups = permisosDisponibles.reduce<Record<string, Permiso[]>>(
-      (acc, p) => {
-         const key = p.nombre.split("_")[1] ?? "general";
+   // 🚀 MEJORA UI: Agrupación semántica más limpia e inteligente
+   const permisoGroups = useMemo(() => {
+      return permisosDisponibles.reduce<Record<string, Permiso[]>>((acc, p) => {
+         const parts = p.nombre.split("_");
+         // Si tiene múltiples partes (ej: administrar_inventario_tipos), tomamos la segunda palabra como módulo
+         let key = parts.length > 1 ? parts[1] : "general";
+
+         // Limpieza de nombres para la UI
+         if (key === "software") key = "licencias"; // Unir catalogo software con licencias
+
          (acc[key] ??= []).push(p);
          return acc;
-      },
-      {},
-   );
+      }, {});
+   }, [permisosDisponibles]);
+
+   // 🚀 MEJORA UX: Función para seleccionar/deseleccionar un módulo completo
+   const handleToggleGroup = (groupPerms: Permiso[], selectAll: boolean) => {
+      const currentSet = new Set(form.getValues("permiso_ids") || []);
+
+      groupPerms.forEach((p) => {
+         if (selectAll) {
+            currentSet.add(p.id);
+         } else {
+            currentSet.delete(p.id);
+         }
+      });
+
+      form.setValue("permiso_ids", Array.from(currentSet), {
+         shouldValidate: true,
+         shouldDirty: true,
+      });
+   };
 
    if (!isInitialized) {
       return (
@@ -148,8 +182,17 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
                            Nombre del Rol <span className="text-destructive">*</span>
                         </FormLabel>
                         <FormControl>
-                           <Input placeholder="Ej: supervisor_almacen" {...field} />
+                           <Input
+                              placeholder="Ej: supervisor_almacen"
+                              {...field}
+                              disabled={isAdminRole || isLoading}
+                           />
                         </FormControl>
+                        {isAdminRole && (
+                           <FormDescription className="text-amber-600">
+                              El nombre del rol Administrador no puede ser modificado por seguridad.
+                           </FormDescription>
+                        )}
                         <FormMessage />
                      </FormItem>
                   )}
@@ -166,6 +209,8 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
                               placeholder="Breve detalle de las funciones del rol..."
                               {...field}
                               value={field.value ?? ""}
+                              disabled={isLoading}
+                              className="resize-none"
                            />
                         </FormControl>
                         <FormMessage />
@@ -176,10 +221,16 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
 
             <Card>
                <CardContent className="pt-6">
-                  <div className="flex items-center gap-2 mb-4">
-                     <Shield className="h-5 w-5 text-primary" />
-                     <h3 className="font-medium text-lg">Permisos del Sistema</h3>
+                  <div className="flex items-center justify-between mb-4 border-b pb-4">
+                     <div className="flex items-center gap-2">
+                        <Shield className="h-5 w-5 text-primary" />
+                        <h3 className="font-medium text-lg">Permisos del Sistema</h3>
+                     </div>
+                     <span className="text-sm text-muted-foreground font-medium bg-muted px-3 py-1 rounded-full">
+                        {selectedPermisos?.length || 0} / {permisosDisponibles.length} seleccionados
+                     </span>
                   </div>
+
                   {loadingPermisos ? (
                      <div className="flex items-center justify-center py-8">
                         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -190,64 +241,92 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
                      </p>
                   ) : (
                      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                        {Object.entries(permisoGroups).map(([groupName, permisos]) => (
-                           <div
-                              key={groupName}
-                              className="space-y-3 border p-4 rounded-lg"
-                           >
-                              <h4 className="font-semibold capitalize text-sm text-muted-foreground border-b pb-2">
-                                 Módulo: {groupName}
-                              </h4>
+                        {Object.entries(permisoGroups).map(([groupName, permisos]) => {
+                           // Calculamos el estado de selección del grupo
+                           const groupSelectedCount = permisos.filter(p => selectedPermisos?.includes(p.id)).length;
+                           const isAllSelected = groupSelectedCount === permisos.length;
+                           const isIndeterminate = groupSelectedCount > 0 && !isAllSelected;
 
-                              {permisos.map((permiso) => (
-                                 <FormField
-                                    key={permiso.id}
-                                    control={form.control}
-                                    name="permiso_ids"
-                                    render={({ field }) => (
-                                       <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                                          <FormControl>
-                                             <Checkbox
-                                                checked={field.value?.includes(permiso.id)}
-                                                onCheckedChange={(checked) =>
-                                                   field.onChange(
-                                                      checked
-                                                         ? [...field.value, permiso.id]
-                                                         : field.value.filter(
-                                                            (v) => v !== permiso.id,
-                                                         ),
-                                                   )
-                                                }
-                                             />
-                                          </FormControl>
-                                          <div className="space-y-1 leading-none">
-                                             <FormLabel className="font-normal cursor-pointer">
-                                                {permiso.nombre}
-                                             </FormLabel>
-                                             {permiso.descripcion && (
-                                                <FormDescription className="text-xs">
-                                                   {permiso.descripcion}
-                                                </FormDescription>
-                                             )}
-                                          </div>
-                                       </FormItem>
-                                    )}
-                                 />
-                              ))}
-                           </div>
-                        ))}
+                           return (
+                              <div
+                                 key={groupName}
+                                 className={cn(
+                                    "space-y-3 border p-4 rounded-lg transition-colors",
+                                    isAllSelected ? "bg-primary/5 border-primary/20" : "bg-card"
+                                 )}
+                              >
+                                 <div className="flex items-center justify-between border-b pb-2 mb-3">
+                                    <h4 className="font-semibold capitalize text-sm text-foreground">
+                                       Módulo: {groupName}
+                                    </h4>
+                                    <Button
+                                       type="button"
+                                       variant="ghost"
+                                       size="sm"
+                                       className="h-6 px-2 text-xs"
+                                       onClick={() => handleToggleGroup(permisos, !isAllSelected)}
+                                    >
+                                       <CheckSquare className={cn("h-3 w-3 mr-1", isAllSelected ? "text-primary" : "text-muted-foreground")} />
+                                       {isAllSelected ? "Deseleccionar" : "Todos"}
+                                    </Button>
+                                 </div>
+
+                                 <div className="space-y-3">
+                                    {permisos.map((permiso) => (
+                                       <FormField
+                                          key={permiso.id}
+                                          control={form.control}
+                                          name="permiso_ids"
+                                          render={({ field }) => (
+                                             <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                                                <FormControl>
+                                                   <Checkbox
+                                                      checked={field.value?.includes(permiso.id)}
+                                                      disabled={isAdminRole || isLoading}
+                                                      onCheckedChange={(checked) =>
+                                                         field.onChange(
+                                                            checked
+                                                               ? [...field.value, permiso.id]
+                                                               : field.value.filter(
+                                                                  (v) => v !== permiso.id,
+                                                               ),
+                                                         )
+                                                      }
+                                                   />
+                                                </FormControl>
+                                                <div className="space-y-1 leading-none">
+                                                   <FormLabel className={cn(
+                                                      "font-normal text-sm cursor-pointer",
+                                                      field.value?.includes(permiso.id) ? "text-foreground font-medium" : "text-muted-foreground"
+                                                   )}>
+                                                      {permiso.nombre}
+                                                   </FormLabel>
+                                                   {permiso.descripcion && (
+                                                      <FormDescription className="text-xs">
+                                                         {permiso.descripcion}
+                                                      </FormDescription>
+                                                   )}
+                                                </div>
+                                             </FormItem>
+                                          )}
+                                       />
+                                    ))}
+                                 </div>
+                              </div>
+                           );
+                        })}
                      </div>
                   )}
                   {form.formState.errors.permiso_ids?.message && (
-                     <p className="text-sm font-medium text-destructive mt-2">
+                     <p className="text-sm font-medium text-destructive mt-4 text-center bg-destructive/10 py-2 rounded-md">
                         {form.formState.errors.permiso_ids.message}
                      </p>
                   )}{" "}
                </CardContent>
             </Card>
 
-            <div className="flex justify-end gap-4">
-               <Button type="button" variant="outline" onClick={handleCancel}>
+            <div className="flex justify-end gap-4 sticky bottom-0 bg-background/80 backdrop-blur-sm py-4 border-t">
+               <Button type="button" variant="outline" onClick={handleCancel} disabled={isLoading}>
                   Cancelar
                </Button>
                <Button type="submit" disabled={isLoading || loadingPermisos}>

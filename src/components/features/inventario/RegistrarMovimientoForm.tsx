@@ -13,7 +13,13 @@ import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { inventarioMovimientoSchema } from "@/lib/zod";
-import { TipoItemInventarioSimple, TipoMovimientoInvEnum, EquipoSimple, InventarioStock } from "@/types/api";
+import {
+   TipoItemInventarioSimple,
+   TipoMovimientoInvEnum,
+   EquipoSimple,
+   InventarioStock,
+   InventarioMovimientoCreate
+} from "@/types/api";
 import { inventarioService } from "@/app/services/inventarioService";
 
 interface RegistrarMovimientoFormProps {
@@ -32,7 +38,7 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
    const form = useForm<FormValues>({
       resolver: standardSchemaResolver(inventarioMovimientoSchema),
       defaultValues: {
-         tipo_item_id: undefined,
+         tipo_item_id: undefined as any,
          tipo_movimiento: TipoMovimientoInvEnum.EntradaCompra,
          cantidad: 1,
          lote_origen: "N/A",
@@ -41,6 +47,8 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
          notas: "",
          ubicacion_origen: "",
          ubicacion_destino: "",
+         motivo_ajuste: "",
+         equipo_asociado_id: undefined,
       },
    });
 
@@ -50,10 +58,26 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
 
    const tipoStr = tipoMovimiento as string;
 
-   const isEntrada = ([TipoMovimientoInvEnum.EntradaCompra, TipoMovimientoInvEnum.DevolucionInterna] as string[]).includes(tipoStr);
-   const isSalida = ([TipoMovimientoInvEnum.SalidaUso, TipoMovimientoInvEnum.SalidaDescarte] as string[]).includes(tipoStr);
-   const isTransferencia = ([TipoMovimientoInvEnum.TransferenciaSalida, TipoMovimientoInvEnum.TransferenciaEntrada] as string[]).includes(tipoStr);
+   const reqOrigen = ([
+      TipoMovimientoInvEnum.SalidaUso,
+      TipoMovimientoInvEnum.SalidaDescarte,
+      TipoMovimientoInvEnum.AjusteNegativo,
+      TipoMovimientoInvEnum.TransferenciaSalida,
+      TipoMovimientoInvEnum.TransferenciaEntrada,
+      TipoMovimientoInvEnum.DevolucionProveedor,
+   ] as string[]).includes(tipoStr);
+
+   const reqDestino = ([
+      TipoMovimientoInvEnum.EntradaCompra,
+      TipoMovimientoInvEnum.DevolucionInterna,
+      TipoMovimientoInvEnum.AjustePositivo,
+      TipoMovimientoInvEnum.TransferenciaSalida,
+      TipoMovimientoInvEnum.TransferenciaEntrada,
+   ] as string[]).includes(tipoStr);
+
    const isAjuste = tipoStr.includes("Ajuste");
+   const showCosto = tipoStr === TipoMovimientoInvEnum.EntradaCompra;
+   const showEquipoAsociado = tipoStr === TipoMovimientoInvEnum.SalidaUso;
 
    // Lógica de seguridad para el origen basado en el Stock real
    const stockDisponibleDelItem = useMemo(() => {
@@ -73,19 +97,27 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
    const onSubmit = async (values: FormValues) => {
       setIsLoading(true);
       try {
-         const payload: any = { ...values };
+         const payload: Partial<InventarioMovimientoCreate> = { ...values };
 
-         // Limpieza de payload cruzado para evitar conflictos
-         if (isEntrada) {
+         if (!reqOrigen) {
             delete payload.ubicacion_origen;
             delete payload.lote_origen;
          }
-         if (isSalida) {
+         if (!reqDestino) {
             delete payload.ubicacion_destino;
             delete payload.lote_destino;
          }
+         if (!isAjuste) {
+            delete payload.motivo_ajuste;
+         }
+         if (!showCosto) {
+            delete payload.costo_unitario;
+         }
+         if (!showEquipoAsociado) {
+            delete payload.equipo_asociado_id;
+         }
 
-         await inventarioService.registrarMovimiento(payload);
+         await inventarioService.registrarMovimiento(payload as InventarioMovimientoCreate);
 
          toast({
             title: "Movimiento Registrado",
@@ -113,7 +145,6 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
    return (
       <Form {...form}>
          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 max-h-[80vh] overflow-y-auto px-1">
-
             <FormField
                control={form.control}
                name="tipo_item_id"
@@ -194,7 +225,7 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                   )}
                />
 
-               {isEntrada && (
+               {showCosto && (
                   <FormField
                      control={form.control}
                      name="costo_unitario"
@@ -225,7 +256,7 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               {(isSalida || isTransferencia || isAjuste) && (
+               {reqOrigen && (
                   <div className="space-y-4 bg-muted/30 p-3 rounded-md border">
                      <FormField
                         control={form.control}
@@ -275,7 +306,7 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                   </div>
                )}
 
-               {(isEntrada || isTransferencia || isAjuste) && (
+               {reqDestino && (
                   <div className="space-y-4 bg-primary/5 p-3 rounded-md border border-primary/20">
                      <FormField
                         control={form.control}
@@ -284,7 +315,7 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                            <FormItem>
                               <FormLabel>Ubicación Destino <span className="text-destructive">*</span></FormLabel>
                               <FormControl>
-                                 <Input placeholder="Ej: Almacén Principal, Estante 3" {...field} value={field.value || ""} />
+                                 <Input placeholder="Ej: Almacén Principal" {...field} value={field.value || ""} />
                               </FormControl>
                               <FormMessage />
                            </FormItem>
@@ -307,7 +338,7 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                )}
             </div>
 
-            {tipoStr === TipoMovimientoInvEnum.SalidaUso && (
+            {showEquipoAsociado && (
                <FormField
                   control={form.control}
                   name="equipo_asociado_id"
@@ -375,9 +406,9 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
             <div className="flex justify-end pt-2">
                <Button type="submit" disabled={isLoading}>
                   {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {isEntrada ? (
+                  {!reqOrigen ? (
                      <PackagePlus className="mr-2 h-4 w-4" />
-                  ) : isSalida ? (
+                  ) : !reqDestino ? (
                      <PackageMinus className="mr-2 h-4 w-4" />
                   ) : (
                      <ArrowRightLeft className="mr-2 h-4 w-4" />

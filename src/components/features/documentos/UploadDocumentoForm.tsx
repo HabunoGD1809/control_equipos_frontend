@@ -59,9 +59,14 @@ export function UploadDocumentoForm({
       resolver: standardSchemaResolver(dynamicSchema),
       defaultValues: {
          titulo: "",
-         tipo_documento_id: undefined,
+         // Inicializamos de forma segura previniendo errores de hidratación
+         tipo_documento_id: undefined as any,
          descripcion: "",
          file: undefined,
+         // Integramos firmemente las llaves foráneas en el control del formulario
+         equipo_id: equipoId || null,
+         mantenimiento_id: mantenimientoId || null,
+         licencia_id: licenciaId || null,
       },
    });
 
@@ -87,10 +92,11 @@ export function UploadDocumentoForm({
 
    const onSubmit = async (values: UploadDocumentoValues) => {
       try {
+         // El payload ahora es exactamente lo que Zod determinó como válido y seguro
          await documentosService.upload({
-            equipo_id: equipoId || null,
-            mantenimiento_id: mantenimientoId || null,
-            licencia_id: licenciaId || null,
+            equipo_id: values.equipo_id,
+            mantenimiento_id: values.mantenimiento_id,
+            licencia_id: values.licencia_id,
             titulo: values.titulo,
             tipo_documento_id: values.tipo_documento_id,
             descripcion: values.descripcion || null,
@@ -144,7 +150,7 @@ export function UploadDocumentoForm({
                         value={field.value || undefined}
                         onValueChange={(val) => {
                            field.onChange(val);
-                           form.setValue("file", undefined); // Reset file on type change
+                           form.setValue("file", undefined);
                         }}
                      >
                         <FormControl>
@@ -171,7 +177,7 @@ export function UploadDocumentoForm({
             <FormField
                control={form.control}
                name="file"
-               render={({ field: { onChange, ...fieldProps } }) => (
+               render={({ field: { onChange, value, ...fieldProps } }) => (
                   <FormItem>
                      <FormLabel>Archivo <span className="text-destructive">*</span></FormLabel>
                      <FormControl>
@@ -183,7 +189,6 @@ export function UploadDocumentoForm({
                            onChange={(event) => onChange(event.target.files?.[0])}
                         />
                      </FormControl>
-
                      <FormDescription>
                         {selectedTipoId
                            ? `Formatos permitidos: ${tiposDocumento
@@ -193,7 +198,6 @@ export function UploadDocumentoForm({
                            : "Seleccione un tipo de documento primero."}{" "}
                         (Máx 10 MB)
                      </FormDescription>
-
                      <FormMessage />
                   </FormItem>
                )}

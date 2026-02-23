@@ -107,7 +107,7 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
 
             <div className="flex gap-2">
                {canEdit && (
-                  <Button variant="outline" onClick={() => console.log("Edit modal trigger")}>
+                  <Button variant="outline" onClick={() => router.push(`/equipos/${equipo.id}/editar`)}>
                      <Edit className="mr-2 h-4 w-4" /> Editar
                   </Button>
                )}

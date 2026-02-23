@@ -1,6 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { AUTH_COOKIE_NAME } from "@/lib/constants";
+import { refreshAccessToken } from "@/lib/token-refresh";
 
 const BASE_URL: string = (() => {
    const v = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -12,12 +13,13 @@ type Primitive = string | number | boolean;
 
 interface FetchOptions extends RequestInit {
    params?: Record<string, Primitive | undefined | null>;
+   _retry?: boolean;
 }
 
 type HttpError = Error & { status?: number };
 
 async function httpServer<T>(path: string, options: FetchOptions = {}): Promise<T> {
-   const { params, headers, ...rest } = options;
+   const { params, headers, _retry, ...rest } = options;
 
    const cleanBase = BASE_URL.replace(/\/$/, "");
    const cleanPath = path.startsWith("/") ? path : `/${path}`;
@@ -45,6 +47,19 @@ async function httpServer<T>(path: string, options: FetchOptions = {}): Promise<
       ...rest,
       cache: rest.cache ?? "no-store",
    });
+
+   // 🔄 INTERCEPTOR DE REFRESH TOKEN
+   if (response.status === 401 && !_retry) {
+      const newAccessToken = await refreshAccessToken();
+
+      if (newAccessToken) {
+         // Reintentamos la petición original con el nuevo token
+         return httpServer<T>(path, { ...options, _retry: true });
+      }
+      // Si refreshAccessToken() retornó null, ya eliminó las cookies.
+      // El throw de abajo + redirect('/login') en el layout funcionará
+      // y el middleware NO hará bucle porque las cookies fueron eliminadas.
+   }
 
    if (!response.ok) {
       let message = `HTTP ${response.status}`;

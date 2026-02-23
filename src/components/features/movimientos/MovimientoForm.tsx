@@ -353,7 +353,7 @@ export function MovimientoForm({
                           selected={(field.value as Date) ?? undefined}
                           onSelect={field.onChange}
                           disabled={(date) => date < new Date()}
-                          initialFocus
+                          autoFocus
                         />
                       </PopoverContent>
                     </Popover>

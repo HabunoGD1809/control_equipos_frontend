@@ -38,24 +38,15 @@ export const MIME_TYPE_MAP: Record<string, string[]> = {
 
 // ─── HELPERS DE VALIDACIÓN ──────────────────────────────────────────────────
 
-// v4: z.string() ya no acepta `{ error }` como primer argumento directo para
-//     mensajes de tipo — se pasa el string directo como shorthand.
 const requiredString = (message = "Este campo es requerido.") =>
   z.string(message).min(1, { error: message });
 
-// v4: z.string().pipe(z.uuid()) → z.guid()
-//     z.guid() es el equivalente exacto al viejo z.string().uuid() de v3
-//     (patrón 8-4-4-4-12 hex, sin validación estricta RFC 4122).
-//     Usamos guid() en lugar de uuid() para mantener compatibilidad con
-//     UUIDs generados por la base de datos que pueden no cumplir RFC 4122 estricto.
 const requiredUuid = (message = "Debe seleccionar una opción.") =>
   z.guid({ error: message });
 
 const requiredDate = (message = "La fecha es requerida.") =>
   z.date({ error: message });
 
-// v4: z.enum() acepta directamente un array readonly, sin necesidad del
-//     tuple hack `[values[0], ...values.slice(1)] as [T, ...T[]]`.
 const requiredEnum = <T extends string>(
   values: T[],
   message = "Debe seleccionar una opción válida.",
@@ -64,7 +55,7 @@ const requiredEnum = <T extends string>(
 // ─── SCHEMAS DINÁMICOS ───────────────────────────────────────────────────────
 
 /**
- * Valida documentos contra las reglas de la BD (TiposDocumento)
+ * Valida documentos contra las reglas de la BD (TiposDocumento y Relaciones)
  */
 export const createDocumentoSchema = (tiposDisponibles: TipoDocumento[]) =>
   z
@@ -72,20 +63,31 @@ export const createDocumentoSchema = (tiposDisponibles: TipoDocumento[]) =>
       titulo: requiredString("El título es requerido.").min(3).max(255),
       tipo_documento_id: requiredUuid("Debe seleccionar un tipo de documento."),
       descripcion: z.string().optional().nullable(),
+      equipo_id: z.guid().optional().nullable(),
+      mantenimiento_id: z.guid().optional().nullable(),
+      licencia_id: z.guid().optional().nullable(),
       file: z
         .any()
-        // v4: .refine() sigue igual, message → sigue aceptándose como string directo
         .refine((file) => file, "El archivo es requerido.")
         .refine(
           (file) => file?.size <= MAX_FILE_SIZE,
           "El tamaño máximo es 10 MB.",
         ),
     })
-    // v4: .superRefine() → .check() es la API preferida en v4.
-    //     .check() recibe (ctx) directamente; el valor se accede via ctx.value.
     .check((ctx) => {
       const data = ctx.value;
 
+      // Validación 1: Evitar documentos huérfanos
+      if (!data.equipo_id && !data.mantenimiento_id && !data.licencia_id) {
+        ctx.issues.push({
+          code: "custom",
+          message: "El documento debe estar vinculado a un equipo, mantenimiento o licencia.",
+          path: ["tipo_documento_id"],
+          input: data.tipo_documento_id,
+        });
+      }
+
+      // Validación 2: Tipo de documento válido
       const tipoSeleccionado = tiposDisponibles.find(
         (t) => t.id === data.tipo_documento_id,
       );
@@ -100,6 +102,7 @@ export const createDocumentoSchema = (tiposDisponibles: TipoDocumento[]) =>
         return;
       }
 
+      // Validación 3: Reglas de MIME Types de la BD
       const file = data.file as File;
       if (!file) return;
 
@@ -127,7 +130,6 @@ export const createDocumentoSchema = (tiposDisponibles: TipoDocumento[]) =>
 export const documentacionUpdateSchema = z.object({
   titulo: z.string().min(3).max(255).optional(),
   descripcion: z.string().optional().nullable(),
-  // v4: z.string().pipe(z.uuid()) → z.guid()
   tipo_documento_id: z.guid().optional(),
 });
 
@@ -138,7 +140,6 @@ export const createCierreMantenimientoSchema = (
   z
     .object({
       estado: requiredEnum(Object.values(EstadoMantenimientoEnum)),
-      // v4: z.coerce sigue igual
       costo_real: z.coerce
         .number()
         .min(0, { error: "El costo real es requerido." }),
@@ -147,7 +148,6 @@ export const createCierreMantenimientoSchema = (
       observaciones: z.string().optional().nullable(),
       tecnico_responsable: requiredString("Técnico responsable requerido."),
     })
-    // v4: .superRefine() → .check()
     .check((ctx) => {
       const data = ctx.value;
 
@@ -248,7 +248,6 @@ export const equipoSchema = z
   });
 
 export const addComponenteSchema = z.object({
-  // v4: requiredUuid ya usa z.guid() internamente
   equipo_componente_id: requiredUuid("Debe seleccionar un equipo componente."),
   cantidad: z.coerce
     .number()
@@ -299,7 +298,6 @@ export const mantenimientoUpdateSchema = z.object({
   costo_estimado: z.coerce.number().optional(),
   costo_real: z.coerce.number().optional(),
   tecnico_responsable: z.string().optional(),
-  // v4: z.string().pipe(z.uuid()) → z.guid()
   proveedor_servicio_id: z.guid().optional().nullable(),
   prioridad: z.coerce.number().int().min(0).max(2).optional(),
   estado: requiredEnum(Object.values(EstadoMantenimientoEnum)).optional(),
@@ -324,7 +322,6 @@ export const tipoItemSchema = z.object({
   sku: z.string().max(100).optional().nullable(),
   codigo_barras: z.string().max(100).optional().nullable(),
   stock_minimo: z.coerce.number().int().min(0).default(0),
-  // v4: z.string().pipe(z.uuid()) → z.guid()
   proveedor_preferido_id: z.guid().optional().nullable(),
 });
 
@@ -345,12 +342,10 @@ export const inventarioMovimientoSchema = z
     ubicacion_origen: z.string().optional().nullable(),
     ubicacion_destino: z.string().optional().nullable(),
     motivo_ajuste: z.string().optional().nullable(),
-    // v4: z.string().pipe(z.uuid()) → z.guid()
     equipo_asociado_id: z.guid().optional().nullable(),
     mantenimiento_id: z.guid().optional().nullable(),
     notas: z.string().optional().nullable(),
   })
-  // v4: .superRefine() → .check()
   .check((ctx) => {
     const data = ctx.value;
 
@@ -414,12 +409,10 @@ export const softwareCatalogoSchema = z.object({
 
 export const licenciaSoftwareSchema = z
   .object({
-    // v4: requiredUuid ya usa z.guid() internamente
     software_catalogo_id: requiredUuid("Debe seleccionar un software."),
     clave_producto: z.string().optional().nullable(),
     fecha_adquisicion: requiredDate(),
     fecha_expiracion: z.date().optional().nullable(),
-    // v4: z.string().pipe(z.uuid()) → z.guid()
     proveedor_id: z.guid().optional().nullable(),
     costo_adquisicion: z.coerce.number().min(0).optional().nullable(),
     cantidad_total: z.coerce
@@ -429,7 +422,6 @@ export const licenciaSoftwareSchema = z
     notas: z.string().optional().nullable(),
     numero_orden_compra: z.string().optional().nullable(),
   })
-  // v4: .refine() con objeto de opciones sigue siendo válido
   .refine(
     (data) =>
       !data.fecha_expiracion ||
@@ -468,8 +460,6 @@ export const asignarLicenciaSchema = z
 
 export const usuarioCreateSchema = z.object({
   nombre_usuario: z.string().min(3).max(50),
-  // v4: z.string().pipe(z.email()) → z.email() es ahora top-level
-  //     La unión con z.literal("") se mantiene para permitir string vacío
   email: z
     .email({ error: "Email inválido" })
     .optional()
@@ -481,14 +471,12 @@ export const usuarioCreateSchema = z.object({
 
 export const usuarioUpdateSchema = z.object({
   nombre_usuario: z.string().min(3).max(50).optional(),
-  // v4: z.string().pipe(z.email()) → z.email() top-level
   email: z
     .email({ error: "Email inválido" })
     .optional()
     .nullable()
     .or(z.literal("")),
   password: z.string().min(8).optional().nullable().or(z.literal("")),
-  // v4: z.string().pipe(z.uuid()) → z.guid()
   rol_id: z.guid().optional(),
   bloqueado: z.boolean().optional(),
   requiere_cambio_contrasena: z.boolean().optional(),
@@ -497,7 +485,6 @@ export const usuarioUpdateSchema = z.object({
 export const rolSchema = z.object({
   nombre: requiredString("Nombre requerido.").min(3).max(100),
   descripcion: z.string().optional().nullable(),
-  // v4: z.string().pipe(z.uuid()) → z.guid() dentro del array
   permiso_ids: z.array(z.guid()).min(1, { error: "Mínimo un permiso." }),
 });
 
@@ -508,7 +495,6 @@ export const proveedorSchema = z.object({
   descripcion: z.string().optional().nullable(),
   contacto: z.string().optional().nullable(),
   direccion: z.string().optional().nullable(),
-  // v4: z.string().pipe(z.url()) → z.url() es ahora top-level
   sitio_web: z
     .url({ error: "URL inválida" })
     .optional()
@@ -548,7 +534,6 @@ export const reservaSchema = z
     hora_fin: requiredString(),
     notas: z.string().optional().nullable(),
   })
-  // v4: .refine() con objeto de opciones sigue siendo válido cuando se necesita path
   .refine(
     (data) => {
       if (!isValid(data.fecha_inicio) || !isValid(data.fecha_fin)) return false;
@@ -650,7 +635,6 @@ export const autorizarMovimientoSchema = z
     }),
     observaciones: z.string().optional(),
   })
-  // v4: .superRefine() → .check()
   .check((ctx) => {
     const data = ctx.value;
 
@@ -728,7 +712,6 @@ export const aprobarReservaSchema = z
     accion: z.enum(["Aprobar", "Rechazar"]),
     notas_admin: z.string().optional(),
   })
-  // v4: .superRefine() → .check()
   .check((ctx) => {
     const data = ctx.value;
 
@@ -748,7 +731,6 @@ export const reservaCheckOutSchema = z.object({
 
 export const reservaCheckInSchema = z.object({
   notas_devolucion: z.string().optional(),
-  // v4: z.string().pipe(z.uuid()) → z.guid()
   estado_final_id: z.guid().optional(),
 });
 
@@ -760,7 +742,6 @@ export const documentacionVerifySchema = z
     ]),
     notas_verificacion: z.string().optional().nullable(),
   })
-  // v4: .superRefine() → .check()
   .check((ctx) => {
     const data = ctx.value;
 
@@ -777,7 +758,6 @@ export const documentacionVerifySchema = z
     }
   });
 
-// Al final de zod.ts
 export const genericCatalogSchema = z.object({
   nombre: requiredString("Nombre requerido.").min(2).max(100),
   descripcion: z.string().optional().nullable(),
@@ -792,6 +772,5 @@ export const genericCatalogSchema = z.object({
   requiere_documentacion: z.boolean().optional(),
 });
 
-// Alias para consistencia con imports
 export const LoginSchema = loginSchema;
 export const ChangePasswordSchema = changePasswordSchema;

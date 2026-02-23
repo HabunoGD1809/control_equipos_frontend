@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { Loader2, CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -49,7 +49,8 @@ interface EditStockDetailsModalProps {
 
 export function EditStockDetailsModal({ stock, isOpen, onClose }: EditStockDetailsModalProps) {
    const { toast } = useToast();
-   const queryClient = useQueryClient();
+   const router = useRouter();
+   const [isLoading, setIsLoading] = useState(false);
 
    const form = useForm<EditStockFormValues>({
       resolver: standardSchemaResolver(editStockSchema),
@@ -68,26 +69,22 @@ export function EditStockDetailsModal({ stock, isOpen, onClose }: EditStockDetai
       }
    }, [stock, form]);
 
-   const mutation = useMutation({
-      mutationFn: (values: EditStockFormValues) => {
-         if (!stock) throw new Error("No hay stock seleccionado");
-         return inventarioService.updateStockDetails(stock.id, {
+   const onSubmit = async (values: EditStockFormValues) => {
+      if (!stock) return;
+      setIsLoading(true);
+      try {
+         await inventarioService.updateStockDetails(stock.id, {
             lote: values.lote,
             fecha_caducidad: values.fecha_caducidad ? values.fecha_caducidad.toISOString() : null,
          });
-      },
-      onSuccess: () => {
          toast({ title: "Actualizado", description: "Los detalles del lote han sido corregidos." });
-         queryClient.invalidateQueries({ queryKey: ["inventario-stock"] });
+         router.refresh();
          onClose();
-      },
-      onError: () => {
+      } catch {
          toast({ variant: "destructive", title: "Error", description: "No se pudieron actualizar los detalles." });
-      },
-   });
-
-   const onSubmit = (data: EditStockFormValues) => {
-      mutation.mutate(data);
+      } finally {
+         setIsLoading(false);
+      }
    };
 
    return (
@@ -161,8 +158,8 @@ export function EditStockDetailsModal({ stock, isOpen, onClose }: EditStockDetai
                      <Button type="button" variant="ghost" onClick={onClose}>
                         Cancelar
                      </Button>
-                     <Button type="submit" disabled={mutation.isPending}>
-                        {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                     <Button type="submit" disabled={isLoading}>
+                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Guardar Cambios
                      </Button>
                   </DialogFooter>

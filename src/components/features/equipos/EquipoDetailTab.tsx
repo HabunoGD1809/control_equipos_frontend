@@ -19,7 +19,6 @@ interface EquipoDetailTabProps {
    equipo: EquipoRead;
 }
 
-// CORRECCIÓN: 'export function' para permitir import { EquipoDetailTab }
 export function EquipoDetailTab({ equipo }: EquipoDetailTabProps) {
 
    const formatCurrency = (amount?: string | number | null) => {

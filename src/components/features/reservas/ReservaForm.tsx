@@ -11,7 +11,12 @@ import { CalendarIcon, Loader2, AlertCircle } from "lucide-react";
 
 import { reservaSchema } from "@/lib/zod";
 import { useCheckAvailability } from "@/hooks/useCheckAvailability";
-import type { EquipoSimple, ReservaEquipo, ReservaEquipoCreate } from "@/types/api";
+import type {
+   EquipoSimple,
+   ReservaEquipo,
+   ReservaEquipoCreate,
+   ReservaEquipoUpdate
+} from "@/types/api";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -46,7 +51,6 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
    const [availabilityError, setAvailabilityError] = useState<string | null>(null);
 
    const defaultValues = useMemo<FormValues>(() => {
-      // Función para estabilizar el componente Select alineándolo a bloques de 30 mins
       const formatTimeOption = (date: Date) => {
          const m = date.getMinutes();
          const h = date.getHours();
@@ -85,11 +89,17 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
    });
 
    const mutation = useMutation({
-      mutationFn: async (payload: ReservaEquipoCreate) => {
-         return await reservasService.create(payload);
+      mutationFn: async (payload: ReservaEquipoCreate | ReservaEquipoUpdate) => {
+         if (initialData) {
+            return await reservasService.update(initialData.id, payload as ReservaEquipoUpdate);
+         }
+         return await reservasService.create(payload as ReservaEquipoCreate);
       },
       onSuccess: (data) => {
-         toast({ title: "Éxito", description: "Reserva gestionada correctamente." });
+         toast({
+            title: initialData ? "Reserva Actualizada" : "Reserva Creada",
+            description: "La operación se completó correctamente."
+         });
          queryClient.invalidateQueries({ queryKey: ["reservas"] });
          onSuccess(data);
       },
@@ -99,7 +109,11 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
             setAvailabilityError("El sistema ha detectado un conflicto de horario (El equipo fue reservado en este instante).");
             return;
          }
-         toast({ variant: "destructive", title: "Error", description: e.message || "No se pudo procesar la solicitud." });
+         toast({
+            variant: "destructive",
+            title: "Error",
+            description: e.message || "No se pudo procesar la solicitud."
+         });
       },
    });
 
@@ -112,7 +126,6 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
       const fecha_hora_inicio = setMinutes(setHours(data.fecha_inicio, sh), sm);
       const fecha_hora_fin = setMinutes(setHours(data.fecha_fin, eh), em);
 
-      // Validación previa del lado del cliente
       const hasConflict = await checkOverlap({
          equipoId: data.equipo_id,
          startDate: fecha_hora_inicio,
@@ -125,15 +138,24 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
          return;
       }
 
-      const payload: ReservaEquipoCreate = {
-         equipo_id: data.equipo_id,
-         proposito: data.proposito,
-         notas: data.notas ?? undefined,
-         fecha_hora_inicio: fecha_hora_inicio.toISOString(),
-         fecha_hora_fin: fecha_hora_fin.toISOString(),
-      };
-
-      mutation.mutate(payload);
+      if (initialData) {
+         const updatePayload: ReservaEquipoUpdate = {
+            fecha_hora_inicio: fecha_hora_inicio.toISOString(),
+            fecha_hora_fin: fecha_hora_fin.toISOString(),
+            proposito: data.proposito,
+            notas: data.notas ?? undefined,
+         };
+         mutation.mutate(updatePayload);
+      } else {
+         const createPayload: ReservaEquipoCreate = {
+            equipo_id: data.equipo_id,
+            proposito: data.proposito,
+            notas: data.notas ?? undefined,
+            fecha_hora_inicio: fecha_hora_inicio.toISOString(),
+            fecha_hora_fin: fecha_hora_fin.toISOString(),
+         };
+         mutation.mutate(createPayload);
+      }
    };
 
    const isSubmitting = mutation.isPending || isChecking;
@@ -161,7 +183,7 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
                            setAvailabilityError(null);
                         }}
                         value={field.value}
-                        disabled={!!initialData}
+                        disabled={!!initialData} // Se bloquea correctamente en edición
                      >
                         <FormControl>
                            <SelectTrigger><SelectValue placeholder="Seleccione un equipo..." /></SelectTrigger>
@@ -310,7 +332,7 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
             <div className="flex justify-end pt-4">
                <Button type="submit" disabled={isSubmitting}>
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {isChecking ? "Verificando..." : "Solicitar Reserva"}
+                  {isChecking ? "Verificando..." : initialData ? "Actualizar Reserva" : "Solicitar Reserva"}
                </Button>
             </div>
          </form>

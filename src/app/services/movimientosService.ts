@@ -1,33 +1,34 @@
 import { api } from "@/lib/http";
-import {
+import type {
    Movimiento,
    MovimientoCreate,
    MovimientoUpdate,
    TipoMovimientoEquipo,
-   TipoMovimientoEquipoEnum,
 } from "@/types/api";
+import { TipoMovimientoEquipoEnum } from "@/types/api";
 
-// Tipo local — si lo mueves a types/api.ts mejor
-export interface AutorizarMovimientoPayload {
-   accion: "Aprobar" | "Rechazar";
-   observaciones?: string;
-}
+type MovimientosQuery = {
+   skip?: number;
+   limit?: number;
+   equipo_id?: string;
+};
 
 export const movimientosService = {
-   getByEquipo: (equipoId: string): Promise<Movimiento[]> =>
-      api.get<Movimiento[]>(`/equipos/${equipoId}/movimientos`),
+   getAll: async (params?: MovimientosQuery): Promise<Movimiento[]> => {
+      return api.get<Movimiento[]>("/movimientos/", { params });
+   },
 
-   getPendientes: (): Promise<Movimiento[]> =>
-      api.get<Movimiento[]>("/movimientos/pendientes"),
+   getById: (id: string): Promise<Movimiento> =>
+      api.get<Movimiento>(`/movimientos/${id}`),
 
    create: (payload: MovimientoCreate): Promise<Movimiento> =>
-      api.post<Movimiento>("/movimientos", payload),
+      api.post<Movimiento>("/movimientos/", payload),
 
    update: (id: string, payload: MovimientoUpdate): Promise<Movimiento> =>
-      api.patch<Movimiento>(`/movimientos/${id}`, payload),
+      api.put<Movimiento>(`/movimientos/${id}`, payload),
 
-   autorizar: (id: string, payload: AutorizarMovimientoPayload): Promise<void> =>
-      api.post<void>(`/movimientos/${id}/autorizar`, payload),
+   cancelar: (id: string): Promise<Movimiento> =>
+      api.post<Movimiento>(`/movimientos/${id}/cancelar`, {}),
 
    predecirEstadoFinal: (tipo: TipoMovimientoEquipo): string => {
       switch (tipo) {

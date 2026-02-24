@@ -1,5 +1,5 @@
 import { api } from '@/lib/http';
-import type { BackupLog, PaginatedResponse } from '@/types/api';
+import type { BackupLog } from '@/types/api';
 
 export const backupsService = {
    getLogs: async (params?: { skip?: number; limit?: number; backup_status?: string; backup_type?: string }): Promise<BackupLog[]> => {
@@ -11,13 +11,9 @@ export const backupsService = {
             backup_type: (params?.backup_type && params.backup_type !== 'all') ? params.backup_type : undefined,
          };
 
-         const data = await api.get<PaginatedResponse<BackupLog> | BackupLog[]>('/backups/logs', {
+         return await api.get<BackupLog[]>('/backups/logs', {
             params: safeParams
          });
-
-         if ('items' in data && Array.isArray(data.items)) return data.items;
-         if (Array.isArray(data)) return data;
-         return [];
       } catch (error) {
          console.error("Error fetching backup logs", error);
          return [];

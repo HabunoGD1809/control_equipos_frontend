@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
-import { PlusCircle, MoreHorizontal, Trash2, Edit } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Trash2, Edit, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -11,26 +11,36 @@ import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/Dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/DropdownMenu";
-import { Mantenimiento, Proveedor, TipoMantenimiento } from "@/types/api";
-import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
-import { ScheduleMantenimientoForm } from "./ScheduleMantenimientoForm";
 import { Badge } from "@/components/ui/Badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/AlertDialog";
-import { EditarMantenimientoForm } from "@/app/(dashboard)/mantenimientos/components/EditarMantenimientoForm";
+import { useToast } from "@/components/ui/use-toast";
+
+import { Mantenimiento, Proveedor, TipoMantenimiento } from "@/types/api";
+import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { useHasPermission } from "@/hooks/useHasPermission";
+
+import { ScheduleMantenimientoForm } from "./ScheduleMantenimientoForm";
+import { EditarMantenimientoForm } from "./EditarMantenimientoForm";
+import { documentosService } from "@/app/services/documentosService";
 
 interface EquipoMantenimientoTabProps {
    equipoId: string;
    mantenimientos: Mantenimiento[];
    tiposMantenimiento: TipoMantenimiento[];
-   proveedores: Proveedor[]; // Añadir proveedores para el formulario de edición
+   proveedores: Proveedor[];
 }
 
 export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenimiento, proveedores }: EquipoMantenimientoTabProps) {
    const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
    const [selectedMantenimiento, setSelectedMantenimiento] = useState<Mantenimiento | null>(null);
+
+   // Estados para validar los documentos antes de editar
+   const [hasDocs, setHasDocs] = useState(false);
+   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+
    const router = useRouter();
+   const { toast } = useToast();
 
    const canEdit = useHasPermission(['editar_mantenimientos']);
    const canDelete = useHasPermission(['eliminar_mantenimientos']);
@@ -39,9 +49,24 @@ export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenim
       isAlertOpen, isDeleting, openAlert, setIsAlertOpen, handleDelete, itemToDelete
    } = useDeleteConfirmation("Mantenimiento", () => router.refresh());
 
-   const handleEditClick = (mantenimiento: Mantenimiento) => {
+   const handleEditClick = async (mantenimiento: Mantenimiento) => {
       setSelectedMantenimiento(mantenimiento);
-      setIsEditModalOpen(true);
+      setIsLoadingDetails(true);
+
+      try {
+         const docs = await documentosService.getByMantenimiento(mantenimiento.id, { limit: 1 });
+         setHasDocs(docs.length > 0);
+         setIsEditModalOpen(true);
+      } catch (error: any) {
+         console.error("Error fetching docs", error);
+         toast({
+            variant: "destructive",
+            title: "Error de conexión",
+            description: error.message || "No se pudo verificar la documentación del mantenimiento.",
+         });
+      } finally {
+         setIsLoadingDetails(false);
+      }
    };
 
    const columns: ColumnDef<Mantenimiento>[] = [
@@ -66,16 +91,24 @@ export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenim
          id: "actions",
          cell: ({ row }) => (
             <DropdownMenu>
-               <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+               <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="h-8 w-8 p-0">
+                     {isLoadingDetails && selectedMantenimiento?.id === row.original.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                     ) : (
+                        <MoreHorizontal className="h-4 w-4" />
+                     )}
+                  </Button>
+               </DropdownMenuTrigger>
                <DropdownMenuContent align="end">
                   {canEdit && (
                      <DropdownMenuItem onClick={() => handleEditClick(row.original)}>
-                        <Edit className="mr-2 h-4 w-4" /> Editar
+                        <Edit className="mr-2 h-4 w-4" /> Editar / Cerrar
                      </DropdownMenuItem>
                   )}
                   {canDelete && (
                      <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => openAlert(row.original.id)}>
-                        <Trash2 className="mr-2 h-4 w-4" />Eliminar
+                        <Trash2 className="mr-2 h-4 w-4" /> Eliminar
                      </DropdownMenuItem>
                   )}
                </DropdownMenuContent>
@@ -106,16 +139,18 @@ export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenim
          {/* Modal de Edición */}
          {selectedMantenimiento && (
             <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-               <DialogContent>
+               <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                      <DialogTitle>Editar Mantenimiento</DialogTitle>
                   </DialogHeader>
                   <EditarMantenimientoForm
                      mantenimiento={selectedMantenimiento}
                      proveedores={proveedores}
+                     tieneDocumentosAdjuntos={hasDocs}
                      onSuccess={() => {
                         setIsEditModalOpen(false);
                         setSelectedMantenimiento(null);
+                        router.refresh();
                      }}
                   />
                </DialogContent>
@@ -127,7 +162,7 @@ export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenim
                <DialogTrigger asChild>
                   <Button><PlusCircle className="mr-2 h-4 w-4" /> Programar Mantenimiento</Button>
                </DialogTrigger>
-               <DialogContent>
+               <DialogContent className="sm:max-w-150">
                   <DialogHeader>
                      <DialogTitle>Programar Nuevo Mantenimiento</DialogTitle>
                      <DialogDescription>
@@ -137,8 +172,10 @@ export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenim
                   <ScheduleMantenimientoForm
                      equipoId={equipoId}
                      tiposMantenimiento={tiposMantenimiento}
+                     proveedores={proveedores}
                      onSuccess={() => {
                         setIsScheduleModalOpen(false);
+                        router.refresh();
                      }}
                   />
                </DialogContent>

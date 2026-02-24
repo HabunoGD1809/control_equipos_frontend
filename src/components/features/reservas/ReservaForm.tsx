@@ -104,8 +104,10 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
          onSuccess(data);
       },
       onError: (err: unknown) => {
-         const e = err as Error & { status?: number, response?: any };
-         if (e.status === 409 || e.response?.status === 409) {
+         const e = err as Error & { status?: number, response?: unknown };
+         const responseStatus = (e.response as { status?: number })?.status;
+
+         if (e.status === 409 || responseStatus === 409) {
             setAvailabilityError("El sistema ha detectado un conflicto de horario (El equipo fue reservado en este instante).");
             return;
          }
@@ -143,14 +145,14 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
             fecha_hora_inicio: fecha_hora_inicio.toISOString(),
             fecha_hora_fin: fecha_hora_fin.toISOString(),
             proposito: data.proposito,
-            notas: data.notas ?? undefined,
+            notas: data.notas ? data.notas : null,
          };
          mutation.mutate(updatePayload);
       } else {
          const createPayload: ReservaEquipoCreate = {
             equipo_id: data.equipo_id,
             proposito: data.proposito,
-            notas: data.notas ?? undefined,
+            notas: data.notas ? data.notas : null,
             fecha_hora_inicio: fecha_hora_inicio.toISOString(),
             fecha_hora_fin: fecha_hora_fin.toISOString(),
          };
@@ -183,7 +185,7 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
                            setAvailabilityError(null);
                         }}
                         value={field.value}
-                        disabled={!!initialData} // Se bloquea correctamente en edición
+                        disabled={!!initialData}
                      >
                         <FormControl>
                            <SelectTrigger><SelectValue placeholder="Seleccione un equipo..." /></SelectTrigger>

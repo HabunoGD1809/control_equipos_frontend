@@ -3,16 +3,15 @@
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { useForm, useWatch } from "react-hook-form";
 import * as z from "zod";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { Loader2 } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/Button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { useToast } from "@/components/ui/use-toast";
-import { Documentacion, EstadoDocumentoEnum } from "@/types/api";
+import { Documentacion, EstadoDocumentoEnum, DocumentacionVerify } from "@/types/api";
 import { documentosService } from "@/app/services/documentosService";
 import { documentacionVerifySchema } from "@/lib/zod";
 
@@ -24,9 +23,8 @@ interface VerifyDocumentoFormProps {
 type FormValues = z.infer<typeof documentacionVerifySchema>;
 
 export function VerifyDocumentoForm({ documento, onSuccess }: VerifyDocumentoFormProps) {
-   const router = useRouter();
    const { toast } = useToast();
-   const [isLoading, setIsLoading] = useState(false);
+   const queryClient = useQueryClient();
 
    const form = useForm<FormValues>({
       resolver: standardSchemaResolver(documentacionVerifySchema),
@@ -38,27 +36,29 @@ export function VerifyDocumentoForm({ documento, onSuccess }: VerifyDocumentoFor
 
    const estadoActual = useWatch({ control: form.control, name: "estado" });
 
-   const onSubmit = async (data: FormValues) => {
-      setIsLoading(true);
-      try {
-         await documentosService.verificar(documento.id, {
-            estado: data.estado,
-            notas_verificacion: data.notas_verificacion ?? null,
-         });
-
+   const mutation = useMutation({
+      mutationFn: (payload: DocumentacionVerify) =>
+         documentosService.verificar(documento.id, payload),
+      onSuccess: () => {
          toast({ title: "Éxito", description: "El estado del documento ha sido actualizado." });
-         router.refresh();
+         queryClient.invalidateQueries({ queryKey: ["documentos"] });
          onSuccess();
-      } catch (err) {
+      },
+      onError: (err: unknown) => {
          const e = err as Error & { status?: number };
          toast({
             variant: "destructive",
             title: "Error",
             description: e.message || "No se pudo actualizar el estado del documento.",
          });
-      } finally {
-         setIsLoading(false);
       }
+   });
+
+   const onSubmit = (data: FormValues) => {
+      mutation.mutate({
+         estado: data.estado as typeof EstadoDocumentoEnum.Verificado | typeof EstadoDocumentoEnum.Rechazado,
+         notas_verificacion: data.notas_verificacion ?? null,
+      });
    };
 
    return (
@@ -108,8 +108,8 @@ export function VerifyDocumentoForm({ documento, onSuccess }: VerifyDocumentoFor
             />
 
             <div className="flex justify-end pt-4">
-               <Button type="submit" disabled={isLoading}>
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+               <Button type="submit" disabled={mutation.isPending}>
+                  {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Actualizar Estado
                </Button>
             </div>

@@ -11,10 +11,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Badge } from "@/components/ui/Badge";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { useDebouncedSearch } from "@/hooks/useDebouncedSearch";
-import type { EquipoRead, PaginatedResponse } from "@/types/api";
+import type { EquipoRead } from "@/types/api";
 
 interface EquiposClientProps {
-   initialData: PaginatedResponse<EquipoRead>;
+   initialData: EquipoRead[];
    initialParams: {
       page: number;
       limit: number;
@@ -117,9 +117,10 @@ export function EquiposClient({ initialData, initialParams }: EquiposClientProps
       },
    ];
 
+   const hasNextPage = initialData.length === initialParams.limit;
+
    return (
       <div className="space-y-4">
-         {/* Barra de Herramientas */}
          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 w-full max-w-sm relative">
                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -135,20 +136,17 @@ export function EquiposClient({ initialData, initialParams }: EquiposClientProps
             </Button>
          </div>
 
-         {/* Tabla sin filtro ni paginación interna */}
          <DataTable
             columns={columns}
-            data={initialData.items}
+            data={initialData}
             showFilter={false}
             showPagination={false}
             showColumnToggle={false}
          />
 
-         {/* Paginación server-side */}
-         <div className="flex items-center justify-end space-x-2 py-4">
-            <div className="flex-1 text-sm text-muted-foreground">
-               Total: {initialData.total} registros.
-               (Página {initialParams.page} de {Math.ceil(initialData.total / initialParams.limit)})
+         <div className="flex items-center justify-between py-4">
+            <div className="text-sm text-muted-foreground">
+               Página {initialParams.page} {initialData.length > 0 ? `(${initialData.length} registros en esta página)` : '(Sin registros)'}
             </div>
             <div className="space-x-2">
                <Button
@@ -163,7 +161,7 @@ export function EquiposClient({ initialData, initialParams }: EquiposClientProps
                   variant="outline"
                   size="sm"
                   onClick={() => handleFiltersChange({ page: initialParams.page + 1 })}
-                  disabled={initialParams.page * initialParams.limit >= initialData.total}
+                  disabled={!hasNextPage}
                >
                   Siguiente
                </Button>

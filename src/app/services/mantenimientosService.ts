@@ -3,7 +3,6 @@ import type {
    Mantenimiento,
    MantenimientoCreate,
    MantenimientoUpdate,
-   PaginatedResponse,
 } from "@/types/api";
 
 type MantenimientosQuery = {
@@ -11,33 +10,18 @@ type MantenimientosQuery = {
    limit?: number;
    equipo_id?: string;
    estado?: string;
-   tecnico_responsable?: string;
-   fecha_inicio?: string;
-   fecha_fin?: string;
+   tipo_mantenimiento_id?: string;
+   start_date?: string;
+   end_date?: string;
 };
-
-function unwrapItems<T>(data: PaginatedResponse<T> | T[]): T[] {
-   if (data && typeof data === "object" && "items" in data) {
-      const items = (data as PaginatedResponse<T>).items;
-      return Array.isArray(items) ? items : [];
-   }
-   return Array.isArray(data) ? data : [];
-}
 
 export const mantenimientosService = {
    async getAll(params?: MantenimientosQuery): Promise<Mantenimiento[]> {
-      const data = await api.get<
-         PaginatedResponse<Mantenimiento> | Mantenimiento[]
-      >("/mantenimientos/", { params });
-      return unwrapItems(data);
+      return api.get<Mantenimiento[]>("/mantenimientos/", { params });
    },
 
    getById(id: string): Promise<Mantenimiento> {
       return api.get<Mantenimiento>(`/mantenimientos/${id}`);
-   },
-
-   getProximos(): Promise<Mantenimiento[]> {
-      return api.get<Mantenimiento[]>("/mantenimientos/proximos");
    },
 
    create(payload: MantenimientoCreate): Promise<Mantenimiento> {

@@ -5,6 +5,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import * as z from "zod";
 import { Loader2, UploadCloud } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/Button";
 import {
@@ -49,6 +50,7 @@ export function UploadDocumentoForm({
    onSuccess,
 }: UploadDocumentoFormProps) {
    const { toast } = useToast();
+   const queryClient = useQueryClient();
 
    const dynamicSchema = useMemo(
       () => createDocumentoSchema(tiposDocumento),
@@ -59,11 +61,9 @@ export function UploadDocumentoForm({
       resolver: standardSchemaResolver(dynamicSchema),
       defaultValues: {
          titulo: "",
-         // Inicializamos de forma segura previniendo errores de hidratación
          tipo_documento_id: undefined as any,
          descripcion: "",
          file: undefined,
-         // Integramos firmemente las llaves foráneas en el control del formulario
          equipo_id: equipoId || null,
          mantenimiento_id: mantenimientoId || null,
          licencia_id: licenciaId || null,
@@ -90,27 +90,28 @@ export function UploadDocumentoForm({
       return [...mimes, ...exts].join(",");
    }, [selectedTipoId, tiposDocumento]);
 
-   const onSubmit = async (values: UploadDocumentoValues) => {
-      try {
-         // El payload ahora es exactamente lo que Zod determinó como válido y seguro
-         await documentosService.upload({
+   const uploadMutation = useMutation({
+      mutationFn: (values: UploadDocumentoValues) => {
+         return documentosService.upload({
             equipo_id: values.equipo_id,
             mantenimiento_id: values.mantenimiento_id,
             licencia_id: values.licencia_id,
             titulo: values.titulo,
             tipo_documento_id: values.tipo_documento_id,
             descripcion: values.descripcion || null,
-            file: values.file,
+            file: values.file as File,
          });
-
+      },
+      onSuccess: () => {
          toast({
             title: "Documento subido",
             description: "El archivo se ha almacenado correctamente.",
          });
-
+         queryClient.invalidateQueries({ queryKey: ["documentos"] });
          form.reset();
          onSuccess();
-      } catch (err) {
+      },
+      onError: (err: unknown) => {
          const e = err as Error & { status?: number };
          toast({
             variant: "destructive",
@@ -120,6 +121,10 @@ export function UploadDocumentoForm({
                "Verifique que el formato coincida con el Tipo de Documento seleccionado y no supere los 10MB.",
          });
       }
+   });
+
+   const onSubmit = (values: UploadDocumentoValues) => {
+      uploadMutation.mutate(values);
    };
 
    return (
@@ -150,7 +155,7 @@ export function UploadDocumentoForm({
                         value={field.value || undefined}
                         onValueChange={(val) => {
                            field.onChange(val);
-                           form.setValue("file", undefined);
+                           form.setValue("file", undefined as any);
                         }}
                      >
                         <FormControl>
@@ -223,8 +228,8 @@ export function UploadDocumentoForm({
             />
 
             <div className="flex justify-end pt-2">
-               <Button type="submit" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? (
+               <Button type="submit" disabled={uploadMutation.isPending}>
+                  {uploadMutation.isPending ? (
                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                      <UploadCloud className="mr-2 h-4 w-4" />

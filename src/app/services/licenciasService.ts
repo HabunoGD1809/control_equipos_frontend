@@ -3,32 +3,20 @@ import type {
    SoftwareCatalogo,
    LicenciaSoftware,
    AsignacionLicencia,
-   PaginatedResponse,
    LicenciaSoftwareCreate,
    LicenciaSoftwareUpdate,
    AsignacionLicenciaCreate,
 } from "@/types/api";
 
-function unwrapItems<T>(data: PaginatedResponse<T> | T[]): T[] {
-   if (data && typeof data === "object" && "items" in data) {
-      const items = (data as PaginatedResponse<T>).items;
-      return Array.isArray(items) ? items : [];
-   }
-   return Array.isArray(data) ? data : [];
-}
-
 type SoftwareCatalogoCreate = Omit<SoftwareCatalogo, "id" | "created_at" | "updated_at"> & {
-   // si tu backend lo requiere: nombre, version, fabricante, tipo_licencia, metrica_licenciamiento...
+   // Asegúrate de que coincida con el schema de backend si es necesario añadir más campos
 };
 
 export const licenciasService = {
-   
+
    // --- Catálogo ---
    async getCatalogo(): Promise<SoftwareCatalogo[]> {
-      const data = await api.get<PaginatedResponse<SoftwareCatalogo> | SoftwareCatalogo[]>(
-         "/licencias/catalogo/"
-      );
-      return unwrapItems(data);
+      return api.get<SoftwareCatalogo[]>("/licencias/catalogo/");
    },
 
    createSoftware(payload: SoftwareCatalogoCreate): Promise<SoftwareCatalogo> {
@@ -45,10 +33,7 @@ export const licenciasService = {
 
    // --- Licencias ---
    async getAll(): Promise<LicenciaSoftware[]> {
-      const data = await api.get<PaginatedResponse<LicenciaSoftware> | LicenciaSoftware[]>(
-         "/licencias/"
-      );
-      return unwrapItems(data);
+      return api.get<LicenciaSoftware[]>("/licencias/");
    },
 
    getById(id: string): Promise<LicenciaSoftware> {

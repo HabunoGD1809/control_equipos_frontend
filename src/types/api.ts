@@ -161,14 +161,6 @@ export const CategoriaItemEnum = {
 export type CategoriaItem = ValuesOf<typeof CategoriaItemEnum>;
 
 // ─── UTILIDADES GLOBALES ─────────────────────────────────────────────────────
-
-export interface PaginatedResponse<T> {
-  items: T[];
-  total: number;
-  skip?: number;
-  limit?: number;
-}
-
 export interface Msg {
   msg: string;
 }

@@ -3,7 +3,6 @@ import type {
    Documentacion,
    DocumentacionVerify,
    DocumentacionUpdate,
-   PaginatedResponse,
 } from "@/types/api";
 
 type DocumentosQuery = {
@@ -16,35 +15,21 @@ type DocumentosQuery = {
    limit?: number;
 };
 
-function unwrapItems<T>(data: PaginatedResponse<T> | T[]): T[] {
-   if (data && typeof data === "object" && "items" in data) {
-      const items = (data as PaginatedResponse<T>).items;
-      return Array.isArray(items) ? items : [];
-   }
-   return Array.isArray(data) ? data : [];
-}
-
 export const documentosService = {
    async getAll(params?: DocumentosQuery): Promise<Documentacion[]> {
-      const data = await api.get<
-         PaginatedResponse<Documentacion> | Documentacion[]
-      >("/documentacion/", { params });
-      return unwrapItems(data);
+      return api.get<Documentacion[]>("/documentacion/", { params });
    },
 
    async getByEquipo(equipoId: string, params?: { skip?: number; limit?: number }): Promise<Documentacion[]> {
-      const data = await api.get<PaginatedResponse<Documentacion> | Documentacion[]>(`/documentacion/equipo/${equipoId}`, { params });
-      return unwrapItems(data);
+      return api.get<Documentacion[]>(`/documentacion/equipo/${equipoId}`, { params });
    },
 
    async getByMantenimiento(mantenimientoId: string, params?: { skip?: number; limit?: number }): Promise<Documentacion[]> {
-      const data = await api.get<PaginatedResponse<Documentacion> | Documentacion[]>(`/documentacion/mantenimiento/${mantenimientoId}`, { params });
-      return unwrapItems(data);
+      return api.get<Documentacion[]>(`/documentacion/mantenimiento/${mantenimientoId}`, { params });
    },
 
    async getByLicencia(licenciaId: string, params?: { skip?: number; limit?: number }): Promise<Documentacion[]> {
-      const data = await api.get<PaginatedResponse<Documentacion> | Documentacion[]>(`/documentacion/licencia/${licenciaId}`, { params });
-      return unwrapItems(data);
+      return api.get<Documentacion[]>(`/documentacion/licencia/${licenciaId}`, { params });
    },
 
    getById(id: string): Promise<Documentacion> {
@@ -70,7 +55,11 @@ export const documentosService = {
       if (payload.mantenimiento_id) formData.append("mantenimiento_id", payload.mantenimiento_id);
       if (payload.licencia_id) formData.append("licencia_id", payload.licencia_id);
 
-      return api.post<Documentacion>("/documentacion/", formData);
+      return api.post<Documentacion>("/documentacion/", formData, {
+         headers: {
+            "Content-Type": "multipart/form-data",
+         },
+      });
    },
 
    update(

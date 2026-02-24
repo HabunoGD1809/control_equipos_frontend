@@ -15,15 +15,14 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Documentacion, TipoDocumento, EstadoDocumentoEnum } from "@/types/api";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { useHasPermission } from "@/hooks/useHasPermission";
+
 import { VerifyDocumentoForm } from "./VerifyDocumentoForm";
 import { UploadDocumentoForm } from "./UploadDocumentoForm";
 
 interface DocumentacionTableProps {
    documentos: Documentacion[];
    tiposDocumento: TipoDocumento[];
-   /** Si se pasa, el botón Subir vincula el doc a ese equipo automáticamente */
    equipoId?: string;
-   /** Muestra la columna "Equipo Asociado" (útil en la vista global) */
    showEquipoColumn?: boolean;
 }
 
@@ -65,7 +64,7 @@ export function DocumentacionTable({
          header: "Equipo Asociado",
          cell: ({ row }: { row: { original: Documentacion } }) =>
             row.original.equipo ? (
-               <Link href={`/equipos/${row.original.equipo.id}`} className="hover:underline text-primary">
+               <Link href={`/equipos/${row.original.equipo.id}`} className="hover:underline text-primary font-medium">
                   {row.original.equipo.nombre}
                </Link>
             ) : <span className="text-muted-foreground text-sm">N/A</span>,
@@ -81,7 +80,7 @@ export function DocumentacionTable({
          cell: ({ row }) => (
             <div className="flex items-center gap-2">
                <EstadoIcon estado={row.getValue("estado")} />
-               <span>{row.getValue("estado")}</span>
+               <span className="font-medium text-sm">{row.getValue("estado")}</span>
             </div>
          ),
       },
@@ -89,14 +88,14 @@ export function DocumentacionTable({
          id: "actions",
          cell: ({ row }) => (
             <div className="flex gap-2 justify-end">
-               <a href={row.original.enlace} target="_blank" rel="noopener noreferrer">
-                  <Button variant="outline" size="icon" title="Descargar / Ver">
+               <Button variant="outline" size="icon" title="Descargar / Ver" asChild>
+                  <a href={row.original.enlace} target="_blank" rel="noopener noreferrer">
                      <Download className="h-4 w-4" />
-                  </Button>
-               </a>
+                  </a>
+               </Button>
                {canVerify && row.original.estado === EstadoDocumentoEnum.Pendiente && (
-                  <Button variant="outline" size="icon" title="Verificar" onClick={() => { setSelectedDocumento(row.original); setIsVerifyModalOpen(true); }}>
-                     <ShieldCheck className="h-4 w-4" />
+                  <Button variant="outline" size="icon" title="Verificar Documento" onClick={() => { setSelectedDocumento(row.original); setIsVerifyModalOpen(true); }}>
+                     <ShieldCheck className="h-4 w-4 text-blue-600" />
                   </Button>
                )}
                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive/80" title="Eliminar" onClick={() => openAlert(row.original.id)}>
@@ -109,14 +108,12 @@ export function DocumentacionTable({
 
    return (
       <>
-         {/* Modal: Subir */}
+         {/* Modales */}
          <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
             <DialogContent>
                <DialogHeader>
                   <DialogTitle>Subir Nuevo Documento</DialogTitle>
-                  <DialogDescription>
-                     Adjunte un archivo. Tamaño máximo: 10 MB.
-                  </DialogDescription>
+                  <DialogDescription>Adjunte un archivo. Tamaño máximo: 10 MB.</DialogDescription>
                </DialogHeader>
                <UploadDocumentoForm
                   equipoId={equipoId}
@@ -126,13 +123,12 @@ export function DocumentacionTable({
             </DialogContent>
          </Dialog>
 
-         {/* Modal: Verificar */}
          {selectedDocumento && (
             <Dialog open={isVerifyModalOpen} onOpenChange={setIsVerifyModalOpen}>
                <DialogContent>
                   <DialogHeader>
                      <DialogTitle>Verificar Documento</DialogTitle>
-                     <DialogDescription>Actualice el estado a "Verificado" o "Rechazado".</DialogDescription>
+                     <DialogDescription>Actualice el estado del documento a Verificado o Rechazado.</DialogDescription>
                   </DialogHeader>
                   <VerifyDocumentoForm
                      documento={selectedDocumento}
@@ -142,14 +138,11 @@ export function DocumentacionTable({
             </Dialog>
          )}
 
-         {/* Alerta: Eliminar */}
          <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
             <AlertDialogContent>
                <AlertDialogHeader>
                   <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                     Esta acción no se puede deshacer. Se eliminará permanentemente el documento y su archivo.
-                  </AlertDialogDescription>
+                  <AlertDialogDescription>Esta acción no se puede deshacer. Se eliminará permanentemente el documento y su archivo físico del almacenamiento.</AlertDialogDescription>
                </AlertDialogHeader>
                <AlertDialogFooter>
                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
@@ -160,7 +153,7 @@ export function DocumentacionTable({
             </AlertDialogContent>
          </AlertDialog>
 
-         {/* Botón subir + tabla */}
+         {/* Contenido principal */}
          {canUpload && (
             <div className="flex justify-end mb-4">
                <Button onClick={() => setIsUploadModalOpen(true)}>
@@ -168,7 +161,6 @@ export function DocumentacionTable({
                </Button>
             </div>
          )}
-
          <DataTable columns={columns} data={documentos} filterColumn="titulo" />
       </>
    );

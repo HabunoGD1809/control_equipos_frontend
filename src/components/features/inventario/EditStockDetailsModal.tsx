@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
-import { useRouter } from "next/navigation";
 import { Loader2, CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
    Dialog,
@@ -17,20 +17,13 @@ import {
    DialogDescription,
    DialogFooter,
 } from "@/components/ui/Dialog";
-import {
-   Form,
-   FormControl,
-   FormField,
-   FormItem,
-   FormLabel,
-   FormMessage,
-} from "@/components/ui/Form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Calendar } from "@/components/ui/Calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/Popover";
 import { useToast } from "@/components/ui/use-toast";
-import { inventarioService } from "@/app/services/inventarioService";
+import { inventarioService, StockDetailsUpdate } from "@/app/services/inventarioService";
 import { InventarioStock } from "@/types/api";
 import { cn } from "@/lib/utils";
 
@@ -49,8 +42,7 @@ interface EditStockDetailsModalProps {
 
 export function EditStockDetailsModal({ stock, isOpen, onClose }: EditStockDetailsModalProps) {
    const { toast } = useToast();
-   const router = useRouter();
-   const [isLoading, setIsLoading] = useState(false);
+   const queryClient = useQueryClient();
 
    const form = useForm<EditStockFormValues>({
       resolver: standardSchemaResolver(editStockSchema),
@@ -69,27 +61,30 @@ export function EditStockDetailsModal({ stock, isOpen, onClose }: EditStockDetai
       }
    }, [stock, form]);
 
-   const onSubmit = async (values: EditStockFormValues) => {
-      if (!stock) return;
-      setIsLoading(true);
-      try {
-         await inventarioService.updateStockDetails(stock.id, {
-            lote: values.lote,
-            fecha_caducidad: values.fecha_caducidad ? values.fecha_caducidad.toISOString() : null,
-         });
+   const mutation = useMutation({
+      mutationFn: (payload: StockDetailsUpdate) =>
+         inventarioService.updateStockDetails(stock!.id, payload),
+      onSuccess: () => {
          toast({ title: "Actualizado", description: "Los detalles del lote han sido corregidos." });
-         router.refresh();
+         queryClient.invalidateQueries({ queryKey: ["stock"] });
          onClose();
-      } catch {
+      },
+      onError: () => {
          toast({ variant: "destructive", title: "Error", description: "No se pudieron actualizar los detalles." });
-      } finally {
-         setIsLoading(false);
       }
+   });
+
+   const onSubmit = (values: EditStockFormValues) => {
+      if (!stock) return;
+      mutation.mutate({
+         lote: values.lote,
+         fecha_caducidad: values.fecha_caducidad ? values.fecha_caducidad.toISOString() : null,
+      });
    };
 
    return (
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-         <DialogContent className="sm:max-w-106.25">
+         <DialogContent className="sm:max-w-md">
             <DialogHeader>
                <DialogTitle>Editar Detalles de Lote</DialogTitle>
                <DialogDescription>
@@ -131,11 +126,7 @@ export function EditStockDetailsModal({ stock, isOpen, onClose }: EditStockDetai
                                           !field.value && "text-muted-foreground"
                                        )}
                                     >
-                                       {field.value ? (
-                                          format(field.value, "PPP", { locale: es })
-                                       ) : (
-                                          <span>Sin vencimiento</span>
-                                       )}
+                                       {field.value ? format(field.value, "PPP", { locale: es }) : <span>Sin vencimiento</span>}
                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                                     </Button>
                                  </FormControl>
@@ -158,8 +149,8 @@ export function EditStockDetailsModal({ stock, isOpen, onClose }: EditStockDetai
                      <Button type="button" variant="ghost" onClick={onClose}>
                         Cancelar
                      </Button>
-                     <Button type="submit" disabled={isLoading}>
-                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                     <Button type="submit" disabled={mutation.isPending}>
+                        {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Guardar Cambios
                      </Button>
                   </DialogFooter>

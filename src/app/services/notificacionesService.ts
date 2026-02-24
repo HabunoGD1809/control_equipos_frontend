@@ -1,12 +1,5 @@
 import { api } from "@/lib/http";
-import type { Notificacion, PaginatedResponse } from "@/types/api";
-
-function unwrapItems<T>(data: PaginatedResponse<T> | T[]): T[] {
-   if (data && typeof data === "object" && "items" in data && Array.isArray((data as any).items)) {
-      return (data as PaginatedResponse<T>).items ?? [];
-   }
-   return Array.isArray(data) ? data : [];
-}
+import type { Notificacion } from "@/types/api";
 
 type UnreadCountResponse =
    | { unread_count: number }
@@ -20,10 +13,7 @@ export const notificacionesService = {
     * params.limit: limita cantidad
     */
    async getAll(params?: { unread_only?: boolean; limit?: number }): Promise<Notificacion[]> {
-      const data = await api.get<PaginatedResponse<Notificacion> | Notificacion[]>("/notificaciones/", {
-         params,
-      });
-      return unwrapItems(data);
+      return api.get<Notificacion[]>("/notificaciones/", { params });
    },
 
    /**
@@ -39,7 +29,6 @@ export const notificacionesService = {
 
    /**
     * Marcar una como leída
-    * (Si tu backend no requiere body, puedes mandar {} igual)
     */
    async marcarComoLeida(id: string): Promise<void> {
       await api.put<void>(`/notificaciones/${id}/marcar`, { leido: true });

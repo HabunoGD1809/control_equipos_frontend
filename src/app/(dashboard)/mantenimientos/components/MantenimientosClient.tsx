@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { PlusCircle, MoreHorizontal, Edit, Trash2, Loader2 } from "lucide-react";
 import { format } from "date-fns";
+import { es } from "date-fns/locale";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
@@ -13,25 +14,20 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/use-toast";
 
-import type { Mantenimiento, EquipoSimple, TipoMantenimiento, Proveedor, Documentacion, PaginatedResponse } from "@/types/api";
+import type { Mantenimiento, EquipoSimple, TipoMantenimiento, Proveedor } from "@/types/api";
+import { EstadoMantenimientoEnum } from "@/types/api";
 import { useHasPermission } from "@/hooks/useHasPermission";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 
 import { MantenimientoForm } from "./MantenimientoForm";
 import { EditarMantenimientoForm } from "./EditarMantenimientoForm";
-import { api } from "@/lib/http";
+import { documentosService } from "@/app/services/documentosService";
 
 interface MantenimientosClientProps {
    initialData: Mantenimiento[];
    equipos: EquipoSimple[];
    tiposMantenimiento: TipoMantenimiento[];
    proveedores: Proveedor[];
-}
-
-function getItems<T>(data: PaginatedResponse<T> | T[]): T[] {
-   if (Array.isArray(data)) return data;
-   if (data && Array.isArray((data as any).items)) return (data as any).items;
-   return [];
 }
 
 function getErrorMessage(err: unknown, fallback: string) {
@@ -49,7 +45,6 @@ export function MantenimientosClient({ initialData, equipos, tiposMantenimiento,
    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
    const [selectedMantenimiento, setSelectedMantenimiento] = useState<Mantenimiento | null>(null);
 
-   // Validación de documentos
    const [hasDocs, setHasDocs] = useState(false);
    const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
@@ -67,15 +62,7 @@ export function MantenimientosClient({ initialData, equipos, tiposMantenimiento,
       setIsLoadingDetails(true);
 
       try {
-         // Opción A (mejor si existe en tu backend): endpoint dedicado por mantenimiento
-         // const docs = await api.get<Documentacion[]>(`/documentacion/mantenimiento/${mantenimiento.id}?limit=1`);
-
-         // Opción B (más genérica): lista con filtro por querystring
-         const data = await api.get<PaginatedResponse<Documentacion> | Documentacion[]>(
-            `/documentacion/?mantenimiento_id=${mantenimiento.id}&limit=1`
-         );
-
-         const docs = getItems(data);
+         const docs = await documentosService.getByMantenimiento(mantenimiento.id, { limit: 1 });
          setHasDocs(docs.length > 0);
          setIsEditModalOpen(true);
       } catch (error) {
@@ -104,7 +91,10 @@ export function MantenimientosClient({ initialData, equipos, tiposMantenimiento,
       {
          accessorKey: "fecha_programada",
          header: "Fecha Programada",
-         cell: ({ row }) => format(new Date(row.getValue("fecha_programada")), "dd/MM/yyyy"),
+         cell: ({ row }) => {
+            const date = row.getValue("fecha_programada");
+            return date ? format(new Date(date as string), "PP", { locale: es }) : "N/A";
+         },
       },
       {
          accessorKey: "estado",
@@ -112,9 +102,10 @@ export function MantenimientosClient({ initialData, equipos, tiposMantenimiento,
          cell: ({ row }) => {
             const estado = row.getValue("estado") as string;
             let variant: "default" | "secondary" | "destructive" | "outline" = "secondary";
-            if (estado === "Completado") variant = "default";
-            if (estado === "Cancelado") variant = "destructive";
-            if (estado === "En Proceso") variant = "outline";
+            if (estado === EstadoMantenimientoEnum.Completado) variant = "default";
+            if (estado === EstadoMantenimientoEnum.Cancelado) variant = "destructive";
+            if (estado === EstadoMantenimientoEnum.EnProceso) variant = "outline";
+            if (estado === EstadoMantenimientoEnum.RequierePiezas) variant = "destructive";
             return <Badge variant={variant}>{estado}</Badge>;
          },
       },
@@ -138,7 +129,7 @@ export function MantenimientosClient({ initialData, equipos, tiposMantenimiento,
                <DropdownMenuContent align="end">
                   {canEdit && (
                      <DropdownMenuItem onClick={() => handleEditClick(row.original)}>
-                        <Edit className="mr-2 h-4 w-4" /> Editar / Cerrar
+                        <Edit className="mr-2 h-4 w-4" /> Gestionar / Cerrar
                      </DropdownMenuItem>
                   )}
                   {canDelete && (
@@ -159,7 +150,7 @@ export function MantenimientosClient({ initialData, equipos, tiposMantenimiento,
       <>
          {/* Modal Crear */}
          <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-            <DialogContent className="sm:max-w-125">
+            <DialogContent className="sm:max-w-150">
                <DialogHeader>
                   <DialogTitle>Programar Mantenimiento</DialogTitle>
                   <DialogDescription>Agende una nueva intervención técnica.</DialogDescription>
@@ -177,10 +168,9 @@ export function MantenimientosClient({ initialData, equipos, tiposMantenimiento,
             </DialogContent>
          </Dialog>
 
-         {/* Modal Editar */}
          {selectedMantenimiento && (
             <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-               <DialogContent className="sm:max-w-150">
+               <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                      <DialogTitle>Gestión de Mantenimiento</DialogTitle>
                      <DialogDescription>

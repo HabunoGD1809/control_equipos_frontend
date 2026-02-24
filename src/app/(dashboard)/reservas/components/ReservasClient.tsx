@@ -6,32 +6,34 @@ import moment from 'moment';
 import 'moment/locale/es';
 import { Calendar as BigCalendar, momentLocalizer, View } from 'react-big-calendar';
 
-import { ReservaEquipo, EquipoSimple, EstadoReserva } from '@/types/api';
+import { ReservaEquipo, EquipoSimple } from '@/types/api';
 import { EstadoReservaEnum } from '@/types/api';
 import { useAuthStore } from '@/store/authStore';
 import { useHasPermission } from '@/hooks/useHasPermission';
 import { Button } from '@/components/ui/Button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
 import { useToast } from '@/components/ui/use-toast';
-import { api } from '@/lib/http';
+import { reservasService } from '@/app/services/reservasService';
 import { ReservaForm } from '@/components/features/reservas/ReservaForm';
 import { cn } from '@/lib/utils';
-import { Check, Truck, X, Undo2 } from 'lucide-react';
+import { CheckSquare, Truck, X, Undo2 } from 'lucide-react';
+
 import { CheckInModal } from './CheckInModal';
 import { CheckOutModal } from './CheckOutModal';
+import { ValidarReservaModal } from '@/components/features/reservas/ValidarReservaModal';
 
 moment.locale('es');
 const localizer = momentLocalizer(moment);
 
 const estadoColores: Record<string, string> = {
-   Confirmada: 'bg-green-500',
-   'Pendiente Aprobacion': 'bg-yellow-500',
-   'En Curso': 'bg-blue-500',
-   Finalizada: 'bg-gray-500',
-   Rechazada: 'bg-red-500',
-   'Cancelada': 'bg-red-700',
-   'Cancelada por Usuario': 'bg-red-700',
-   'Cancelada por Gestor': 'bg-red-700',
+   [EstadoReservaEnum.Confirmada]: 'bg-green-500',
+   [EstadoReservaEnum.PendienteAprobacion]: 'bg-yellow-500',
+   [EstadoReservaEnum.EnCurso]: 'bg-blue-500',
+   [EstadoReservaEnum.Finalizada]: 'bg-gray-500',
+   [EstadoReservaEnum.Rechazada]: 'bg-red-500',
+   [EstadoReservaEnum.Cancelada]: 'bg-red-700',
+   [EstadoReservaEnum.CanceladaPorUsuario]: 'bg-red-700',
+   [EstadoReservaEnum.CanceladaPorGestor]: 'bg-red-700',
 };
 
 const CustomEvent = ({ event }: { event: ReservaEquipo }) => (
@@ -47,9 +49,13 @@ export function ReservasClient({ initialEvents, equipos }: {
 }) {
    const [events] = useState<ReservaEquipo[]>(initialEvents);
    const [selectedReserva, setSelectedReserva] = useState<ReservaEquipo | null>(null);
+
+   // Control de Modales
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [isCheckInOpen, setIsCheckInOpen] = useState(false);
    const [isCheckOutOpen, setIsCheckOutOpen] = useState(false);
+   const [isValidarOpen, setIsValidarOpen] = useState(false);
+
    const [isLoading, setIsLoading] = useState(false);
 
    const router = useRouter();
@@ -84,31 +90,20 @@ export function ReservasClient({ initialEvents, equipos }: {
       setIsModalOpen(false);
       setIsCheckInOpen(false);
       setIsCheckOutOpen(false);
+      setIsValidarOpen(false);
       setSelectedReserva(null);
       router.refresh();
    };
 
-   const updateEstado = async (resId: string, estado: EstadoReserva) => {
-      setIsLoading(true);
-      try {
-         await api.patch(`/reservas/${resId}/estado`, { estado });
-         toast({ title: 'Éxito', description: `Reserva ${estado.toLowerCase()}.` });
-         handleSuccess();
-      } catch {
-         toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar el estado.' });
-      } finally {
-         setIsLoading(false);
-      }
-   };
-
    const handleCancel = async (resId: string) => {
+      if (!confirm("¿Desea cancelar esta reserva?")) return;
       setIsLoading(true);
       try {
-         await api.post(`/reservas/${resId}/cancelar`, {});
+         await reservasService.cancelar(resId);
          toast({ title: 'Éxito', description: 'Reserva cancelada.' });
          handleSuccess();
-      } catch {
-         toast({ variant: 'destructive', title: 'Error', description: 'No se pudo cancelar la reserva.' });
+      } catch (error: any) {
+         toast({ variant: 'destructive', title: 'Error', description: error.message || 'No se pudo cancelar la reserva.' });
       } finally {
          setIsLoading(false);
       }
@@ -116,6 +111,13 @@ export function ReservasClient({ initialEvents, equipos }: {
 
    return (
       <>
+         {/* Modales de Flujo */}
+         <ValidarReservaModal
+            isOpen={isValidarOpen}
+            onClose={() => setIsValidarOpen(false)}
+            reserva={selectedReserva}
+            onSuccess={handleSuccess}
+         />
          <CheckInModal
             isOpen={isCheckInOpen}
             onClose={() => setIsCheckInOpen(false)}
@@ -129,7 +131,7 @@ export function ReservasClient({ initialEvents, equipos }: {
             onSuccess={handleSuccess}
          />
 
-         {/* Modal Principal */}
+         {/* Modal Principal de Detalles */}
          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
             <DialogContent className="sm:max-w-2xl">
                <DialogHeader>
@@ -145,33 +147,29 @@ export function ReservasClient({ initialEvents, equipos }: {
 
                {selectedReserva && (
                   <div className="pt-6 border-t mt-6">
-                     <h3 className="text-lg font-semibold mb-2">Acciones</h3>
+                     <h3 className="text-lg font-semibold mb-2">Acciones Rápidas</h3>
                      <div className="flex flex-wrap gap-2">
+
                         {canManage && selectedReserva.estado === EstadoReservaEnum.PendienteAprobacion && (
-                           <>
-                              <Button size="sm" onClick={() => updateEstado(selectedReserva.id, EstadoReservaEnum.Confirmada)} disabled={isLoading}>
-                                 <Check className="mr-2 h-4 w-4" /> Aprobar
-                              </Button>
-                              <Button size="sm" variant="destructive" onClick={() => updateEstado(selectedReserva.id, EstadoReservaEnum.Rechazada)} disabled={isLoading}>
-                                 <X className="mr-2 h-4 w-4" /> Rechazar
-                              </Button>
-                           </>
+                           <Button size="sm" onClick={() => { setIsModalOpen(false); setIsValidarOpen(true); }} disabled={isLoading}>
+                              <CheckSquare className="mr-2 h-4 w-4" /> Validar Solicitud
+                           </Button>
                         )}
 
                         {canManage && selectedReserva.estado === EstadoReservaEnum.Confirmada && (
-                           <Button size="sm" onClick={() => { setIsModalOpen(false); setIsCheckInOpen(true); }} disabled={isLoading}>
-                              <Truck className="mr-2 h-4 w-4" /> Realizar Check-in (Entrega)
+                           <Button size="sm" onClick={() => { setIsModalOpen(false); setIsCheckOutOpen(true); }} disabled={isLoading}>
+                              <Truck className="mr-2 h-4 w-4" /> Registrar Check-out (Entrega)
                            </Button>
                         )}
                         {canManage && selectedReserva.estado === EstadoReservaEnum.EnCurso && (
-                           <Button size="sm" onClick={() => { setIsModalOpen(false); setIsCheckOutOpen(true); }} disabled={isLoading}>
-                              <Undo2 className="mr-2 h-4 w-4" /> Realizar Check-out (Devolución)
+                           <Button size="sm" onClick={() => { setIsModalOpen(false); setIsCheckInOpen(true); }} disabled={isLoading}>
+                              <Undo2 className="mr-2 h-4 w-4" /> Registrar Check-in (Devolución)
                            </Button>
                         )}
 
                         {user?.id === selectedReserva.usuario_solicitante_id &&
                            (selectedReserva.estado === EstadoReservaEnum.PendienteAprobacion || selectedReserva.estado === EstadoReservaEnum.Confirmada) && (
-                              <Button size="sm" variant="outline" onClick={() => handleCancel(selectedReserva.id)} disabled={isLoading}>
+                              <Button size="sm" variant="outline" className="border-red-200 text-red-600 hover:bg-red-50" onClick={() => handleCancel(selectedReserva.id)} disabled={isLoading}>
                                  <X className="mr-2 h-4 w-4" /> Cancelar mi Reserva
                               </Button>
                            )}
@@ -181,7 +179,7 @@ export function ReservasClient({ initialEvents, equipos }: {
             </DialogContent>
          </Dialog>
 
-         <div className="p-4 bg-card rounded-lg shadow-sm" style={{ height: '75vh' }}>
+         <div className="p-4 bg-card rounded-lg shadow-sm border" style={{ height: '75vh' }}>
             <BigCalendar
                localizer={localizer}
                events={calendarEvents}

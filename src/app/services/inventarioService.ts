@@ -3,7 +3,6 @@ import type {
    TipoItemInventario,
    InventarioStock,
    InventarioMovimiento,
-   PaginatedResponse,
    InventarioMovimientoCreate,
    TipoItemInventarioCreate,
    TipoItemInventarioUpdate,
@@ -56,9 +55,9 @@ export const inventarioService = {
    },
 
    // --- Movimientos ---
-   getMovimientos(page = 1, limit = 50): Promise<PaginatedResponse<InventarioMovimiento>> {
+   getMovimientos(page = 1, limit = 50): Promise<InventarioMovimiento[]> {
       const skip = (page - 1) * limit;
-      return api.get<PaginatedResponse<InventarioMovimiento>>("/inventario/movimientos/", {
+      return api.get<InventarioMovimiento[]>("/inventario/movimientos/", {
          params: { skip, limit },
       });
    },

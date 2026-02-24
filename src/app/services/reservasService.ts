@@ -5,7 +5,6 @@ import type {
    ReservaEquipoUpdate,
    ReservaEquipoUpdateEstado,
    ReservaEquipoCheckInOut,
-   PaginatedResponse,
 } from "@/types/api";
 
 type ReservasQuery = {
@@ -18,20 +17,9 @@ type ReservasQuery = {
    fecha_fin?: string;
 };
 
-function unwrapItems<T>(data: PaginatedResponse<T> | T[]): T[] {
-   if (data && typeof data === "object" && "items" in data) {
-      const items = (data as PaginatedResponse<T>).items;
-      return Array.isArray(items) ? items : [];
-   }
-   return Array.isArray(data) ? data : [];
-}
-
 export const reservasService = {
    async getAll(params?: ReservasQuery): Promise<ReservaEquipo[]> {
-      const data = await api.get<
-         PaginatedResponse<ReservaEquipo> | ReservaEquipo[]
-      >("/reservas/", { params });
-      return unwrapItems(data);
+      return api.get<ReservaEquipo[]>("/reservas/", { params });
    },
 
    getById: (id: string): Promise<ReservaEquipo> =>

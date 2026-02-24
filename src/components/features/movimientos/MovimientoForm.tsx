@@ -84,17 +84,14 @@ export function MovimientoForm({
     name: "equipo_id",
   });
 
-  // Al cambiar de equipo, actualizamos automáticamente el origen
   useEffect(() => {
     if (equipo || !equipos) return;
     const found = equipos.find((e) => e.id === equipoIdSeleccionado);
     if (found) {
       form.setValue("origen", found.ubicacion_actual ?? "Almacén Principal");
-      // Reseteamos el destino si cambiamos de equipo, salvo que ya esté manipulado
     }
   }, [equipoIdSeleccionado, equipos, equipo, form]);
 
-  // Al cambiar el tipo de movimiento, autocompletamos campos según reglas de negocio
   useEffect(() => {
     if (!tipoSeleccionado) return;
 
@@ -109,8 +106,6 @@ export function MovimientoForm({
       form.setValue("usuario_id", null);
       form.setValue("fecha_prevista_retorno", null);
     } else if (tipoSeleccionado === TipoMovimientoEquipoEnum.AsignacionInterna) {
-      // Para asignación interna, el destino se debe llenar obligatoriamente
-      // (ej. "Oficina de Finanzas")
       form.setValue("destino", "");
     }
   }, [tipoSeleccionado, form, equipo, equipos]);
@@ -141,8 +136,9 @@ export function MovimientoForm({
   });
 
   const onSubmit = (data: MovimientoFormValues) => {
+    // 🚨 ADAPTADOR ESTRICTO: Transformación del Payload a OpenAPI
     // Obtenemos el nombre del usuario seleccionado para mandarlo como "recibido_por", 
-    // ya que la API no acepta "usuario_id" en la creación del movimiento.
+    // ya que la API (MovimientoCreate) NO acepta "usuario_id".
     const selectedUser = usuarios.find((u) => u.id === data.usuario_id);
 
     const payload: MovimientoCreate = {
@@ -152,7 +148,6 @@ export function MovimientoForm({
       destino: data.destino || null,
       proposito: data.proposito || null,
       observaciones: data.observaciones || null,
-      // La API acepta string en recibido_por
       recibido_por: selectedUser ? selectedUser.nombre_usuario : null,
       fecha_prevista_retorno: data.fecha_prevista_retorno
         ? (data.fecha_prevista_retorno as Date).toISOString()
@@ -170,7 +165,6 @@ export function MovimientoForm({
     );
   }
 
-  // Corregido: Mostrar destino siempre que NO sea Entrada (AsignacionInterna SÍ requiere destino visible)
   const mostrarDestino =
     tipoSeleccionado && tipoSeleccionado !== TipoMovimientoEquipoEnum.Entrada;
 

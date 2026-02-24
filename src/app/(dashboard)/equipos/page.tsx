@@ -1,10 +1,11 @@
 import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
 import { EquiposClient } from "./components/EquiposClient";
 import { equiposServerService } from "@/app/services/equiposService.server";
-import { redirect } from "next/navigation";
+import type { EquipoRead } from "@/types/api";
 
 export const metadata: Metadata = {
    title: "Gestión de Equipos | Control de Activos",
@@ -22,7 +23,8 @@ export default async function EquiposPage({ searchParams }: PageProps) {
    const limit = 10;
    const skip = (page - 1) * limit;
 
-   let initialData;
+   let initialData: EquipoRead[] = [];
+
    try {
       initialData = await equiposServerService.getAll({
          skip,
@@ -33,6 +35,7 @@ export default async function EquiposPage({ searchParams }: PageProps) {
    } catch (e: unknown) {
       const err = e as Error & { status?: number };
       if (err.status === 401) redirect("/login");
+      // En producción deberíamos manejar otros errores (ej. 500) con un Error Boundary
       throw e;
    }
 
@@ -45,7 +48,7 @@ export default async function EquiposPage({ searchParams }: PageProps) {
          <Suspense
             fallback={
                <div className="flex justify-center p-10">
-                  <Loader2 className="animate-spin h-8 w-8" />
+                  <Loader2 className="animate-spin h-8 w-8 text-primary" />
                </div>
             }
          >

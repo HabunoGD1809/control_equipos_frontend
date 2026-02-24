@@ -3,7 +3,8 @@
 import { useForm, useWatch } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import * as z from "zod";
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, ArrowRightLeft, PackageMinus, PackagePlus } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
@@ -33,7 +34,7 @@ type FormValues = z.infer<typeof inventarioMovimientoSchema>;
 
 export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSuccess }: RegistrarMovimientoFormProps) {
    const { toast } = useToast();
-   const [isLoading, setIsLoading] = useState(false);
+   const queryClient = useQueryClient();
 
    const form = useForm<FormValues>({
       resolver: standardSchemaResolver(inventarioMovimientoSchema),
@@ -79,7 +80,6 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
    const showCosto = tipoStr === TipoMovimientoInvEnum.EntradaCompra;
    const showEquipoAsociado = tipoStr === TipoMovimientoInvEnum.SalidaUso;
 
-   // Lógica de seguridad para el origen basado en el Stock real
    const stockDisponibleDelItem = useMemo(() => {
       return stockData.filter(s => s.tipo_item_id === tipoItemId && s.cantidad_actual > 0);
    }, [stockData, tipoItemId]);
@@ -94,39 +94,22 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
          .map(s => s.lote || "N/A");
    }, [stockDisponibleDelItem, ubicacionOrigenSel]);
 
-   const onSubmit = async (values: FormValues) => {
-      setIsLoading(true);
-      try {
-         const payload: Partial<InventarioMovimientoCreate> = { ...values };
-
-         if (!reqOrigen) {
-            delete payload.ubicacion_origen;
-            delete payload.lote_origen;
-         }
-         if (!reqDestino) {
-            delete payload.ubicacion_destino;
-            delete payload.lote_destino;
-         }
-         if (!isAjuste) {
-            delete payload.motivo_ajuste;
-         }
-         if (!showCosto) {
-            delete payload.costo_unitario;
-         }
-         if (!showEquipoAsociado) {
-            delete payload.equipo_asociado_id;
-         }
-
-         await inventarioService.registrarMovimiento(payload as InventarioMovimientoCreate);
-
+   const mutation = useMutation({
+      mutationFn: inventarioService.registrarMovimiento,
+      onSuccess: () => {
          toast({
             title: "Movimiento Registrado",
             description: "El stock ha sido actualizado correctamente.",
          });
 
+         queryClient.invalidateQueries({ queryKey: ["stock"] });
+         queryClient.invalidateQueries({ queryKey: ["inventario-movimientos"] });
+         queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+
          form.reset();
          onSuccess();
-      } catch (err) {
+      },
+      onError: (err: unknown) => {
          const e = err as Error & { status?: number };
          const msg = e.message || "Error al registrar movimiento.";
 
@@ -137,9 +120,32 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                ? "No hay suficiente stock en la ubicación de origen seleccionada."
                : msg,
          });
-      } finally {
-         setIsLoading(false);
       }
+   });
+
+   const onSubmit = (values: FormValues) => {
+      const payload: Partial<InventarioMovimientoCreate> = { ...values };
+
+      // Limpiamos la basura del payload antes de mandarlo al backend
+      if (!reqOrigen) {
+         delete payload.ubicacion_origen;
+         delete payload.lote_origen;
+      }
+      if (!reqDestino) {
+         delete payload.ubicacion_destino;
+         delete payload.lote_destino;
+      }
+      if (!isAjuste) {
+         delete payload.motivo_ajuste;
+      }
+      if (!showCosto) {
+         delete payload.costo_unitario;
+      }
+      if (!showEquipoAsociado) {
+         delete payload.equipo_asociado_id;
+      }
+
+      mutation.mutate(payload as InventarioMovimientoCreate);
    };
 
    return (
@@ -154,7 +160,7 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                      <Select
                         onValueChange={(val) => {
                            field.onChange(val);
-                           form.setValue("ubicacion_origen", ""); // Reset origen al cambiar ítem
+                           form.setValue("ubicacion_origen", "");
                            form.setValue("lote_origen", "N/A");
                         }}
                         value={field.value ?? undefined}
@@ -404,8 +410,8 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
             />
 
             <div className="flex justify-end pt-2">
-               <Button type="submit" disabled={isLoading}>
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+               <Button type="submit" disabled={mutation.isPending}>
+                  {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {!reqOrigen ? (
                      <PackagePlus className="mr-2 h-4 w-4" />
                   ) : !reqDestino ? (

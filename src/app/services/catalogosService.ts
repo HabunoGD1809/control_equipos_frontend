@@ -3,7 +3,6 @@ import type {
    EstadoEquipo,
    TipoDocumento,
    TipoMantenimiento,
-   PaginatedResponse,
 } from "@/types/api";
 
 export interface CatalogoCreatePayload {
@@ -12,25 +11,10 @@ export interface CatalogoCreatePayload {
    [key: string]: unknown;
 }
 
-function unwrapItems<T>(data: PaginatedResponse<T> | T[]): T[] {
-   if (
-      data &&
-      typeof data === "object" &&
-      "items" in data &&
-      Array.isArray((data as any).items)
-   ) {
-      return (data as PaginatedResponse<T>).items ?? [];
-   }
-   return Array.isArray(data) ? data : [];
-}
-
 export const catalogosService = {
    // --- Estados de Equipo ---
    async getEstadosEquipo(): Promise<EstadoEquipo[]> {
-      const data = await api.get<
-         PaginatedResponse<EstadoEquipo> | EstadoEquipo[]
-      >("/catalogos/estados-equipo/");
-      return unwrapItems(data);
+      return api.get<EstadoEquipo[]>("/catalogos/estados-equipo/");
    },
 
    createEstadoEquipo(payload: CatalogoCreatePayload): Promise<EstadoEquipo> {
@@ -50,10 +34,7 @@ export const catalogosService = {
 
    // --- Tipos de Documento ---
    async getTiposDocumento(): Promise<TipoDocumento[]> {
-      const data = await api.get<
-         PaginatedResponse<TipoDocumento> | TipoDocumento[]
-      >("/catalogos/tipos-documento/");
-      return unwrapItems(data);
+      return api.get<TipoDocumento[]>("/catalogos/tipos-documento/");
    },
 
    createTipoDocumento(payload: CatalogoCreatePayload): Promise<TipoDocumento> {
@@ -73,10 +54,7 @@ export const catalogosService = {
 
    // --- Tipos de Mantenimiento ---
    async getTiposMantenimiento(): Promise<TipoMantenimiento[]> {
-      const data = await api.get<
-         PaginatedResponse<TipoMantenimiento> | TipoMantenimiento[]
-      >("/catalogos/tipos-mantenimiento/");
-      return unwrapItems(data);
+      return api.get<TipoMantenimiento[]>("/catalogos/tipos-mantenimiento/");
    },
 
    createTipoMantenimiento(

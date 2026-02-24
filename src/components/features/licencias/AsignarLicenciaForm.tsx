@@ -5,6 +5,7 @@ import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import * as z from "zod";
 import { useState } from "react";
 import { Loader2, Link as LinkIcon, Laptop, User } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/Button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
@@ -15,7 +16,7 @@ import { Checkbox } from "@/components/ui/Checkbox";
 import { useToast } from "@/components/ui/use-toast";
 
 import { asignarLicenciaSchema } from "@/lib/zod";
-import { EquipoSimple, UsuarioSimple } from "@/types/api";
+import { EquipoSimple, UsuarioSimple, AsignacionLicenciaCreate } from "@/types/api";
 import { licenciasService } from "@/app/services/licenciasService";
 
 interface AsignarLicenciaFormProps {
@@ -29,7 +30,7 @@ type FormValues = z.infer<typeof asignarLicenciaSchema>;
 
 export function AsignarLicenciaForm({ licenciaId, equipos, usuarios, onSuccess }: AsignarLicenciaFormProps) {
    const { toast } = useToast();
-   const [isLoading, setIsLoading] = useState(false);
+   const queryClient = useQueryClient();
    const [activeTab, setActiveTab] = useState<"equipo" | "usuario">("equipo");
 
    const form = useForm<FormValues>({
@@ -53,39 +54,42 @@ export function AsignarLicenciaForm({ licenciaId, equipos, usuarios, onSuccess }
       } else {
          form.setValue("equipo_id", null);
       }
-
       form.clearErrors();
    };
 
-   const onSubmit = async (values: FormValues) => {
-      setIsLoading(true);
-      try {
-         await licenciasService.asignar({
-            licencia_id: licenciaId,
-            equipo_id: values.asignar_a === "equipo" ? values.equipo_id ?? null : null,
-            usuario_id: values.asignar_a === "usuario" ? values.usuario_id ?? null : null,
-            notas: values.notas ?? null,
-            instalado: values.instalado,
-         });
-
+   const mutation = useMutation({
+      mutationFn: (payload: AsignacionLicenciaCreate) => licenciasService.asignar(payload),
+      onSuccess: (_, variables) => {
          toast({
             title: "Licencia Asignada",
-            description: `Se ha vinculado correctamente al ${values.asignar_a}.`,
+            description: `Se ha vinculado correctamente al ${variables.equipo_id ? "equipo" : "usuario"}.`,
          });
 
+         queryClient.invalidateQueries({ queryKey: ["asignaciones"] });
+         queryClient.invalidateQueries({ queryKey: ["licencias"] });
+
          onSuccess();
-      } catch (err) {
+      },
+      onError: (err: unknown) => {
          const e = err as Error & { status?: number };
          toast({
             variant: "destructive",
             title: "Error de asignación",
             description:
                e.message ||
-               "No se pudo realizar la asignación. Verifique si ya existe una asignación para este destino.",
+               "No se pudo realizar la asignación. Verifique si ya existe una asignación o si no hay stock.",
          });
-      } finally {
-         setIsLoading(false);
       }
+   });
+
+   const onSubmit = (values: FormValues) => {
+      mutation.mutate({
+         licencia_id: licenciaId,
+         equipo_id: values.asignar_a === "equipo" ? values.equipo_id ?? null : null,
+         usuario_id: values.asignar_a === "usuario" ? values.usuario_id ?? null : null,
+         notas: values.notas ?? null,
+         instalado: values.instalado,
+      });
    };
 
    return (
@@ -198,8 +202,8 @@ export function AsignarLicenciaForm({ licenciaId, equipos, usuarios, onSuccess }
             />
 
             <div className="flex justify-end pt-2">
-               <Button type="submit" disabled={isLoading}>
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+               <Button type="submit" disabled={mutation.isPending}>
+                  {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   <LinkIcon className="mr-2 h-4 w-4" />
                   Confirmar Asignación
                </Button>

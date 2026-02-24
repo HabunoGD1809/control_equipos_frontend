@@ -7,7 +7,6 @@ import type {
    ComponenteInfo,
    PadreInfo,
    EquipoSimple,
-   PaginatedResponse,
 } from "@/types/api";
 
 type GetAllParams = {
@@ -19,57 +18,21 @@ type GetAllParams = {
    ubicacion?: string;
 };
 
-function normalizePaginated<T>(
-   data: PaginatedResponse<T> | T[],
-   fallback: { skip: number; limit: number },
-): PaginatedResponse<T> {
-   if (
-      data &&
-      typeof data === "object" &&
-      "items" in data &&
-      Array.isArray((data as any).items)
-   ) {
-      const d = data as PaginatedResponse<T>;
-      return {
-         items: d.items ?? [],
-         total: d.total ?? d.items?.length ?? 0,
-         skip: d.skip ?? fallback.skip,
-         limit: d.limit ?? fallback.limit,
-      };
-   }
-   if (Array.isArray(data)) {
-      return {
-         items: data,
-         total: data.length,
-         skip: fallback.skip,
-         limit: fallback.limit,
-      };
-   }
-   return { items: [], total: 0, skip: fallback.skip, limit: fallback.limit };
-}
-
 export const equiposService = {
-   async getAll(
-      params: GetAllParams = {},
-   ): Promise<PaginatedResponse<EquipoRead>> {
+   async getAll(params: GetAllParams = {}): Promise<EquipoRead[]> {
       const limit = params.limit ?? 10;
       const skip = params.skip ?? 0;
 
-      const data = await api.get<PaginatedResponse<EquipoRead> | EquipoRead[]>(
-         "/equipos",
-         {
-            params: {
-               limit,
-               skip,
-               q: params.q || undefined,
-               estado_id: params.estado_id || undefined,
-               proveedor_id: params.proveedor_id || undefined,
-               ubicacion_actual: params.ubicacion || undefined,
-            },
+      return api.get<EquipoRead[]>("/equipos", {
+         params: {
+            limit,
+            skip,
+            q: params.q || undefined,
+            estado_id: params.estado_id || undefined,
+            proveedor_id: params.proveedor_id || undefined,
+            ubicacion_actual: params.ubicacion || undefined,
          },
-      );
-
-      return normalizePaginated(data, { skip, limit });
+      });
    },
 
    getById: (id: string) => api.get<EquipoRead>(`/equipos/${id}`),
@@ -112,13 +75,11 @@ export const equiposService = {
       api.delete<void>(`/equipos/componentes/${relacionId}`),
 
    getOptions: async (): Promise<EquipoSimple[]> => {
-      const data = await api.get<PaginatedResponse<EquipoRead> | EquipoRead[]>(
-         "/equipos",
-         { params: { limit: 1000 } },
-      );
-      const normalized = normalizePaginated(data, { skip: 0, limit: 1000 });
+      const data = await api.get<EquipoRead[]>("/equipos", {
+         params: { limit: 1000, skip: 0 },
+      });
 
-      return normalized.items.map((e) => ({
+      return data.map((e) => ({
          id: e.id,
          nombre: e.nombre,
          numero_serie: e.numero_serie,

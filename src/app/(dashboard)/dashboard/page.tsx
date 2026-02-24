@@ -20,10 +20,17 @@ import { QuickActions } from '@/components/features/dashboard/QuickActions';
 import {
    DashboardData,
    Mantenimiento,
-   InventarioStock,
    AuditLog,
-   EquipoRead
-} from '@/types/api';
+   EquipoRead} from '@/types/api';
+
+interface TipoItemInventarioConStock {
+   id: string;
+   nombre: string;
+   categoria: string;
+   unidad_medida: string;
+   stock_minimo: number;
+   stock_total_actual: number;
+}
 
 // Función auxiliar para formatear moneda
 const formatCurrency = (value: number) => {
@@ -35,6 +42,12 @@ const formatCurrency = (value: number) => {
    }).format(value);
 };
 
+function unwrapItems<T>(data: any): T[] {
+   if (Array.isArray(data)) return data;
+   if (data && Array.isArray(data.items)) return data.items;
+   return [];
+}
+
 async function getDashboardPageData() {
    const cookieStore = await cookies();
    const accessToken = cookieStore.get('access_token')?.value;
@@ -45,7 +58,6 @@ async function getDashboardPageData() {
    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
    try {
-      // Fetch Paralelo de Datos Críticos
       const [
          dashboardRes,
          mantenimientosRes,
@@ -55,26 +67,44 @@ async function getDashboardPageData() {
       ] = await Promise.all([
          fetch(`${baseUrl}/dashboard/`, { headers, cache: 'no-store' }),
          fetch(`${baseUrl}/mantenimientos/?estado=Programado&limit=5`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/inventario/stock/?bajo_stock=true&limit=5`, { headers, cache: 'no-store' }),
+         fetch(`${baseUrl}/inventario/tipos/bajo-stock/?limit=5`, { headers, cache: 'no-store' }),
          fetch(`${baseUrl}/auditoria/?limit=10`, { headers, cache: 'no-store' }),
          fetch(`${baseUrl}/equipos/?limit=500`, { headers, cache: 'no-store' })
       ]);
 
       if (!dashboardRes.ok) return null;
 
-      const equiposData = equiposValuationRes.ok ? await equiposValuationRes.json() as EquipoRead[] : [];
+      const equiposRaw = equiposValuationRes.ok ? await equiposValuationRes.json() : [];
+      const equiposData = unwrapItems<EquipoRead>(equiposRaw);
 
-      // Cálculo de KPI Financiero: Valor Total de Activos
+      // Cálculo de KPI Financiero Seguro
       const totalValorActivos = equiposData.reduce((acc, equipo) => {
-         const valor = parseFloat(equipo.valor_adquisicion || "0");
+         const valor = parseFloat(String(equipo.valor_adquisicion || "0"));
          return acc + (isNaN(valor) ? 0 : valor);
       }, 0);
 
+      // Adaptador para el componente ItemsBajoStockList (Evita que rompa por el cambio de DTO)
+      const bajoStockRaw = bajoStockRes.ok ? await bajoStockRes.json() : [];
+      const itemsBajoStockData = unwrapItems<TipoItemInventarioConStock>(bajoStockRaw);
+
+      const itemsBajoStockAdapter = itemsBajoStockData.map(item => ({
+         id: item.id,
+         tipo_item_id: item.id,
+         ubicacion: "Global",
+         cantidad_actual: item.stock_total_actual,
+         ultima_actualizacion: new Date().toISOString(),
+         tipo_item: {
+            id: item.id,
+            nombre: item.nombre,
+            unidad_medida: item.unidad_medida as any
+         }
+      }));
+
       return {
          summary: await dashboardRes.json() as DashboardData,
-         proximosMantenimientos: mantenimientosRes.ok ? await mantenimientosRes.json() as Mantenimiento[] : [],
-         itemsBajoStock: bajoStockRes.ok ? await bajoStockRes.json() as InventarioStock[] : [],
-         recentActivity: auditoriaRes.ok ? await auditoriaRes.json() as AuditLog[] : [],
+         proximosMantenimientos: mantenimientosRes.ok ? unwrapItems<Mantenimiento>(await mantenimientosRes.json()) : [],
+         itemsBajoStock: itemsBajoStockAdapter, // Pasamos la data adaptada
+         recentActivity: auditoriaRes.ok ? unwrapItems<AuditLog>(await auditoriaRes.json()) : [],
          financials: {
             totalValorActivos
          }
@@ -186,7 +216,8 @@ export default async function DashboardPage() {
                         <CardTitle className="text-base">Reposición Urgente</CardTitle>
                      </CardHeader>
                      <CardContent>
-                        <ItemsBajoStockList items={itemsBajoStock} />
+                        {/* Se suprime el error de tipado con any temporalmente debido a la adaptación del DTO */}
+                        <ItemsBajoStockList items={itemsBajoStock as any} />
                      </CardContent>
                   </Card>
                </div>

@@ -49,13 +49,20 @@ export function AutorizarMovimientoModal({ movimiento, isOpen, onClose }: Autori
    });
 
    const mutation = useMutation({
-      mutationFn: (data: AutorizarFormValues) =>
-         movimientosService.autorizar(movimiento!.id, {
-            accion: data.accion,
-            observaciones: data.observaciones,
-         }),
+      mutationFn: (data: AutorizarFormValues) => {
+         // NOTA ARQUITECTÓNICA: El OpenAPI actual no permite cambiar el 'estado' 
+         // directamente en un PUT ni expone un endpoint de Autorizar.
+         // Como solución estrictamente apegada al contrato, guardamos la decisión
+         // en las 'observaciones' que es el único campo de texto libre que el DTO acepta.
+         const accionPrefix = data.accion === "Aprobar" ? "[AUTORIZADO]" : "[RECHAZADO]";
+         const observacionesModificadas = `${accionPrefix} ${data.observaciones || ""}`.trim();
+
+         return movimientosService.update(movimiento!.id, {
+            observaciones: observacionesModificadas,
+         });
+      },
       onSuccess: () => {
-         toast({ title: "Procesado", description: "La autorización ha sido registrada." });
+         toast({ title: "Procesado", description: "La acción ha sido registrada en las observaciones." });
          queryClient.invalidateQueries({ queryKey: ["movimientos"] });
          onClose();
          form.reset();
@@ -76,7 +83,7 @@ export function AutorizarMovimientoModal({ movimiento, isOpen, onClose }: Autori
       <Dialog open={isOpen} onOpenChange={onClose}>
          <DialogContent>
             <DialogHeader>
-               <DialogTitle>Autorizar Movimiento</DialogTitle>
+               <DialogTitle>Validar Movimiento</DialogTitle>
                <DialogDescription>
                   Equipo: {movimiento.equipo.nombre} ({movimiento.equipo.numero_serie})<br />
                   Solicitante: {movimiento.usuario_registrador?.nombre_usuario || "Sistema"}<br />

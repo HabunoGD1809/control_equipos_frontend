@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { PlusCircle, MoreHorizontal } from "lucide-react";
+import { PlusCircle, MoreHorizontal, CheckCircle, XCircle, Ban } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -16,15 +16,21 @@ import {
    DialogDescription,
 } from "@/components/ui/Dialog";
 import { Badge } from "@/components/ui/Badge";
+import {
+   DropdownMenu,
+   DropdownMenuContent,
+   DropdownMenuItem,
+   DropdownMenuLabel,
+   DropdownMenuSeparator,
+   DropdownMenuTrigger,
+} from "@/components/ui/DropdownMenu";
+import { useToast } from "@/components/ui/use-toast";
 
-import type {
-   Movimiento,
-   EquipoRead,
-   UsuarioSimple,
-   PaginatedResponse,
-} from "@/types/api";
+import type { Movimiento, EquipoRead, UsuarioSimple } from "@/types/api";
+import { EstadoMovimientoEquipoEnum } from "@/types/api";
 import { MovimientoForm } from "@/components/features/movimientos/MovimientoForm";
-import { api } from "@/lib/http";
+import { movimientosService } from "@/app/services/movimientosService";
+import { AutorizarMovimientoModal } from "@/components/features/movimientos/AutorizarMovimientoModal";
 
 interface MovimientosClientProps {
    initialData: Movimiento[];
@@ -32,29 +38,41 @@ interface MovimientosClientProps {
    usuarios: UsuarioSimple[];
 }
 
-function getItems<T>(data: PaginatedResponse<T> | T[]): T[] {
-   if (Array.isArray(data)) return data;
-   if (data && Array.isArray((data as any).items)) return (data as any).items;
-   return [];
-}
-
 export const MovimientosClient: React.FC<MovimientosClientProps> = ({
    initialData,
    equipos,
    usuarios,
 }) => {
-   const [movimientos, setMovimientos] = useState(initialData);
-   const [isModalOpen, setIsModalOpen] = useState(false);
+   const [movimientos, setMovimientos] = useState<Movimiento[]>(initialData);
+   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-   const handleSuccess = async () => {
+   // Estados para acciones específicas
+   const [movimientoToAuthorize, setMovimientoToAuthorize] = useState<Movimiento | null>(null);
+   const { toast } = useToast();
+
+   const refreshData = async () => {
       try {
-         const data = await api.get<PaginatedResponse<Movimiento> | Movimiento[]>(
-            "/movimientos/?limit=200",
-         );
-         setMovimientos(getItems(data));
-         setIsModalOpen(false);
+         const data = await movimientosService.getAll({ limit: 200 });
+         setMovimientos(data);
       } catch (error) {
          console.error("Error al refrescar los movimientos", error);
+      }
+   };
+
+   const handleSuccessCreate = () => {
+      setIsCreateModalOpen(false);
+      refreshData();
+   };
+
+   const handleCancelar = async (id: string) => {
+      if (!confirm("¿Estás seguro de que deseas cancelar este movimiento?")) return;
+
+      try {
+         await movimientosService.cancelar(id);
+         toast({ title: "Cancelado", description: "El movimiento ha sido cancelado exitosamente." });
+         refreshData();
+      } catch (error: any) {
+         toast({ variant: "destructive", title: "Error", description: error.message || "No se pudo cancelar." });
       }
    };
 
@@ -72,44 +90,96 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
       {
          accessorKey: "estado",
          header: "Estado",
-         cell: ({ row }) => (
-            <Badge variant="outline">{row.getValue("estado")}</Badge>
-         ),
+         cell: ({ row }) => {
+            const estado = row.getValue("estado") as string;
+            // Estilos visuales según el estado
+            let variant: "default" | "secondary" | "destructive" | "outline" = "outline";
+            if (estado === EstadoMovimientoEquipoEnum.Completado) variant = "default";
+            if (estado === EstadoMovimientoEquipoEnum.Cancelado || estado === EstadoMovimientoEquipoEnum.Rechazado) variant = "destructive";
+            if (estado === EstadoMovimientoEquipoEnum.Pendiente) variant = "secondary";
+
+            return <Badge variant={variant}>{estado}</Badge>;
+         },
       },
       {
          id: "actions",
-         cell: () => (
-            <Button variant="ghost" className="h-8 w-8 p-0">
-               <span className="sr-only">Abrir menú</span>
-               <MoreHorizontal className="h-4 w-4" />
-            </Button>
-         ),
+         cell: ({ row }) => {
+            const mov = row.original;
+            const isPendiente = mov.estado === EstadoMovimientoEquipoEnum.Pendiente;
+            const isCancelable = isPendiente || mov.estado === EstadoMovimientoEquipoEnum.Autorizado;
+
+            return (
+               <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                     <Button variant="ghost" className="h-8 w-8 p-0">
+                        <span className="sr-only">Abrir menú</span>
+                        <MoreHorizontal className="h-4 w-4" />
+                     </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                     <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                     <DropdownMenuSeparator />
+
+                     {/* BOTÓN FALTANTE: Validar / Autorizar */}
+                     {isPendiente && (
+                        <DropdownMenuItem onClick={() => setMovimientoToAuthorize(mov)}>
+                           <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                           <span>Validar Movimiento</span>
+                        </DropdownMenuItem>
+                     )}
+
+                     {/* BOTÓN FALTANTE: Cancelar */}
+                     {isCancelable && (
+                        <DropdownMenuItem onClick={() => handleCancelar(mov.id)}>
+                           <Ban className="mr-2 h-4 w-4 text-red-600" />
+                           <span>Cancelar Movimiento</span>
+                        </DropdownMenuItem>
+                     )}
+
+                     {!isPendiente && !isCancelable && (
+                        <DropdownMenuItem disabled>
+                           Sin acciones disponibles
+                        </DropdownMenuItem>
+                     )}
+                  </DropdownMenuContent>
+               </DropdownMenu>
+            );
+         },
       },
    ];
 
    return (
       <>
-         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+         {/* Modal de Creación */}
+         <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
             <DialogContent className="max-w-2xl">
                <DialogHeader>
                   <DialogTitle>Registrar Nuevo Movimiento</DialogTitle>
                   <DialogDescription>
-                     Completa el formulario para registrar una nueva asignación, salida
-                     o transferencia.
+                     Completa el formulario para registrar una nueva asignación, salida o transferencia.
                   </DialogDescription>
                </DialogHeader>
-
                <MovimientoForm
                   equipos={equipos}
                   usuarios={usuarios}
-                  onSuccess={handleSuccess}
-                  onCancel={() => setIsModalOpen(false)}
+                  onSuccess={handleSuccessCreate}
+                  onCancel={() => setIsCreateModalOpen(false)}
                />
             </DialogContent>
          </Dialog>
 
+         {/* Modal de Autorización (El que arreglamos en el paso anterior) */}
+         <AutorizarMovimientoModal
+            movimiento={movimientoToAuthorize}
+            isOpen={!!movimientoToAuthorize}
+            onClose={() => {
+               setMovimientoToAuthorize(null);
+               refreshData();
+            }}
+         />
+
          <div className="flex justify-end mb-4">
-            <Button onClick={() => setIsModalOpen(true)}>
+            <Button onClick={() => setIsCreateModalOpen(true)}>
                <PlusCircle className="mr-2 h-4 w-4" />
                Registrar Movimiento
             </Button>

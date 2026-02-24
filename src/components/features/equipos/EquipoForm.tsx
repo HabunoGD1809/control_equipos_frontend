@@ -48,6 +48,9 @@ interface EquipoFormProps {
 
 type EquipoFormValues = z.infer<typeof equipoSchema>;
 
+const formatToDateString = (d?: Date | null) => (d ? format(d, "yyyy-MM-dd") : null);
+const cleanString = (str?: string | null) => (str && str.trim() !== "" ? str.trim() : null);
+
 export function EquipoForm({
    estados,
    proveedores,
@@ -78,12 +81,9 @@ export function EquipoForm({
          fecha_garantia_expiracion: initialData?.fecha_garantia_expiracion
             ? new Date(initialData.fecha_garantia_expiracion)
             : null,
-         valor_adquisicion:
-            initialData?.valor_adquisicion !== undefined &&
-               initialData?.valor_adquisicion !== null &&
-               String(initialData.valor_adquisicion).trim() !== ""
-               ? Number(initialData.valor_adquisicion)
-               : null,
+         valor_adquisicion: initialData?.valor_adquisicion
+            ? Number(initialData.valor_adquisicion)
+            : null,
          centro_costo: initialData?.centro_costo ?? "",
          notas: initialData?.notas ?? "",
       },
@@ -103,24 +103,18 @@ export function EquipoForm({
    const onSubmit: SubmitHandler<EquipoFormValues> = async (data) => {
       setIsLoading(true);
       try {
-         const formatDate = (d?: Date | null) => (d ? format(d, "yyyy-MM-dd") : null);
-         const emptyToNull = (str?: string | null) => (str?.trim() === "" ? null : str);
-
          const payload: EquipoCreate = {
             ...data,
-            codigo_interno: emptyToNull(data.codigo_interno),
-            marca: emptyToNull(data.marca),
-            modelo: emptyToNull(data.modelo),
-            ubicacion_actual: emptyToNull(data.ubicacion_actual),
-            centro_costo: emptyToNull(data.centro_costo),
-            notas: emptyToNull(data.notas),
-            proveedor_id:
-               !data.proveedor_id || data.proveedor_id === ("none" as any)
-                  ? null
-                  : data.proveedor_id,
-            fecha_adquisicion: formatDate(data.fecha_adquisicion),
-            fecha_puesta_marcha: formatDate(data.fecha_puesta_marcha),
-            fecha_garantia_expiracion: formatDate(data.fecha_garantia_expiracion),
+            codigo_interno: cleanString(data.codigo_interno),
+            marca: cleanString(data.marca),
+            modelo: cleanString(data.modelo),
+            ubicacion_actual: cleanString(data.ubicacion_actual),
+            centro_costo: cleanString(data.centro_costo),
+            notas: cleanString(data.notas),
+            proveedor_id: data.proveedor_id || null,
+            fecha_adquisicion: formatToDateString(data.fecha_adquisicion),
+            fecha_puesta_marcha: formatToDateString(data.fecha_puesta_marcha),
+            fecha_garantia_expiracion: formatToDateString(data.fecha_garantia_expiracion),
             valor_adquisicion: data.valor_adquisicion ?? null,
          };
 
@@ -143,7 +137,7 @@ export function EquipoForm({
          router.push("/equipos");
          router.refresh();
       } catch (error: any) {
-         const detail = error?.message || "";
+         const detail = error?.detail || error?.message || "";
 
          if (detail.includes("uq_equipos_numero_serie")) {
             form.setError("numero_serie", {
@@ -172,8 +166,8 @@ export function EquipoForm({
          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
 
             {/* ── Identificación ─────────────────────────────────────── */}
-            <div className="rounded-lg border p-4 shadow-sm bg-card">
-               <h3 className="mb-4 text-lg font-medium">Identificación del Equipo</h3>
+            <div className="rounded-lg border p-6 shadow-sm bg-card">
+               <h3 className="mb-6 text-lg font-semibold tracking-tight">Identificación del Equipo</h3>
                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
 
                   <FormField
@@ -291,8 +285,8 @@ export function EquipoForm({
             </div>
 
             {/* ── Financiero y ciclo de vida ──────────────────────────── */}
-            <div className="rounded-lg border p-4 shadow-sm bg-card">
-               <h3 className="mb-4 text-lg font-medium">Detalles Financieros y Ciclo de Vida</h3>
+            <div className="rounded-lg border p-6 shadow-sm bg-card">
+               <h3 className="mb-6 text-lg font-semibold tracking-tight">Detalles Financieros y Ciclo de Vida</h3>
                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
 
                   <FormField
@@ -357,7 +351,7 @@ export function EquipoForm({
                            >
                               <FormControl>
                                  <SelectTrigger>
-                                    <SelectValue placeholder="Seleccione" />
+                                    <SelectValue placeholder="Seleccione proveedor" />
                                  </SelectTrigger>
                               </FormControl>
                               <SelectContent>
@@ -421,7 +415,7 @@ export function EquipoForm({
                            <FormControl>
                               <Textarea
                                  placeholder="Detalles adicionales sobre el equipo..."
-                                 className="resize-none"
+                                 className="resize-none min-h-25"
                                  {...field}
                                  value={field.value ?? ""}
                               />
@@ -434,7 +428,7 @@ export function EquipoForm({
             </div>
 
             {/* ── Acciones ───────────────────────────────────────────── */}
-            <div className="flex justify-end space-x-4">
+            <div className="flex justify-end gap-4 pt-4 border-t">
                <Button
                   type="button"
                   variant="outline"
@@ -443,10 +437,13 @@ export function EquipoForm({
                >
                   Cancelar
                </Button>
-               <Button type="submit" disabled={isLoading}>
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+               <Button type="submit" disabled={isLoading} className="min-w-37.5">
+                  {isLoading ? (
+                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                     <Save className="mr-2 h-4 w-4" />
+                  )}
                   {isEditing ? "Guardar Cambios" : "Registrar Equipo"}
-                  {!isLoading && <Save className="ml-2 h-4 w-4" />}
                </Button>
             </div>
 

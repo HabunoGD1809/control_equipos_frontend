@@ -12,7 +12,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/Dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/DropdownMenu";
 import { Badge } from "@/components/ui/Badge";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/AlertDialog";
+import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
 import { useToast } from "@/components/ui/use-toast";
 
 import { Mantenimiento, Proveedor, TipoMantenimiento } from "@/types/api";
@@ -22,6 +22,7 @@ import { useHasPermission } from "@/hooks/useHasPermission";
 import { ScheduleMantenimientoForm } from "./ScheduleMantenimientoForm";
 import { EditarMantenimientoForm } from "./EditarMantenimientoForm";
 import { documentosService } from "@/app/services/documentosService";
+import { mantenimientosService } from "@/app/services/mantenimientosService";
 
 interface EquipoMantenimientoTabProps {
    equipoId: string;
@@ -35,7 +36,6 @@ export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenim
    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
    const [selectedMantenimiento, setSelectedMantenimiento] = useState<Mantenimiento | null>(null);
 
-   // Estados para validar los documentos antes de editar
    const [hasDocs, setHasDocs] = useState(false);
    const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
@@ -45,9 +45,11 @@ export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenim
    const canEdit = useHasPermission(['editar_mantenimientos']);
    const canDelete = useHasPermission(['eliminar_mantenimientos']);
 
-   const {
-      isAlertOpen, isDeleting, openAlert, setIsAlertOpen, handleDelete, itemToDelete
-   } = useDeleteConfirmation("Mantenimiento", () => router.refresh());
+   const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } = useDeleteConfirmation({
+      onDelete: (id) => mantenimientosService.delete(id),
+      onSuccess: () => router.refresh(),
+      successMessage: "El mantenimiento ha sido eliminado correctamente del historial del equipo.",
+   });
 
    const handleEditClick = async (mantenimiento: Mantenimiento) => {
       setSelectedMantenimiento(mantenimiento);
@@ -107,7 +109,10 @@ export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenim
                      </DropdownMenuItem>
                   )}
                   {canDelete && (
-                     <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => openAlert(row.original.id)}>
+                     <DropdownMenuItem
+                        className="text-destructive focus:bg-destructive focus:text-destructive-foreground"
+                        onClick={() => openAlert(row.original.id)}
+                     >
                         <Trash2 className="mr-2 h-4 w-4" /> Eliminar
                      </DropdownMenuItem>
                   )}
@@ -119,24 +124,16 @@ export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenim
 
    return (
       <div className="mt-4 space-y-4">
-         <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-            <AlertDialogContent>
-               <AlertDialogHeader>
-                  <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                     Esta acción no se puede deshacer. Se eliminará permanentemente el registro de mantenimiento.
-                  </AlertDialogDescription>
-               </AlertDialogHeader>
-               <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => handleDelete(`/mantenimientos/${itemToDelete}`)} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
-                     {isDeleting ? "Eliminando..." : "Sí, eliminar"}
-                  </AlertDialogAction>
-               </AlertDialogFooter>
-            </AlertDialogContent>
-         </AlertDialog>
 
-         {/* Modal de Edición */}
+         <ConfirmDeleteDialog
+            isOpen={isAlertOpen}
+            isDeleting={isDeleting}
+            onClose={closeAlert}
+            onConfirm={confirmDelete}
+            title="¿Eliminar mantenimiento?"
+            description="Esta acción eliminará permanentemente este registro del historial del equipo."
+         />
+
          {selectedMantenimiento && (
             <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -181,6 +178,7 @@ export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenim
                </DialogContent>
             </Dialog>
          </div>
+
          <DataTable columns={columns} data={mantenimientos} filterColumn="tipo_mantenimiento" />
       </div>
    );

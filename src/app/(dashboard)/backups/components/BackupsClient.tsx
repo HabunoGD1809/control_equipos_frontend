@@ -19,41 +19,7 @@ interface BackupsClientProps {
    initialData: BackupLog[];
 }
 
-// Helper mínimo para extraer mensaje del error del nuevo api()
-function getErrorMessage(err: unknown, fallback = "Ocurrió un error inesperado.") {
-   if (typeof err === "object" && err && "message" in err) return String((err as any).message);
-   if (typeof err === "string") return err;
-   return fallback;
-}
-
 export function BackupsClient({ initialData }: BackupsClientProps) {
-   const router = useRouter();
-   const { toast } = useToast();
-   const [isBackingUp, setIsBackingUp] = useState(false);
-
-   const handleCreateBackup = async () => {
-      setIsBackingUp(true);
-      try {
-         await api.post("/system/backup/trigger", undefined);
-
-         toast({
-            title: "Proceso Iniciado",
-            description: "El respaldo de la base de datos ha comenzado en segundo plano.",
-         });
-
-         // refrescar para ver el nuevo log
-         setTimeout(() => router.refresh(), 2000);
-      } catch (error) {
-         console.error(error);
-         toast({
-            variant: "destructive",
-            title: "Error",
-            description: getErrorMessage(error, "No se pudo iniciar el respaldo. Revise los logs del servidor."),
-         });
-      } finally {
-         setIsBackingUp(false);
-      }
-   };
 
    const columns: ColumnDef<BackupLog>[] = [
       {
@@ -185,18 +151,6 @@ export function BackupsClient({ initialData }: BackupsClientProps) {
                   <CardTitle>Historial de Respaldos</CardTitle>
                   <CardDescription>Registro de copias de seguridad automáticas y manuales.</CardDescription>
                </div>
-
-               <Button onClick={handleCreateBackup} disabled={isBackingUp}>
-                  {isBackingUp ? (
-                     <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Procesando...
-                     </>
-                  ) : (
-                     <>
-                        <DatabaseBackup className="mr-2 h-4 w-4" /> Crear Respaldo Ahora
-                     </>
-                  )}
-               </Button>
             </CardHeader>
 
             <CardContent>

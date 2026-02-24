@@ -1,24 +1,17 @@
 'use server';
 
-import { z } from 'zod';
 import { serverApi } from '@/lib/http-server';
 import { revalidatePath } from 'next/cache';
+import { updateProfileSchema } from '@/lib/zod';
+import { z } from 'zod';
 
-const profileSchema = z.object({
-   username: z.string().min(3, "Mínimo 3 caracteres").max(50).optional(),
-   email: z.string().email("Debe ser un email válido.").optional().nullable(),
-   first_name: z.string().optional(),
-   last_name: z.string().optional(),
-});
-
-type FormValues = z.infer<typeof profileSchema>;
+type FormValues = z.infer<typeof updateProfileSchema>;
 
 export async function updateProfileAction(data: FormValues) {
-   // Nota: safeParse a veces falla si envías campos extra no definidos en el schema
-   const parsed = profileSchema.safeParse(data);
+   const parsed = updateProfileSchema.safeParse(data);
 
    if (!parsed.success) {
-      return { error: "Datos inválidos" };
+      return { error: "Datos inválidos: Revise los campos enviados." };
    }
 
    try {
@@ -30,6 +23,6 @@ export async function updateProfileAction(data: FormValues) {
       return { success: true };
    } catch (error: any) {
       console.error("Error updating profile:", error);
-      return { error: error.message || "No se pudo actualizar el perfil." };
+      return { error: error.detail || error.message || "No se pudo actualizar el perfil." };
    }
 }

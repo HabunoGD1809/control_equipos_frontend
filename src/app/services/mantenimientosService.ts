@@ -32,7 +32,7 @@ export const mantenimientosService = {
       return api.put<Mantenimiento>(`/mantenimientos/${id}`, payload);
    },
 
-   delete(id: string): Promise<void> {
-      return api.delete<void>(`/mantenimientos/${id}`);
-   },
+   delete: async (id: string) => {
+      return api.delete(`/mantenimientos/${id}`);
+   }
 };

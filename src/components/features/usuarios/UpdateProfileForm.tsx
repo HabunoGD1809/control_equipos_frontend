@@ -12,13 +12,9 @@ import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/use-toast";
 import { Usuario } from "@/types/api";
 import { updateProfileAction } from "@/actions/user-actions";
+import { updateProfileSchema } from "@/lib/zod";
 
-const profileSchema = z.object({
-   nombre_usuario: z.string().min(3, "Mínimo 3 caracteres").max(50),
-   email: z.string().email("Debe ser un email válido.").optional().nullable(),
-});
-
-type FormValues = z.infer<typeof profileSchema>;
+type FormValues = z.infer<typeof updateProfileSchema>;
 
 interface UpdateProfileFormProps {
    currentUser: Usuario;
@@ -26,11 +22,10 @@ interface UpdateProfileFormProps {
 
 export function UpdateProfileForm({ currentUser }: UpdateProfileFormProps) {
    const { toast } = useToast();
-   // ✅ Eliminado useState importado pero nunca usado
    const [isPending, startTransition] = useTransition();
 
    const form = useForm<FormValues>({
-      resolver: standardSchemaResolver(profileSchema),
+      resolver: standardSchemaResolver(updateProfileSchema),
       defaultValues: {
          nombre_usuario: currentUser.nombre_usuario,
          email: currentUser.email,
@@ -44,7 +39,7 @@ export function UpdateProfileForm({ currentUser }: UpdateProfileFormProps) {
          if (result.error) {
             toast({
                variant: "destructive",
-               title: "Error",
+               title: "Error al actualizar",
                description: result.error,
             });
          } else {
@@ -66,7 +61,7 @@ export function UpdateProfileForm({ currentUser }: UpdateProfileFormProps) {
                   <FormItem>
                      <FormLabel>Nombre de Usuario</FormLabel>
                      <FormControl>
-                        <Input {...field} disabled={isPending} />
+                        <Input {...field} disabled={isPending} value={field.value ?? ""} />
                      </FormControl>
                      <FormMessage />
                   </FormItem>

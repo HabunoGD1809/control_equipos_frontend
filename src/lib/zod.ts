@@ -393,6 +393,11 @@ export const inventarioMovimientoSchema = z
     }
   });
 
+export const editStockSchema = z.object({
+  lote: requiredString("El lote es requerido (use N/A si no aplica)."),
+  fecha_caducidad: z.date().optional().nullable(),
+});
+
 // ─── LICENCIAS ──────────────────────────────────────────────────────────────
 
 export const softwareCatalogoSchema = z.object({
@@ -486,6 +491,18 @@ export const rolSchema = z.object({
   nombre: requiredString("Nombre requerido.").min(3).max(100),
   descripcion: z.string().optional().nullable(),
   permiso_ids: z.array(z.guid()).min(1, { error: "Mínimo un permiso." }),
+});
+
+export const updateProfileSchema = z.object({
+  nombre_usuario: requiredString("Mínimo 3 caracteres")
+    .min(3)
+    .max(50)
+    .optional(),
+
+  email: z
+    .union([z.email("Debe ser un email válido."), z.literal("")])
+    .optional()
+    .nullable(),
 });
 
 // ─── PROVEEDORES Y CATÁLOGOS ────────────────────────────────────────────────
@@ -770,6 +787,12 @@ export const genericCatalogSchema = z.object({
   periodicidad_dias: z.coerce.number().int().min(0).optional().nullable(),
   es_preventivo: z.boolean().optional(),
   requiere_documentacion: z.boolean().optional(),
+});
+
+export const auditFilterSchema = z.object({
+  table_name: z.string().optional(),
+  operation: z.string().optional(),
+  username: z.string().optional(),
 });
 
 export const LoginSchema = loginSchema;

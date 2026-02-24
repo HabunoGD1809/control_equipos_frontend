@@ -1,11 +1,9 @@
 import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 
 import { EquiposClient } from "./components/EquiposClient";
 import { equiposServerService } from "@/app/services/equiposService.server";
-import type { EquipoRead } from "@/types/api";
 
 export const metadata: Metadata = {
    title: "Gestión de Equipos | Control de Activos",
@@ -23,21 +21,12 @@ export default async function EquiposPage({ searchParams }: PageProps) {
    const limit = 10;
    const skip = (page - 1) * limit;
 
-   let initialData: EquipoRead[] = [];
-
-   try {
-      initialData = await equiposServerService.getAll({
-         skip,
-         limit,
-         q: params?.q || "",
-         estado_id: params?.estado || "",
-      });
-   } catch (e: unknown) {
-      const err = e as Error & { status?: number };
-      if (err.status === 401) redirect("/login");
-      // En producción deberíamos manejar otros errores (ej. 500) con un Error Boundary
-      throw e;
-   }
+   const initialData = await equiposServerService.getAll({
+      skip,
+      limit,
+      q: params?.q || "",
+      estado_id: params?.estado || "",
+   });
 
    return (
       <div className="flex-1 space-y-4 p-8 pt-6">

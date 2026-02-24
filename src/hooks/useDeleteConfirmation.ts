@@ -1,78 +1,70 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useToast } from "@/components/ui/use-toast";
-import { useRouter } from "next/navigation";
-import { api } from "@/lib/http";
 
 type HttpError = Error & { status?: number };
 
-function getErrorMessage(error: unknown, fallback: string) {
-   if (error instanceof Error) return error.message || fallback;
-   if (typeof error === "string" && error.trim()) return error;
-   return fallback;
+interface UseDeleteConfirmationProps {
+   onDelete: (id: string) => Promise<any>;
+   onSuccess?: () => void;
+   successMessage?: string;
+   errorMessage?: string;
 }
 
-/**
- * Hook genérico para confirmar y ejecutar eliminación.
- *
- * USO:
- * - openAlert(id) abre el modal y guarda el id
- * - handleDelete(endpoint) ejecuta DELETE al endpoint exacto
- *    Ej: handleDelete(`/proveedores/${itemToDelete}`)
- */
-export const useDeleteConfirmation = (itemType: string, onSuccess?: () => void) => {
+export const useDeleteConfirmation = ({
+   onDelete,
+   onSuccess,
+   successMessage = "Registro eliminado correctamente.",
+   errorMessage = "Ocurrió un error al intentar eliminar el registro.",
+}: UseDeleteConfirmationProps) => {
    const [isAlertOpen, setIsAlertOpen] = useState(false);
    const [isDeleting, setIsDeleting] = useState(false);
    const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
    const { toast } = useToast();
-   const router = useRouter();
 
-   const openAlert = (id: string) => {
+   const openAlert = useCallback((id: string) => {
       setItemToDelete(id);
       setIsAlertOpen(true);
-   };
+   }, []);
 
-   const handleDelete = async (endpoint: string) => {
+   const closeAlert = useCallback(() => {
+      setIsAlertOpen(false);
+      setItemToDelete(null);
+   }, []);
+
+   const confirmDelete = useCallback(async () => {
       if (!itemToDelete) return;
 
       setIsDeleting(true);
       try {
-         await api.delete<void>(endpoint);
+         await onDelete(itemToDelete);
 
          toast({
             title: "Éxito",
-            description: `${itemType} eliminado correctamente.`,
+            description: successMessage,
          });
 
-         setItemToDelete(null);
-         setIsAlertOpen(false);
-
+         closeAlert();
          if (onSuccess) onSuccess();
-         else router.refresh();
       } catch (error) {
          const err = error as HttpError;
-
-         // Si tu api wrapper pone message “detail/message/HTTP 500”, aquí ya viene listo.
-         const msg = getErrorMessage(err, `No se pudo eliminar el ${itemType.toLowerCase()}.`);
-
          toast({
             variant: "destructive",
             title: "Error",
-            description: msg,
+            description: err.message || errorMessage,
          });
       } finally {
          setIsDeleting(false);
       }
-   };
+   }, [itemToDelete, onDelete, onSuccess, successMessage, errorMessage, toast, closeAlert]);
 
    return {
       isAlertOpen,
       isDeleting,
-      itemToDelete,
       openAlert,
-      setIsAlertOpen,
-      handleDelete,
+      closeAlert,
+      confirmDelete,
    };
 };

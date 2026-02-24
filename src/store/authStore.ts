@@ -2,10 +2,6 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Usuario } from '@/types/api';
 
-/**
- * El token de acceso vive en una cookie httpOnly gestionada por el servidor.
- * Este store solo guarda la info del usuario para la UI.
- */
 interface AuthState {
   user: Usuario | null;
   isAuthenticated: boolean;
@@ -25,8 +21,13 @@ export const useAuthStore = create<AuthState>()(
       setUser: (user) =>
         set({ user, isAuthenticated: true }),
 
-      logout: () =>
-        set({ user: null, isAuthenticated: false }),
+      logout: () => {
+        set({ user: null, isAuthenticated: false });
+
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('auth-storage');
+        }
+      },
 
       setInitialized: (val) => set({ isInitialized: val }),
     }),

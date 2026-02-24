@@ -27,10 +27,7 @@ import { inventarioService, StockDetailsUpdate } from "@/app/services/inventario
 import { InventarioStock } from "@/types/api";
 import { cn } from "@/lib/utils";
 
-const editStockSchema = z.object({
-   lote: z.string().min(1, "El lote es requerido (use N/A si no aplica)."),
-   fecha_caducidad: z.date().optional().nullable(),
-});
+import { editStockSchema } from "@/lib/zod";
 
 type EditStockFormValues = z.infer<typeof editStockSchema>;
 
@@ -136,7 +133,7 @@ export function EditStockDetailsModal({ stock, isOpen, onClose }: EditStockDetai
                                     mode="single"
                                     selected={field.value || undefined}
                                     onSelect={field.onChange}
-                                    initialFocus
+                                    autoFocus
                                  />
                               </PopoverContent>
                            </Popover>

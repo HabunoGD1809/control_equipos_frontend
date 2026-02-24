@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/DropdownMenu";
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/use-toast";
+import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
 
 import type { Mantenimiento, EquipoSimple, TipoMantenimiento, Proveedor } from "@/types/api";
 import { EstadoMantenimientoEnum } from "@/types/api";
@@ -20,8 +21,9 @@ import { useHasPermission } from "@/hooks/useHasPermission";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 
 import { MantenimientoForm } from "./MantenimientoForm";
-import { EditarMantenimientoForm } from "./EditarMantenimientoForm";
+import { EditarMantenimientoForm } from "@/components/features/mantenimientos/EditarMantenimientoForm";
 import { documentosService } from "@/app/services/documentosService";
+import { mantenimientosService } from "@/app/services/mantenimientosService";
 
 interface MantenimientosClientProps {
    initialData: Mantenimiento[];
@@ -55,7 +57,11 @@ export function MantenimientosClient({ initialData, equipos, tiposMantenimiento,
    const canEdit = useHasPermission(["editar_mantenimientos"]);
    const canDelete = useHasPermission(["eliminar_mantenimientos"]);
 
-   const { openAlert } = useDeleteConfirmation("Mantenimiento", () => router.refresh());
+   const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } = useDeleteConfirmation({
+      onDelete: (id) => mantenimientosService.delete(id),
+      onSuccess: () => router.refresh(),
+      successMessage: "El registro de mantenimiento ha sido eliminado permanentemente.",
+   });
 
    const handleEditClick = async (mantenimiento: Mantenimiento) => {
       setSelectedMantenimiento(mantenimiento);
@@ -134,7 +140,7 @@ export function MantenimientosClient({ initialData, equipos, tiposMantenimiento,
                   )}
                   {canDelete && (
                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive"
+                        className="text-destructive focus:bg-destructive focus:text-destructive-foreground"
                         onClick={() => openAlert(row.original.id)}
                      >
                         <Trash2 className="mr-2 h-4 w-4" /> Eliminar
@@ -148,7 +154,6 @@ export function MantenimientosClient({ initialData, equipos, tiposMantenimiento,
 
    return (
       <>
-         {/* Modal Crear */}
          <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
             <DialogContent className="sm:max-w-150">
                <DialogHeader>
@@ -201,6 +206,15 @@ export function MantenimientosClient({ initialData, equipos, tiposMantenimiento,
          </div>
 
          <DataTable columns={columns} data={initialData} filterColumn="equipo_nombre" />
+
+         <ConfirmDeleteDialog
+            isOpen={isAlertOpen}
+            isDeleting={isDeleting}
+            onClose={closeAlert}
+            onConfirm={confirmDelete}
+            title="¿Eliminar este mantenimiento?"
+            description="Esta acción eliminará el registro del mantenimiento de forma permanente."
+         />
       </>
    );
 }

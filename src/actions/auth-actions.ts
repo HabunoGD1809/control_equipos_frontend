@@ -10,15 +10,20 @@ import {
    resetPasswordRequestSchema,
 } from "@/lib/zod";
 import { AUTH_COOKIE_NAME, REFRESH_COOKIE_NAME } from "@/lib/constants";
-import type { ResetTokenResponse } from "@/types/api";
-
-const API_URL = process.env.NEXT_PUBLIC_API_BASE_URL!;
+import { serverApi } from "@/lib/http-server";
+import type { ResetTokenResponse, Usuario } from "@/types/api";
 
 // ─── TIPOS DE RETORNO ─────────────────────────────────────────────────────────
 
 type ResetActionResult =
    | { success: true; data: ResetTokenResponse }
    | { success?: never; error: string };
+
+type LoginResponse = {
+   access_token: string;
+   refresh_token?: string;
+   token_type: string;
+};
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 
@@ -32,18 +37,11 @@ export async function loginAction(values: z.infer<typeof loginSchema>) {
    params.append("password", password);
 
    try {
-      const res = await fetch(`${API_URL}/auth/login/access-token`, {
-         method: "POST",
-         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-         body: params,
-         cache: "no-store",
-      });
+      const tokens = await serverApi.post<LoginResponse>(
+         "/auth/login/access-token",
+         params
+      );
 
-      if (!res.ok) {
-         return { error: "Credenciales incorrectas o usuario bloqueado" };
-      }
-
-      const tokens = await res.json();
       const cookieStore = await cookies();
 
       cookieStore.set(AUTH_COOKIE_NAME, tokens.access_token, {
@@ -64,16 +62,14 @@ export async function loginAction(values: z.infer<typeof loginSchema>) {
          });
       }
 
-      const meRes = await fetch(`${API_URL}/usuarios/me`, {
-         headers: { Authorization: `Bearer ${tokens.access_token}` },
-         cache: "no-store",
-      });
-
-      const user = meRes.ok ? await meRes.json() : null;
+      const user = await serverApi.get<Usuario>("/usuarios/me");
 
       return { success: true, user };
-   } catch (error) {
+   } catch (error: any) {
       console.error("Login error:", error);
+      if (error.status === 400 || error.status === 401) {
+         return { error: "Credenciales incorrectas o usuario bloqueado" };
+      }
       return { error: "Error de conexión con el servidor" };
    }
 }
@@ -95,37 +91,19 @@ export async function requestPasswordResetAction(
    const parsed = resetPasswordRequestSchema.safeParse(values);
    if (!parsed.success) return { error: "Datos inválidos" };
 
-   const cookieStore = await cookies();
-   const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
-
-   if (!token) {
-      return { error: "Acceso denegado. Solo un administrador autenticado puede generar un token." };
-   }
-
    try {
-      const res = await fetch(
-         `${API_URL}/auth/password-recovery/request-reset`,
-         {
-            method: "POST",
-            headers: {
-               "Content-Type": "application/json",
-               "Authorization": `Bearer ${token}`
-            },
-            body: JSON.stringify(parsed.data),
-            cache: "no-store",
-         }
+      const data = await serverApi.post<ResetTokenResponse>(
+         "/auth/password-recovery/request-reset",
+         parsed.data
       );
 
-      if (!res.ok) {
-         const errorData = await res.json().catch(() => ({}));
-         return { error: errorData.detail || "Error al solicitar recuperación. Verifique si el usuario existe." };
-      }
-
-      const data: ResetTokenResponse = await res.json();
       return { success: true, data };
-   } catch (error) {
+   } catch (error: any) {
       console.error("Request Reset error:", error);
-      return { error: "Error de conexión con el servidor." };
+      if (error.status === 401 || error.status === 403) {
+         return { error: "Acceso denegado. Solo un administrador autenticado puede generar un token." };
+      }
+      return { error: error.detail || "Error al solicitar recuperación. Verifique si el usuario existe." };
    }
 }
 
@@ -135,29 +113,14 @@ export async function confirmPasswordResetAction(
    const parsed = resetPasswordConfirmSchema.safeParse(values);
    if (!parsed.success) return { error: "Datos inválidos" };
 
-   // El backend no recibe confirm_password, se filtra
    const { confirm_password, ...payload } = parsed.data;
 
    try {
-      const res = await fetch(
-         `${API_URL}/auth/password-recovery/confirm-reset`,
-         {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-            cache: "no-store",
-         }
-      );
-
-      if (!res.ok) {
-         const errorData = await res.json().catch(() => ({}));
-         return { error: errorData.detail || "Token inválido o expirado." };
-      }
-
+      await serverApi.post("/auth/password-recovery/confirm-reset", payload);
       return { success: true };
-   } catch (error) {
+   } catch (error: any) {
       console.error("Confirm Reset error:", error);
-      return { error: "Error de conexión con el servidor." };
+      return { error: error.detail || "Token inválido o expirado." };
    }
 }
 
@@ -167,33 +130,18 @@ export async function changePasswordAction(
    const parsed = changePasswordSchema.safeParse(values);
    if (!parsed.success) return { error: "Datos inválidos" };
 
-   const cookieStore = await cookies();
-   const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
-
-   if (!token) return { error: "Sesión expirada. Inicie sesión nuevamente." };
-
    try {
-      const res = await fetch(`${API_URL}/auth/change-password`, {
-         method: "POST",
-         headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-         },
-         body: JSON.stringify({
-            current_password: parsed.data.current_password,
-            new_password: parsed.data.new_password,
-         }),
-         cache: "no-store",
+      await serverApi.post("/auth/change-password", {
+         current_password: parsed.data.current_password,
+         new_password: parsed.data.new_password,
       });
 
-      if (!res.ok) {
-         const errorData = await res.json().catch(() => ({}));
-         return { error: errorData.detail || "La contraseña actual es incorrecta." };
-      }
-
       return { success: true };
-   } catch (error) {
+   } catch (error: any) {
       console.error("Change Password error:", error);
-      return { error: "Error de conexión con el servidor." };
+      if (error.status === 401) {
+         return { error: "Sesión expirada. Inicie sesión nuevamente." };
+      }
+      return { error: error.detail || "La contraseña actual es incorrecta." };
    }
 }

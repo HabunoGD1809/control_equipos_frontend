@@ -64,15 +64,18 @@ async function http<T>(path: string, options: FetchOptions = {}): Promise<T> {
 
    let res = await fetch(url, fetchOptions);
 
-   // 🚨 INTERCEPTOR DE REFESH TOKEN 🚨
+   const purgeClientSessionAndRedirect = () => {
+      if (!isServer && typeof window !== "undefined") {
+         localStorage.removeItem("auth-storage");
+         window.location.href = "/login";
+      }
+   };
+
+   // 🚨 INTERCEPTOR DE REFRESH TOKEN 🚨
    if (res.status === 401 && !_retry) {
-      // 1. Evitamos bucles infinitos marcando el intento
       options._retry = true;
 
       try {
-         // 2. Intentamos refrescar el token a través de un endpoint local o del action
-         // Como tu proxy intercepta todo, usaremos un endpoint dedicado en tu Next API 
-         // para que él maneje las cookies de forma segura.
          const refreshUrl = isServer
             ? new URL("/api/auth/refresh", await getServerOrigin()).toString()
             : "/api/auth/refresh";
@@ -83,24 +86,12 @@ async function http<T>(path: string, options: FetchOptions = {}): Promise<T> {
          });
 
          if (refreshRes.ok) {
-            // 3. El token se refrescó exitosamente (las nuevas cookies se setearon).
-            // Reintentamos la petición original.
-
-            // Si estamos en el server, debemos actualizar el cookieHeader 
-            // con las nuevas cookies recibidas (si fuera necesario, aunque next/headers 
-            // no expone un setter directo en medio de un fetch, por lo general en el 
-            // cliente es automático).
             res = await fetch(url, fetchOptions);
          } else {
-            // El refresh token expiró o es inválido. Redirigimos al login.
-            if (!isServer && typeof window !== "undefined") {
-               window.location.href = "/login";
-            }
+            purgeClientSessionAndRedirect();
          }
       } catch (refreshError) {
-         if (!isServer && typeof window !== "undefined") {
-            window.location.href = "/login";
-         }
+         purgeClientSessionAndRedirect();
       }
    }
 
@@ -116,12 +107,12 @@ async function http<T>(path: string, options: FetchOptions = {}): Promise<T> {
             message = text || message;
          }
       } catch {
-         // ignore parsing errors
+         // ignorar errores de parseo
       }
 
-      // Si a pesar del intento de refresh sigue dando 401, expulsamos al usuario
-      if (res.status === 401 && !isServer && typeof window !== "undefined") {
-         window.location.href = "/login";
+      // Si a pesar del intento de refresh sigue dando 401
+      if (res.status === 401) {
+         purgeClientSessionAndRedirect();
       }
 
       const err = new Error(message) as Error & { status?: number };

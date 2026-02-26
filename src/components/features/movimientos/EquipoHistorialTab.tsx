@@ -43,11 +43,8 @@ export const columns: ColumnDef<Movimiento>[] = [
    { accessorKey: "proposito", header: "Propósito" },
 ];
 
-
 export function EquipoHistorialTab({ movimientos }: EquipoHistorialTabProps) {
    return (
-      <div className="mt-4">
-         <DataTable columns={columns} data={movimientos} />
-      </div>
+      <DataTable columns={columns} data={movimientos} className="mt-4" />
    );
 }

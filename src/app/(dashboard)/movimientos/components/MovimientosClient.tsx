@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { PlusCircle, MoreHorizontal, CheckCircle, XCircle, Ban } from "lucide-react";
+import { PlusCircle, MoreHorizontal, CheckCircle, Ban } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -45,8 +45,6 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
 }) => {
    const [movimientos, setMovimientos] = useState<Movimiento[]>(initialData);
    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-
-   // Estados para acciones específicas
    const [movimientoToAuthorize, setMovimientoToAuthorize] = useState<Movimiento | null>(null);
    const { toast } = useToast();
 
@@ -92,7 +90,6 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
          header: "Estado",
          cell: ({ row }) => {
             const estado = row.getValue("estado") as string;
-            // Estilos visuales según el estado
             let variant: "default" | "secondary" | "destructive" | "outline" = "outline";
             if (estado === EstadoMovimientoEquipoEnum.Completado) variant = "default";
             if (estado === EstadoMovimientoEquipoEnum.Cancelado || estado === EstadoMovimientoEquipoEnum.Rechazado) variant = "destructive";
@@ -119,23 +116,18 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
                   <DropdownMenuContent align="end">
                      <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                      <DropdownMenuSeparator />
-
-                     {/* BOTÓN FALTANTE: Validar / Autorizar */}
                      {isPendiente && (
                         <DropdownMenuItem onClick={() => setMovimientoToAuthorize(mov)}>
                            <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
                            <span>Validar Movimiento</span>
                         </DropdownMenuItem>
                      )}
-
-                     {/* BOTÓN FALTANTE: Cancelar */}
                      {isCancelable && (
                         <DropdownMenuItem onClick={() => handleCancelar(mov.id)}>
                            <Ban className="mr-2 h-4 w-4 text-red-600" />
                            <span>Cancelar Movimiento</span>
                         </DropdownMenuItem>
                      )}
-
                      {!isPendiente && !isCancelable && (
                         <DropdownMenuItem disabled>
                            Sin acciones disponibles
@@ -149,8 +141,7 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
    ];
 
    return (
-      <>
-         {/* Modal de Creación */}
+      <div className="space-y-4 animate-in fade-in duration-300">
          <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
             <DialogContent className="max-w-2xl">
                <DialogHeader>
@@ -168,7 +159,6 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
             </DialogContent>
          </Dialog>
 
-         {/* Modal de Autorización (El que arreglamos en el paso anterior) */}
          <AutorizarMovimientoModal
             movimiento={movimientoToAuthorize}
             isOpen={!!movimientoToAuthorize}
@@ -178,14 +168,19 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
             }}
          />
 
-         <div className="flex justify-end mb-4">
-            <Button onClick={() => setIsCreateModalOpen(true)}>
+         <div className="flex justify-end">
+            <Button onClick={() => setIsCreateModalOpen(true)} className="shadow-sm">
                <PlusCircle className="mr-2 h-4 w-4" />
                Registrar Movimiento
             </Button>
          </div>
 
-         <DataTable columns={columns} data={movimientos} filterColumn="destino" />
-      </>
+         <DataTable
+            columns={columns}
+            data={movimientos}
+            filterColumn="destino"
+            tableContainerClassName="shadow-sm"
+         />
+      </div>
    );
 };

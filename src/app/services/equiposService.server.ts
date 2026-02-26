@@ -1,5 +1,5 @@
 import { serverApi } from "@/lib/http-server";
-import type { EquipoRead } from "@/types/api";
+import type { EquipoRead, ComponenteInfo, PadreInfo } from "@/types/api";
 
 type GetAllParams = {
    skip?: number;
@@ -9,6 +9,16 @@ type GetAllParams = {
    proveedor_id?: string;
    ubicacion?: string;
 };
+
+// Función auxiliar para normalizar la respuesta de la API
+function unwrap<T>(data: any): T[] {
+   if (!data) return [];
+   if (Array.isArray(data)) return data;
+   if (typeof data === "object" && "items" in data && Array.isArray(data.items)) {
+      return data.items;
+   }
+   return [];
+}
 
 export const equiposServerService = {
    async getAll(params: GetAllParams = {}): Promise<EquipoRead[]> {
@@ -30,4 +40,19 @@ export const equiposServerService = {
    getById(id: string) {
       return serverApi.get<EquipoRead>(`/equipos/${id}`);
    },
+
+   // 🚀 SSR MINIMALISTA: Solo pedimos lo que la pantalla necesita para pintar el primer frame
+   getEquipoDetailBasics: async (id: string) => {
+      const [equipo, compRes, padresRes] = await Promise.all([
+         serverApi.get<EquipoRead>(`/equipos/${id}`),
+         serverApi.get<any>(`/equipos/${id}/componentes`).catch(() => []),
+         serverApi.get<any>(`/equipos/${id}/parte_de`).catch(() => []),
+      ]);
+
+      return {
+         equipo,
+         componentes: unwrap<ComponenteInfo>(compRes),
+         padres: unwrap<PadreInfo>(padresRes),
+      };
+   }
 };

@@ -117,7 +117,7 @@ export function EquiposClient({ initialData, initialParams }: EquiposClientProps
    const isEmpty = initialData.length === 0;
 
    return (
-      <div className="space-y-6">
+      <div className="space-y-6 animate-in fade-in duration-300">
          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="relative w-full max-w-md">
                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -153,11 +153,17 @@ export function EquiposClient({ initialData, initialParams }: EquiposClientProps
             </div>
          ) : (
             <div className="space-y-4">
-               <DataTable columns={columns} data={initialData} showFilter={false} showPagination={false} />
+               <DataTable
+                  columns={columns}
+                  data={initialData}
+                  showFilter={false}
+                  showPagination={false}
+                  tableContainerClassName="shadow-sm"
+               />
 
                <div className="flex items-center justify-between px-2 text-sm">
                   <div className="text-muted-foreground">
-                     Página <span className="font-medium text-foreground">{initialParams.page}</span> 
+                     Página <span className="font-medium text-foreground">{initialParams.page}</span>
                      <span className="hidden sm:inline opacity-70"> — Mostrando {initialData.length} registros</span>
                   </div>
                   <div className="flex items-center gap-2">

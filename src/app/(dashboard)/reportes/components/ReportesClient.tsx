@@ -88,8 +88,8 @@ export const ReportesClient = () => {
    };
 
    return (
-      <div className="container mx-auto py-10">
-         <Card className="max-w-2xl mx-auto shadow-lg">
+      <div className="container mx-auto py-10 animate-in fade-in duration-300">
+         <Card className="max-w-2xl mx-auto shadow-sm border">
             <CardHeader className="bg-muted/20">
                <CardTitle className="flex items-center gap-2">
                   <FileDown className="h-6 w-6 text-primary" />
@@ -245,7 +245,7 @@ export const ReportesClient = () => {
                         <Button
                            type="submit"
                            disabled={isLoading}
-                           className="w-full md:w-auto min-w-50"
+                           className="w-full md:w-auto min-w-50 shadow-sm"
                         >
                            {isLoading ? (
                               <>

@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -9,11 +7,9 @@ import { DatabaseBackup, Download, AlertCircle, CheckCircle2, Clock, Loader2 } f
 
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
-import { useToast } from "@/components/ui/use-toast";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/Alert";
 import type { BackupLog } from "@/types/api";
-import { api } from "@/lib/http";
 
 interface BackupsClientProps {
    initialData: BackupLog[];
@@ -90,7 +86,7 @@ export function BackupsClient({ initialData }: BackupsClientProps) {
 
             if (error) {
                return (
-                  <span className="text-xs text-red-500 max-w-50 truncate" title={error}>
+                  <span className="text-xs text-red-500 max-w-50 truncate block" title={error}>
                      {error}
                   </span>
                );
@@ -98,7 +94,7 @@ export function BackupsClient({ initialData }: BackupsClientProps) {
 
             const filename = path?.split("/").pop();
             return (
-               <span className="text-xs font-mono text-muted-foreground max-w-50 truncate" title={path || ""}>
+               <span className="text-xs font-mono text-muted-foreground max-w-50 truncate block" title={path || ""}>
                   {filename || "--"}
                </span>
             );
@@ -111,13 +107,15 @@ export function BackupsClient({ initialData }: BackupsClientProps) {
 
             if (status === "Success" && row.original.file_path) {
                return (
-                  <Button
-                     variant="ghost"
-                     size="sm"
-                     onClick={() => window.open(`/api/proxy/system/backup/download/${row.original.id}`, "_blank")}
-                  >
-                     <Download className="h-4 w-4" />
-                  </Button>
+                  <div className="flex justify-end">
+                     <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => window.open(`/api/proxy/system/backup/download/${row.original.id}`, "_blank")}
+                     >
+                        <Download className="h-4 w-4" />
+                     </Button>
+                  </div>
                );
             }
 
@@ -127,9 +125,9 @@ export function BackupsClient({ initialData }: BackupsClientProps) {
    ];
 
    return (
-      <div className="space-y-6">
+      <div className="space-y-6 animate-in fade-in duration-300">
          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
+            <Card className="shadow-sm">
                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Último Respaldo</CardTitle>
                   <DatabaseBackup className="h-4 w-4 text-muted-foreground" />
@@ -138,33 +136,33 @@ export function BackupsClient({ initialData }: BackupsClientProps) {
                   <div className="text-2xl font-bold">
                      {initialData[0] ? format(new Date(initialData[0].backup_timestamp), "dd/MM") : "--"}
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground mt-1">
                      {initialData[0]?.backup_status === "Success" ? "Completado exitosamente" : "Estado desconocido"}
                   </p>
                </CardContent>
             </Card>
          </div>
 
-         <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-               <div>
-                  <CardTitle>Historial de Respaldos</CardTitle>
-                  <CardDescription>Registro de copias de seguridad automáticas y manuales.</CardDescription>
-               </div>
-            </CardHeader>
+         <div className="space-y-4">
+            <div>
+               <h3 className="text-lg font-medium leading-6 text-foreground">Historial de Respaldos</h3>
+               <p className="mt-1 text-sm text-muted-foreground">Registro de copias de seguridad automáticas y manuales.</p>
+            </div>
 
-            <CardContent>
-               {!initialData.length && (
-                  <Alert className="mb-4">
-                     <AlertCircle className="h-4 w-4" />
-                     <AlertTitle>Sin Registros</AlertTitle>
-                     <AlertDescription>No se han encontrado registros de respaldos en el sistema.</AlertDescription>
-                  </Alert>
-               )}
+            {!initialData.length && (
+               <Alert className="mb-4 shadow-sm">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Sin Registros</AlertTitle>
+                  <AlertDescription>No se han encontrado registros de respaldos en el sistema.</AlertDescription>
+               </Alert>
+            )}
 
-               <DataTable columns={columns} data={initialData} />
-            </CardContent>
-         </Card>
+            <DataTable
+               columns={columns}
+               data={initialData}
+               tableContainerClassName="shadow-sm"
+            />
+         </div>
       </div>
    );
 }

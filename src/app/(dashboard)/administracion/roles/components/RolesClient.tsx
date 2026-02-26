@@ -118,14 +118,18 @@ export function RolesClient() {
    }
 
    return (
-      <div className="space-y-4">
+      <div className="space-y-4 animate-in fade-in duration-300">
          <div className="flex justify-end">
-            <Button onClick={handleCreate}>
+            <Button onClick={handleCreate} className="shadow-sm">
                <Plus className="mr-2 h-4 w-4" /> Nuevo Rol
             </Button>
          </div>
 
-         <DataTable columns={columns} data={data} />
+         <DataTable
+            columns={columns}
+            data={data}
+            tableContainerClassName="shadow-sm"
+         />
 
          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
             <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">

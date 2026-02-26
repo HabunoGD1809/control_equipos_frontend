@@ -1,18 +1,20 @@
 "use client"
 
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 
 import { DataTable } from "@/components/ui/DataTable";
-import { AsignacionLicencia } from "@/types/api";
-import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
+
 import { useHasPermission } from "@/hooks/useHasPermission";
-import Link from "next/link";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/AlertDialog";
+import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
+import { api } from "@/lib/http";
+import type { AsignacionLicencia } from "@/types/api";
 
 interface AsignacionesClientProps {
    data: AsignacionLicencia[];
@@ -22,9 +24,11 @@ export function AsignacionesClient({ data }: AsignacionesClientProps) {
    const router = useRouter();
    const canUnassign = useHasPermission(['desasignar_licencias']);
 
-   const {
-      isAlertOpen, isDeleting, openAlert, setIsAlertOpen, handleDelete, itemToDelete
-   } = useDeleteConfirmation("Asignación", () => router.refresh());
+   const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } = useDeleteConfirmation({
+      onDelete: (id) => api.delete(`/licencias/asignaciones/${id}`),
+      onSuccess: () => router.refresh(),
+      successMessage: "Licencia desasignada correctamente.",
+   });
 
    const columns: ColumnDef<AsignacionLicencia>[] = [
       {
@@ -37,10 +41,10 @@ export function AsignacionesClient({ data }: AsignacionesClientProps) {
          cell: ({ row }) => {
             const item = row.original;
             if (item.equipo) {
-               return <Link href={`/equipos/${item.equipo.id}`} className="hover:underline text-primary">Equipo: {item.equipo.nombre}</Link>
+               return <Link href={`/equipos/${item.equipo.id}`} className="hover:underline text-primary font-medium">Equipo: {item.equipo.nombre}</Link>
             }
             if (item.usuario) {
-               return `Usuario: ${item.usuario.nombre_usuario}`;
+               return <span className="font-medium">Usuario: {item.usuario.nombre_usuario}</span>;
             }
             return 'N/A';
          }
@@ -58,8 +62,9 @@ export function AsignacionesClient({ data }: AsignacionesClientProps) {
                   <Button
                      variant="ghost"
                      size="icon"
-                     className="text-destructive hover:text-destructive/80"
+                     className="text-destructive hover:text-destructive hover:bg-destructive/10 transition-colors"
                      onClick={() => openAlert(row.original.id)}
+                     title="Desasignar"
                   >
                      <Trash2 className="h-4 w-4" />
                   </Button>
@@ -70,25 +75,22 @@ export function AsignacionesClient({ data }: AsignacionesClientProps) {
    ];
 
    return (
-      <>
-         <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-            <AlertDialogContent>
-               <AlertDialogHeader>
-                  <AlertDialogTitle>¿Desasignar licencia?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                     Esta acción liberará la licencia para que pueda ser utilizada por otro equipo o usuario.
-                  </AlertDialogDescription>
-               </AlertDialogHeader>
-               <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => handleDelete(`/licencias/asignaciones/${itemToDelete}`)} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
-                     {isDeleting ? "Desasignando..." : "Sí, desasignar"}
-                  </AlertDialogAction>
-               </AlertDialogFooter>
-            </AlertDialogContent>
-         </AlertDialog>
+      <div className="space-y-4 animate-in fade-in duration-300">
+         <ConfirmDeleteDialog
+            isOpen={isAlertOpen}
+            isDeleting={isDeleting}
+            onClose={closeAlert}
+            onConfirm={confirmDelete}
+            title="¿Desasignar licencia?"
+            description="Esta acción liberará la licencia para que pueda ser utilizada por otro equipo o usuario en el futuro."
+         />
 
-         <DataTable columns={columns} data={data} filterColumn="software" />
-      </>
+         <DataTable
+            columns={columns}
+            data={data}
+            filterColumn="software"
+            tableContainerClassName="shadow-sm"
+         />
+      </div>
    )
 }

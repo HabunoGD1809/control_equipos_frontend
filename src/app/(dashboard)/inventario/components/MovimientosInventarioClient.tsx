@@ -60,6 +60,11 @@ export const columns: ColumnDef<InventarioMovimiento>[] = [
 
 export function MovimientosInventarioClient({ data }: MovimientosInventarioClientProps) {
    return (
-      <DataTable columns={columns} data={data} filterColumn="item_nombre" />
+      <DataTable
+         columns={columns}
+         data={data}
+         filterColumn="item_nombre"
+         tableContainerClassName="shadow-sm"
+      />
    );
 }

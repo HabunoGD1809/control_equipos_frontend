@@ -7,7 +7,7 @@ import {
   AlertTriangle,
   Package,
   Calendar,
-  Pencil, // Importar ícono
+  Pencil,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -38,8 +38,6 @@ interface ItemGroup {
 
 export function StockGroupedTable({ data }: StockGroupedTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-
-  // Estado para el modal de edición
   const [editingStock, setEditingStock] = useState<InventarioStock | null>(null);
 
   const groupedData = useMemo(() => {
@@ -99,7 +97,7 @@ export function StockGroupedTable({ data }: StockGroupedTableProps) {
 
   return (
     <>
-      <div className="rounded-md border">
+      <div className="rounded-md border bg-card shadow-sm">
         <Table>
           <TableHeader>
             <TableRow>
@@ -187,7 +185,7 @@ export function StockGroupedTable({ data }: StockGroupedTableProps) {
                                 <TableHead className="text-xs h-8">Lote</TableHead>
                                 <TableHead className="text-xs h-8">Caducidad</TableHead>
                                 <TableHead className="text-xs h-8 text-right">Cant.</TableHead>
-                                <TableHead className="text-xs h-8 w-12.5"></TableHead> {/* Columna Acciones */}
+                                <TableHead className="text-xs h-8 w-12.5"></TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -256,7 +254,6 @@ export function StockGroupedTable({ data }: StockGroupedTableProps) {
         </Table>
       </div>
 
-      {/* Modal de Edición */}
       <EditStockDetailsModal
         stock={editingStock}
         isOpen={!!editingStock}

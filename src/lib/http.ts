@@ -1,6 +1,6 @@
 type Primitive = string | number | boolean;
 
-interface FetchOptions extends Omit<RequestInit, "headers"> {
+interface FetchOptions extends Omit<RequestInit, "headers" | "body" | "method"> {
    params?: Record<string, Primitive | null | undefined>;
    headers?: Record<string, string>;
    _retry?: boolean;
@@ -8,13 +8,15 @@ interface FetchOptions extends Omit<RequestInit, "headers"> {
 
 const PROXY_PREFIX = "/api/proxy";
 
-function buildQuery(params?: FetchOptions["params"]) {
+function buildQuery(params?: FetchOptions["params"]): string {
    if (!params) return "";
    const sp = new URLSearchParams();
+
    for (const [k, v] of Object.entries(params)) {
       if (v === undefined || v === null) continue;
       sp.set(k, String(v));
    }
+
    const qs = sp.toString();
    return qs ? `?${qs}` : "";
 }
@@ -26,21 +28,52 @@ async function getServerOrigin(): Promise<string> {
    const proto = h.get("x-forwarded-proto") ?? "http";
    const host = h.get("x-forwarded-host") ?? h.get("host");
 
-   if (!host) {
-      return "http://localhost:3000";
-   }
-   return `${proto}://${host}`;
+   return host ? `${proto}://${host}` : "http://localhost:3000";
 }
 
-async function http<T>(path: string, options: FetchOptions = {}): Promise<T> {
+function handleUnauthorizedClient() {
+   if (typeof window !== "undefined") {
+      localStorage.removeItem("auth-storage");
+      window.location.href = "/login";
+   }
+}
+
+function prepareBodyAndHeaders(
+   body: unknown,
+   customHeaders?: Record<string, string>
+): { body?: BodyInit; headers?: Record<string, string> } {
+   if (body === undefined || body === null) {
+      return { headers: customHeaders };
+   }
+
+   const isFormData = body instanceof FormData;
+   const isString = typeof body === "string";
+   const isURLSearchParams = body instanceof URLSearchParams;
+   const isBlob = typeof Blob !== "undefined" && body instanceof Blob;
+
+   if (isFormData || isString || isURLSearchParams || isBlob) {
+      return {
+         body: body as BodyInit,
+         headers: customHeaders,
+      };
+   }
+
+   return {
+      body: JSON.stringify(body),
+      headers: {
+         "Content-Type": "application/json",
+         ...(customHeaders ?? {}),
+      },
+   };
+}
+
+async function http<T>(path: string, options: FetchOptions & { method: string; body?: BodyInit }): Promise<T> {
    const { params, headers, _retry, ...rest } = options;
 
    const cleanPath = path.startsWith("/") ? path : `/${path}`;
-   const qs = buildQuery(params);
-   const proxyPath = `${PROXY_PREFIX}${cleanPath}${qs}`;
+   const proxyPath = `${PROXY_PREFIX}${cleanPath}${buildQuery(params)}`;
 
    const isServer = typeof window === "undefined";
-
    const url = isServer
       ? new URL(proxyPath, await getServerOrigin()).toString()
       : proxyPath;
@@ -48,14 +81,12 @@ async function http<T>(path: string, options: FetchOptions = {}): Promise<T> {
    let cookieHeader: string | null = null;
    if (isServer) {
       const { headers: nextHeaders } = await import("next/headers");
-      const h = await nextHeaders();
-      cookieHeader = h.get("cookie");
+      cookieHeader = (await nextHeaders()).get("cookie");
    }
 
    const fetchOptions: RequestInit = {
       ...rest,
       headers: {
-         "Content-Type": "application/json",
          ...(cookieHeader ? { cookie: cookieHeader } : {}),
          ...(headers ?? {}),
       },
@@ -64,17 +95,7 @@ async function http<T>(path: string, options: FetchOptions = {}): Promise<T> {
 
    let res = await fetch(url, fetchOptions);
 
-   const purgeClientSessionAndRedirect = () => {
-      if (!isServer && typeof window !== "undefined") {
-         localStorage.removeItem("auth-storage");
-         window.location.href = "/login";
-      }
-   };
-
-   // 🚨 INTERCEPTOR DE REFRESH TOKEN 🚨
    if (res.status === 401 && !_retry) {
-      options._retry = true;
-
       try {
          const refreshUrl = isServer
             ? new URL("/api/auth/refresh", await getServerOrigin()).toString()
@@ -83,19 +104,22 @@ async function http<T>(path: string, options: FetchOptions = {}): Promise<T> {
          const refreshRes = await fetch(refreshUrl, {
             method: "POST",
             headers: cookieHeader ? { cookie: cookieHeader } : {},
+            cache: "no-store",
          });
 
          if (refreshRes.ok) {
             res = await fetch(url, fetchOptions);
          } else {
-            purgeClientSessionAndRedirect();
+            handleUnauthorizedClient();
          }
-      } catch (refreshError) {
-         purgeClientSessionAndRedirect();
+      } catch {
+         handleUnauthorizedClient();
       }
    }
 
    if (!res.ok) {
+      if (res.status === 401) handleUnauthorizedClient();
+
       let message = `HTTP ${res.status}`;
       try {
          const ct = res.headers.get("content-type") || "";
@@ -107,12 +131,7 @@ async function http<T>(path: string, options: FetchOptions = {}): Promise<T> {
             message = text || message;
          }
       } catch {
-         // ignorar errores de parseo
-      }
-
-      // Si a pesar del intento de refresh sigue dando 401
-      if (res.status === 401) {
-         purgeClientSessionAndRedirect();
+         // ignore parse errors
       }
 
       const err = new Error(message) as Error & { status?: number };
@@ -130,52 +149,27 @@ async function http<T>(path: string, options: FetchOptions = {}): Promise<T> {
    return (await res.json()) as T;
 }
 
+function createMethod(method: "POST" | "PUT" | "PATCH") {
+   return <T>(path: string, body?: unknown, options?: FetchOptions) => {
+      const prepared = prepareBodyAndHeaders(body, options?.headers);
+
+      return http<T>(path, {
+         method,
+         ...options,
+         body: prepared.body,
+         headers: prepared.headers,
+      });
+   };
+}
+
 export const api = {
    get: <T>(path: string, options?: FetchOptions) =>
       http<T>(path, { method: "GET", ...options }),
 
-   post: <T>(path: string, body: unknown, options?: FetchOptions) =>
-      http<T>(path, {
-         method: "POST",
-         body:
-            body instanceof FormData || typeof body === "string"
-               ? (body as any)
-               : JSON.stringify(body),
-         ...options,
-         headers: {
-            ...(body instanceof FormData ? {} : { "Content-Type": "application/json" }),
-            ...(options?.headers ?? {}),
-         },
-      }),
-
-   put: <T>(path: string, body: unknown, options?: FetchOptions) =>
-      http<T>(path, {
-         method: "PUT",
-         body:
-            body instanceof FormData || typeof body === "string"
-               ? (body as any)
-               : JSON.stringify(body),
-         ...options,
-         headers: {
-            ...(body instanceof FormData ? {} : { "Content-Type": "application/json" }),
-            ...(options?.headers ?? {}),
-         },
-      }),
-
-   patch: <T>(path: string, body: unknown, options?: FetchOptions) =>
-      http<T>(path, {
-         method: "PATCH",
-         body:
-            body instanceof FormData || typeof body === "string"
-               ? (body as any)
-               : JSON.stringify(body),
-         ...options,
-         headers: {
-            ...(body instanceof FormData ? {} : { "Content-Type": "application/json" }),
-            ...(options?.headers ?? {}),
-         },
-      }),
-
    delete: <T>(path: string, options?: FetchOptions) =>
       http<T>(path, { method: "DELETE", ...options }),
+
+   post: createMethod("POST"),
+   put: createMethod("PUT"),
+   patch: createMethod("PATCH"),
 };

@@ -1,3 +1,4 @@
+// src/components/ui/DataTable.tsx
 "use client";
 
 import * as React from "react";
@@ -31,6 +32,7 @@ import {
    TableHeader,
    TableRow,
 } from "@/components/ui/Table";
+import { cn } from "@/lib/utils";
 
 interface DataTableProps<TData, TValue> {
    columns: ColumnDef<TData, TValue>[];
@@ -40,6 +42,10 @@ interface DataTableProps<TData, TValue> {
    showFilter?: boolean;
    showPagination?: boolean;
    showColumnToggle?: boolean;
+   // Props arquitectónicas para delegación de control visual
+   className?: string;
+   tableContainerClassName?: string;
+   withBorder?: boolean;
 }
 
 export function DataTable<TData, TValue>({
@@ -50,12 +56,14 @@ export function DataTable<TData, TValue>({
    showFilter = true,
    showPagination = true,
    showColumnToggle = true,
+   className,
+   tableContainerClassName,
+   withBorder = true,
 }: DataTableProps<TData, TValue>) {
    const [sorting, setSorting] = React.useState<SortingState>([]);
    const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
    const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
 
-   // eslint-disable-next-line react-hooks/incompatible-library
    const table = useReactTable({
       data,
       columns,
@@ -77,7 +85,7 @@ export function DataTable<TData, TValue>({
       filterColumn || table.getAllColumns().find((c) => c.getCanFilter())?.id;
 
    return (
-      <div className="w-full space-y-4">
+      <div className={cn("w-full space-y-4", className)}>
          {(showFilter || showColumnToggle) && (
             <div className="flex items-center justify-between">
                {showFilter && filterColumnName && (
@@ -117,7 +125,8 @@ export function DataTable<TData, TValue>({
             </div>
          )}
 
-         <div className="rounded-md border bg-card">
+         {/* Contenedor centralizado para bordes y fondos delegados */}
+         <div className={cn(withBorder && "rounded-md border bg-card", tableContainerClassName)}>
             <Table>
                <TableHeader>
                   {table.getHeaderGroups().map((headerGroup) => (

@@ -19,42 +19,42 @@ export const CatalogosClient: React.FC<CatalogosClientProps> = ({
    initialProveedores
 }) => {
    return (
-      <Tabs defaultValue="estados">
-         <TabsList>
+      <Tabs defaultValue="estados" className="w-full">
+         <TabsList className="mb-4">
             <TabsTrigger value="estados">Estados de Equipo</TabsTrigger>
             <TabsTrigger value="tipos-documento">Tipos de Documento</TabsTrigger>
             <TabsTrigger value="tipos-mantenimiento">Tipos de Mantenimiento</TabsTrigger>
             <TabsTrigger value="proveedores">Proveedores</TabsTrigger>
          </TabsList>
 
-         <TabsContent value="estados" className="mt-4">
+         <TabsContent value="estados" className="mt-0 animate-in fade-in duration-300">
             <GenericCatalogTab
-               data={initialEstados}
+               data={initialEstados as any[]}
                title="Estado de Equipo"
                apiEndpoint="/catalogos/estados-equipo"
                formFields={['nombre', 'descripcion', 'color_hex']}
             />
          </TabsContent>
 
-         <TabsContent value="tipos-documento" className="mt-4">
+         <TabsContent value="tipos-documento" className="mt-0 animate-in fade-in duration-300">
             <GenericCatalogTab
-               data={initialTiposDocumento}
+               data={initialTiposDocumento as any[]}
                title="Tipo de Documento"
                apiEndpoint="/catalogos/tipos-documento"
                formFields={['nombre', 'descripcion']}
             />
          </TabsContent>
 
-         <TabsContent value="tipos-mantenimiento" className="mt-4">
+         <TabsContent value="tipos-mantenimiento" className="mt-0 animate-in fade-in duration-300">
             <GenericCatalogTab
-               data={initialTiposMantenimiento}
+               data={initialTiposMantenimiento as any[]}
                title="Tipo de Mantenimiento"
                apiEndpoint="/catalogos/tipos-mantenimiento"
                formFields={['nombre', 'descripcion', 'es_preventivo', 'periodicidad_dias']}
             />
          </TabsContent>
 
-         <TabsContent value="proveedores" className="mt-4">
+         <TabsContent value="proveedores" className="mt-0 animate-in fade-in duration-300">
             <ProveedoresTab data={initialProveedores} />
          </TabsContent>
       </Tabs>

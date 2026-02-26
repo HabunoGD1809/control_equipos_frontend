@@ -1,16 +1,16 @@
+// [Manteniendo imports y lógica superior exactamente igual]
 "use client";
 
 import { useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { MoreHorizontal, PlusCircle, Trash2 } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Trash2, Pencil } from "lucide-react";
+
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/Dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/DropdownMenu";
-import {
-   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
-   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
-} from "@/components/ui/AlertDialog";
+import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
+
 import { GenericCatalogForm } from "./GenericCatalogForm";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { api } from "@/lib/http";
@@ -34,16 +34,13 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({ data, titl
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [selectedItem, setSelectedItem] = useState<GenericItem | null>(null);
 
-   const {
-      isAlertOpen,
-      isDeleting,
-      openAlert,
-      setIsAlertOpen,
-      handleDelete,
-      itemToDelete,
-   } = useDeleteConfirmation(title, async () => {
-      const fresh = await api.get<GenericItem[]>(apiEndpoint);
-      setItems(fresh);
+   const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } = useDeleteConfirmation({
+      onDelete: (id) => api.delete(`${apiEndpoint}/${id}`),
+      onSuccess: async () => {
+         const fresh = await api.get<GenericItem[]>(apiEndpoint);
+         setItems(fresh);
+      },
+      successMessage: `El ítem ha sido eliminado correctamente del catálogo.`,
    });
 
    const handleEdit = (item: GenericItem) => {
@@ -57,11 +54,11 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({ data, titl
    };
 
    const columns: ColumnDef<GenericItem>[] = [
-      { accessorKey: "nombre", header: "Nombre" },
+      { accessorKey: "nombre", header: "Nombre", cell: ({ row }) => <span className="font-medium">{row.getValue("nombre")}</span> },
       {
          accessorKey: "descripcion",
          header: "Descripción",
-         cell: ({ row }) => (row.original as GenericItem).descripcion || "N/A",
+         cell: ({ row }) => <span className="text-muted-foreground">{(row.original as GenericItem).descripcion || "Sin descripción"}</span>,
       },
       {
          id: "actions",
@@ -74,13 +71,14 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({ data, titl
                </DropdownMenuTrigger>
                <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => handleEdit(row.original)}>Editar</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleEdit(row.original)}>
+                     <Pencil className="mr-2 h-4 w-4" /> Editar
+                  </DropdownMenuItem>
                   <DropdownMenuItem
-                     className="text-destructive focus:text-destructive"
+                     className="text-destructive focus:text-destructive focus:bg-destructive/10"
                      onClick={() => openAlert(row.original.id)}
                   >
-                     <Trash2 className="mr-2 h-4 w-4" />
-                     Eliminar
+                     <Trash2 className="mr-2 h-4 w-4" /> Eliminar
                   </DropdownMenuItem>
                </DropdownMenuContent>
             </DropdownMenu>
@@ -89,27 +87,15 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({ data, titl
    ];
 
    return (
-      <>
-         <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-            <AlertDialogContent>
-               <AlertDialogHeader>
-                  <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                     Esta acción no se puede deshacer. Eliminar este ítem puede causar errores si está siendo utilizado.
-                  </AlertDialogDescription>
-               </AlertDialogHeader>
-               <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction
-                     onClick={() => handleDelete(`${apiEndpoint}/${itemToDelete}`)}
-                     disabled={isDeleting}
-                     className="bg-destructive hover:bg-destructive/90"
-                  >
-                     {isDeleting ? "Eliminando..." : "Sí, eliminar"}
-                  </AlertDialogAction>
-               </AlertDialogFooter>
-            </AlertDialogContent>
-         </AlertDialog>
+      <div className="space-y-4 animate-in fade-in duration-300">
+         <ConfirmDeleteDialog
+            isOpen={isAlertOpen}
+            isDeleting={isDeleting}
+            onClose={closeAlert}
+            onConfirm={confirmDelete}
+            title={`¿Eliminar ${title}?`}
+            description="Esta acción no se puede deshacer. Eliminar este ítem puede causar errores si está siendo utilizado en otros registros."
+         />
 
          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
             <DialogContent>
@@ -130,12 +116,17 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({ data, titl
          </Dialog>
 
          <div className="flex justify-end mb-4">
-            <Button onClick={handleNew}>
+            <Button onClick={handleNew} className="shadow-sm">
                <PlusCircle className="mr-2 h-4 w-4" /> Crear Nuevo {title}
             </Button>
          </div>
 
-         <DataTable columns={columns} data={items} filterColumn="nombre" />
-      </>
+         <DataTable
+            columns={columns}
+            data={items}
+            filterColumn="nombre"
+            tableContainerClassName="shadow-sm"
+         />
+      </div>
    );
 };

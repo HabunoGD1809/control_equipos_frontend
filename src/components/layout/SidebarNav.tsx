@@ -54,7 +54,7 @@ function CollapsibleNavItem({ item }: { item: NavItemProps }) {
             className="flex items-center justify-between w-full px-3 py-2 text-sm font-medium rounded-md transition-colors text-foreground/70 hover:bg-accent hover:text-accent-foreground"
          >
             <div className="flex items-center">
-               <item.icon className="h-5 w-5 mr-3 flex-shrink-0" />
+               <item.icon className="h-5 w-5 mr-3 shrink-0" />
                <span>{item.label}</span>
             </div>
             <motion.div animate={{ rotate: isOpen ? 180 : 0 }}>
@@ -99,7 +99,7 @@ function NavItem({ item }: { item: NavItemProps }) {
                transition={{ type: "spring", stiffness: 350, damping: 30 }}
             />
          )}
-         <item.icon className="h-5 w-5 mr-3 z-10 flex-shrink-0" />
+         <item.icon className="h-5 w-5 mr-3 z-10 shrink-0" />
          <span className="z-10">{item.label}</span>
       </Link>
    );

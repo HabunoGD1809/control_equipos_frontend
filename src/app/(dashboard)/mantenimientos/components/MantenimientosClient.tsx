@@ -153,7 +153,7 @@ export function MantenimientosClient({ initialData, equipos, tiposMantenimiento,
    ];
 
    return (
-      <>
+      <div className="space-y-4 animate-in fade-in duration-300">
          <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
             <DialogContent className="sm:max-w-150">
                <DialogHeader>
@@ -197,15 +197,20 @@ export function MantenimientosClient({ initialData, equipos, tiposMantenimiento,
             </Dialog>
          )}
 
-         <div className="flex justify-end mb-4">
+         <div className="flex justify-end">
             {canSchedule && (
-               <Button onClick={() => setIsCreateModalOpen(true)}>
+               <Button onClick={() => setIsCreateModalOpen(true)} className="shadow-sm">
                   <PlusCircle className="mr-2 h-4 w-4" /> Programar Mantenimiento
                </Button>
             )}
          </div>
 
-         <DataTable columns={columns} data={initialData} filterColumn="equipo_nombre" />
+         <DataTable
+            columns={columns}
+            data={initialData}
+            filterColumn="equipo_nombre"
+            tableContainerClassName="shadow-sm"
+         />
 
          <ConfirmDeleteDialog
             isOpen={isAlertOpen}
@@ -215,6 +220,6 @@ export function MantenimientosClient({ initialData, equipos, tiposMantenimiento,
             title="¿Eliminar este mantenimiento?"
             description="Esta acción eliminará el registro del mantenimiento de forma permanente."
          />
-      </>
+      </div>
    );
 }

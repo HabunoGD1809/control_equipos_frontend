@@ -32,8 +32,11 @@ const columns: ColumnDef<LicenciaSoftware>[] = [
 
 export function EquipoLicenciasTab({ licenciasAsignadas }: EquipoLicenciasTabProps) {
    return (
-      <div className="mt-4">
-         <DataTable columns={columns} data={licenciasAsignadas} filterColumn="software" />
-      </div>
+      <DataTable
+         columns={columns}
+         data={licenciasAsignadas}
+         filterColumn="software"
+         className="mt-4"
+      />
    );
 }

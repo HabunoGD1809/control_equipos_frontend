@@ -50,7 +50,6 @@ export function ReservasClient({ initialEvents, equipos }: {
    const [events] = useState<ReservaEquipo[]>(initialEvents);
    const [selectedReserva, setSelectedReserva] = useState<ReservaEquipo | null>(null);
 
-   // Control de Modales
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [isCheckInOpen, setIsCheckInOpen] = useState(false);
    const [isCheckOutOpen, setIsCheckOutOpen] = useState(false);
@@ -110,8 +109,7 @@ export function ReservasClient({ initialEvents, equipos }: {
    };
 
    return (
-      <>
-         {/* Modales de Flujo */}
+      <div className="space-y-4 animate-in fade-in duration-300">
          <ValidarReservaModal
             isOpen={isValidarOpen}
             onClose={() => setIsValidarOpen(false)}
@@ -131,7 +129,6 @@ export function ReservasClient({ initialEvents, equipos }: {
             onSuccess={handleSuccess}
          />
 
-         {/* Modal Principal de Detalles */}
          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
             <DialogContent className="sm:max-w-2xl">
                <DialogHeader>
@@ -203,6 +200,6 @@ export function ReservasClient({ initialEvents, equipos }: {
                onSelectSlot={handleSelectSlot}
             />
          </div>
-      </>
+      </div>
    );
 }

@@ -18,7 +18,6 @@ import { AuditLog } from "@/types/api";
 import { auditFilterSchema } from "@/lib/zod";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 
-// Visor de diferencias (Sin cambios lógicos, solo estéticos)
 const DataDiffViewer = ({ oldData, newData }: { oldData: any; newData: any }) => {
   if (!oldData && !newData) return <span className="text-muted-foreground text-xs">-</span>;
 
@@ -126,9 +125,8 @@ export function AuditoriaClient({ initialData }: AuditoriaClientProps) {
   const searchParams = useSearchParams();
   const { setFilters } = useUrlFilters();
 
-  // Paginación Manual (Lo que faltaba)
   const currentPage = Number(searchParams.get("page")) || 1;
-  const limit = 20; // Asumiendo que tu endpoint devuelve 20 por defecto
+  const limit = 20;
   const hasNextPage = initialData.length === limit;
 
   const form = useForm<z.infer<typeof auditFilterSchema>>({
@@ -150,8 +148,8 @@ export function AuditoriaClient({ initialData }: AuditoriaClientProps) {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="p-4 rounded-md border bg-muted/20">
+    <div className="space-y-6 animate-in fade-in duration-300">
+      <div className="p-4 rounded-md border shadow-sm bg-muted/20">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
             <FormField control={form.control} name="table_name" render={({ field }) => (
@@ -184,8 +182,8 @@ export function AuditoriaClient({ initialData }: AuditoriaClientProps) {
             )} />
 
             <div className="flex gap-2">
-              <Button type="submit" className="h-9 flex-1">Filtrar</Button>
-              <Button type="button" variant="outline" onClick={handleReset} className="h-9 px-3 bg-background" aria-label="Limpiar filtros">
+              <Button type="submit" className="h-9 flex-1 shadow-sm">Filtrar</Button>
+              <Button type="button" variant="outline" onClick={handleReset} className="h-9 px-3 bg-background shadow-sm" aria-label="Limpiar filtros">
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -194,7 +192,14 @@ export function AuditoriaClient({ initialData }: AuditoriaClientProps) {
       </div>
 
       <div className="space-y-4">
-        <DataTable columns={columns} data={initialData} showPagination={false} showFilter={false} showColumnToggle={false} />
+        <DataTable
+          columns={columns}
+          data={initialData}
+          showPagination={false}
+          showFilter={false}
+          showColumnToggle={false}
+          tableContainerClassName="shadow-sm"
+        />
 
         <div className="flex items-center justify-between px-2 text-sm">
           <div className="text-muted-foreground">

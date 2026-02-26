@@ -1,23 +1,28 @@
 "use client"
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { MoreHorizontal, PlusCircle, Users, Pencil, Trash2 } from "lucide-react";
+
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/Dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/DropdownMenu";
-import { LicenciaSoftware, SoftwareCatalogo, Proveedor, EquipoSimple, UsuarioSimple, AsignacionLicencia } from "@/types/api";
+import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
+
 import { useHasPermission } from "@/hooks/useHasPermission";
+import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
+import { api } from "@/lib/http";
+import type { LicenciaSoftware, SoftwareCatalogo, Proveedor, EquipoSimple, UsuarioSimple, AsignacionLicencia } from "@/types/api";
+
 import { SoftwareCatalogoForm } from "@/components/features/licencias/SoftwareCatalogoForm";
 import { LicenciaSoftwareForm } from "@/components/features/licencias/LicenciaSoftwareForm";
 import { AsignarLicenciaForm } from "@/components/features/licencias/AsignarLicenciaForm";
-import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { AsignacionesClient } from "./AsignacionesClient";
-import { useRouter } from "next/navigation";
 
 interface LicenciasClientProps {
    initialLicencias: LicenciaSoftware[];
@@ -38,16 +43,25 @@ export function LicenciasClient({
    equipos,
    usuarios
 }: LicenciasClientProps) {
+   const router = useRouter();
    const [activeTab, setActiveTab] = useState("licencias");
    const [modal, setModal] = useState<{ type: ModalType; data?: LicenciaSoftware | SoftwareCatalogo }>({ type: null });
-   const router = useRouter();
 
    const canManageCatalogo = useHasPermission(['administrar_software_catalogo']);
    const canManageLicencias = useHasPermission(['administrar_licencias']);
    const canAssignLicencias = useHasPermission(['asignar_licencias']);
 
-   const { handleDelete: deleteLicencia } = useDeleteConfirmation("Licencia", () => router.refresh());
-   const { handleDelete: deleteCatalogo } = useDeleteConfirmation("Catálogo", () => router.refresh());
+   const licenciaDelete = useDeleteConfirmation({
+      onDelete: (id) => api.delete(`/licencias/${id}`),
+      onSuccess: () => router.refresh(),
+      successMessage: "Licencia eliminada correctamente."
+   });
+
+   const catalogoDelete = useDeleteConfirmation({
+      onDelete: (id) => api.delete(`/licencias/catalogo/${id}`),
+      onSuccess: () => router.refresh(),
+      successMessage: "Software eliminado del catálogo."
+   });
 
    const handleOpenModal = (type: ModalType, data: LicenciaSoftware | SoftwareCatalogo | null = null) => {
       setModal({ type, data: data || undefined });
@@ -67,7 +81,7 @@ export function LicenciasClient({
       {
          id: "disponibilidad",
          header: "Disponibles / Total",
-         cell: ({ row }) => `${row.original.cantidad_disponible} / ${row.original.cantidad_total}`
+         cell: ({ row }) => <span className="font-medium">{row.original.cantidad_disponible} / {row.original.cantidad_total}</span>
       },
       {
          accessorKey: "fecha_expiracion",
@@ -78,7 +92,9 @@ export function LicenciasClient({
          id: "actions",
          cell: ({ row }) => (
             <DropdownMenu>
-               <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+               <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
+               </DropdownMenuTrigger>
                <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                   {canAssignLicencias && row.original.cantidad_disponible > 0 && (
@@ -92,7 +108,7 @@ export function LicenciasClient({
                            <Pencil className="mr-2 h-4 w-4" />Editar Licencia
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteLicencia(`/licencias/${row.original.id}`)}>
+                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => licenciaDelete.openAlert(row.original.id)}>
                            <Trash2 className="mr-2 h-4 w-4" />Eliminar Licencia
                         </DropdownMenuItem>
                      </>
@@ -105,7 +121,7 @@ export function LicenciasClient({
 
    const catalogoColumns: ColumnDef<SoftwareCatalogo>[] = [
       { accessorKey: "nombre", header: "Nombre" },
-      { accessorKey: "version", header: "Versión" },
+      { accessorKey: "version", header: "Versión", cell: ({ row }) => row.original.version || "N/A" },
       { accessorKey: "fabricante", header: "Fabricante" },
       { accessorKey: "tipo_licencia", header: "Tipo" },
       { accessorKey: "metrica_licenciamiento", header: "Métrica" },
@@ -113,11 +129,21 @@ export function LicenciasClient({
          id: "actions",
          cell: ({ row }) => (
             <DropdownMenu>
-               <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+               <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
+               </DropdownMenuTrigger>
                <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                  {canManageCatalogo && <DropdownMenuItem onClick={() => handleOpenModal('catalogo', row.original)}>Editar</DropdownMenuItem>}
-                  {canManageCatalogo && <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteCatalogo(`/licencias/catalogo/${row.original.id}`)}>Eliminar</DropdownMenuItem>}
+                  {canManageCatalogo && (
+                     <>
+                        <DropdownMenuItem onClick={() => handleOpenModal('catalogo', row.original)}>
+                           <Pencil className="mr-2 h-4 w-4" /> Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => catalogoDelete.openAlert(row.original.id)}>
+                           <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                        </DropdownMenuItem>
+                     </>
+                  )}
                </DropdownMenuContent>
             </DropdownMenu>
          )
@@ -125,7 +151,7 @@ export function LicenciasClient({
    ];
 
    return (
-      <>
+      <div className="space-y-4 animate-in fade-in duration-300">
          <Dialog open={!!modal.type} onOpenChange={(isOpen) => !isOpen && handleCloseModal()}>
             <DialogContent className="sm:max-w-md">
                <DialogHeader>
@@ -146,39 +172,70 @@ export function LicenciasClient({
             </DialogContent>
          </Dialog>
 
+         <ConfirmDeleteDialog
+            isOpen={licenciaDelete.isAlertOpen}
+            isDeleting={licenciaDelete.isDeleting}
+            onClose={licenciaDelete.closeAlert}
+            onConfirm={licenciaDelete.confirmDelete}
+            title="¿Eliminar Licencia?"
+            description="Esta acción eliminará el registro de adquisición. Las asignaciones vinculadas deben ser liberadas previamente."
+         />
+
+         <ConfirmDeleteDialog
+            isOpen={catalogoDelete.isAlertOpen}
+            isDeleting={catalogoDelete.isDeleting}
+            onClose={catalogoDelete.closeAlert}
+            onConfirm={catalogoDelete.confirmDelete}
+            title="¿Eliminar del Catálogo?"
+            description="Esta acción removerá el software de las opciones disponibles. No se puede deshacer."
+         />
+
          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
                <TabsList>
                   <TabsTrigger value="licencias">Licencias Adquiridas</TabsTrigger>
-                  <TabsTrigger value="asignaciones">Asignaciones</TabsTrigger> {/* NUEVA PESTAÑA */}
+                  <TabsTrigger value="asignaciones">Asignaciones</TabsTrigger>
                   {canManageCatalogo && <TabsTrigger value="catalogo">Catálogo de Software</TabsTrigger>}
                </TabsList>
+
                <div className="flex gap-2">
                   {activeTab === 'licencias' && canManageLicencias && (
-                     <Button onClick={() => handleOpenModal('licencia')}>
+                     <Button onClick={() => handleOpenModal('licencia')} className="shadow-sm">
                         <PlusCircle className="mr-2 h-4 w-4" /> Registrar Licencia
                      </Button>
                   )}
                   {activeTab === 'catalogo' && canManageCatalogo && (
-                     <Button onClick={() => handleOpenModal('catalogo')}>
+                     <Button onClick={() => handleOpenModal('catalogo')} className="shadow-sm">
                         <PlusCircle className="mr-2 h-4 w-4" /> Añadir Software
                      </Button>
                   )}
                </div>
             </div>
 
-            <TabsContent value="licencias">
-               <DataTable columns={licenciasColumns} data={initialLicencias} filterColumn="software" />
+            <TabsContent value="licencias" className="mt-0 animate-in fade-in duration-300">
+               <DataTable
+                  columns={licenciasColumns}
+                  data={initialLicencias}
+                  filterColumn="software"
+                  tableContainerClassName="shadow-sm"
+               />
             </TabsContent>
-            <TabsContent value="asignaciones"> {/* NUEVO CONTENIDO DE PESTAÑA */}
+
+            <TabsContent value="asignaciones" className="mt-0 animate-in fade-in duration-300">
                <AsignacionesClient data={initialAsignaciones} />
             </TabsContent>
+
             {canManageCatalogo && (
-               <TabsContent value="catalogo">
-                  <DataTable columns={catalogoColumns} data={initialCatalogo} filterColumn="nombre" />
+               <TabsContent value="catalogo" className="mt-0 animate-in fade-in duration-300">
+                  <DataTable
+                     columns={catalogoColumns}
+                     data={initialCatalogo}
+                     filterColumn="nombre"
+                     tableContainerClassName="shadow-sm"
+                  />
                </TabsContent>
             )}
          </Tabs>
-      </>
+      </div>
    );
 }

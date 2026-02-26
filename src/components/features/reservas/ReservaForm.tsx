@@ -103,18 +103,18 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
          queryClient.invalidateQueries({ queryKey: ["reservas"] });
          onSuccess(data);
       },
-      onError: (err: unknown) => {
-         const e = err as Error & { status?: number, response?: unknown };
-         const responseStatus = (e.response as { status?: number })?.status;
+      onError: (err: any) => {
+         const status = err?.status || err?.response?.status;
+         const msg = err?.message?.toLowerCase() || "";
 
-         if (e.status === 409 || responseStatus === 409) {
+         if (status === 409 || msg.includes("overlap") || msg.includes("solapamiento") || msg.includes("excl")) {
             setAvailabilityError("El sistema ha detectado un conflicto de horario (El equipo fue reservado en este instante).");
             return;
          }
          toast({
             variant: "destructive",
             title: "Error",
-            description: e.message || "No se pudo procesar la solicitud."
+            description: err.message || "No se pudo procesar la solicitud."
          });
       },
    });
@@ -140,10 +140,13 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
          return;
       }
 
+      const isoStart = format(fecha_hora_inicio, "yyyy-MM-dd'T'HH:mm:ssXXX");
+      const isoEnd = format(fecha_hora_fin, "yyyy-MM-dd'T'HH:mm:ssXXX");
+
       if (initialData) {
          const updatePayload: ReservaEquipoUpdate = {
-            fecha_hora_inicio: fecha_hora_inicio.toISOString(),
-            fecha_hora_fin: fecha_hora_fin.toISOString(),
+            fecha_hora_inicio: isoStart,
+            fecha_hora_fin: isoEnd,
             proposito: data.proposito,
             notas: data.notas ? data.notas : null,
          };
@@ -153,8 +156,8 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
             equipo_id: data.equipo_id,
             proposito: data.proposito,
             notas: data.notas ? data.notas : null,
-            fecha_hora_inicio: fecha_hora_inicio.toISOString(),
-            fecha_hora_fin: fecha_hora_fin.toISOString(),
+            fecha_hora_inicio: isoStart,
+            fecha_hora_fin: isoEnd,
          };
          mutation.mutate(createPayload);
       }

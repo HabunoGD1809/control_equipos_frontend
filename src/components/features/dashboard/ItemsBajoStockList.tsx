@@ -1,46 +1,69 @@
-"use client"
+"use client";
 
-import { useRouter } from "next/navigation";
+import { PackageX, AlertTriangle, ArrowRight } from "lucide-react";
+import Link from "next/link";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
-import type { ItemBajoStock } from "@/app/services/inventarioService";
+
+// Usamos el adaptador que definiste en page.tsx
+interface TipoItemInventarioConStock {
+   id: string;
+   nombre: string;
+   categoria?: string;
+   unidad_medida?: string;
+   stock_minimo?: number;
+   stock_total_actual?: number;
+   cantidad_actual?: number;
+   tipo_item?: {
+      nombre: string;
+      unidad_medida: string;
+   };
+}
 
 interface ItemsBajoStockListProps {
-   items: ItemBajoStock[];
+   items: TipoItemInventarioConStock[];
 }
 
 export function ItemsBajoStockList({ items }: ItemsBajoStockListProps) {
-   const router = useRouter();
-
    if (!items || items.length === 0) {
-      return <p className="text-sm text-muted-foreground italic">No hay ítems con bajo stock actualmente.</p>;
+      return (
+         <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+            <PackageX className="h-10 w-10 mb-2 opacity-20" />
+            <p>El inventario está estable.</p>
+         </div>
+      );
    }
 
    return (
       <div className="space-y-4">
          {items.map((item) => (
-            <div key={item.id} className="flex items-center justify-between">
-               <div>
-                  <p className="text-sm font-medium leading-none truncate">
-                     {item.tipo_item.nombre}
-                  </p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                     Ubicación: {item.ubicacion}
-                  </p>
+            <div
+               key={item.id}
+               className="flex items-center justify-between p-3 rounded-md border border-red-500/20 bg-red-500/5 shadow-sm"
+            >
+               <div className="flex items-center gap-3">
+                  <div className="p-2 bg-red-500/10 rounded-full shrink-0">
+                     <AlertTriangle className="h-4 w-4 text-red-600" />
+                  </div>
+                  <div>
+                     <p className="font-medium text-sm">
+                        {item.tipo_item?.nombre || item.nombre}
+                     </p>
+                     <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        Stock actual:{" "}
+                        <span className="font-bold text-red-600">
+                           {item.cantidad_actual ?? item.stock_total_actual}
+                        </span>{" "}
+                        {item.tipo_item?.unidad_medida || item.unidad_medida || "unidades"}
+                     </p>
+                  </div>
                </div>
-               <div className="text-right flex flex-col items-end">
-                  <Badge variant="destructive" className="mb-1">
-                     {item.cantidad_actual} / {item.tipo_item.stock_minimo}
-                  </Badge>
-                  <Button
-                     variant="link"
-                     size="sm"
-                     className="h-auto p-0 text-xs"
-                     onClick={() => router.push(`/inventario`)}
-                  >
-                     Gestionar
-                  </Button>
-               </div>
+               <Button variant="ghost" size="icon" asChild className="shrink-0 text-red-600 hover:text-red-700 hover:bg-red-500/10">
+                  <Link href={`/inventario/nuevo?tipo_item_id=${item.id}`}>
+                     <ArrowRight className="h-4 w-4" />
+                  </Link>
+               </Button>
             </div>
          ))}
       </div>

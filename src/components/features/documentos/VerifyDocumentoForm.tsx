@@ -22,6 +22,8 @@ interface VerifyDocumentoFormProps {
 
 type FormValues = z.infer<typeof documentacionVerifySchema>;
 
+const cleanString = (str?: string | null) => (str && str.trim() !== "" ? str.trim() : null);
+
 export function VerifyDocumentoForm({ documento, onSuccess }: VerifyDocumentoFormProps) {
    const { toast } = useToast();
    const queryClient = useQueryClient();
@@ -41,7 +43,14 @@ export function VerifyDocumentoForm({ documento, onSuccess }: VerifyDocumentoFor
          documentosService.verificar(documento.id, payload),
       onSuccess: () => {
          toast({ title: "Éxito", description: "El estado del documento ha sido actualizado." });
+
+         // 🚀 CORRECCIÓN DE CACHÉ Y TYPESCRIPT: 
+         // Accedemos a los IDs a través de los objetos anidados generados por la API
          queryClient.invalidateQueries({ queryKey: ["documentos"] });
+         if (documento.equipo?.id) queryClient.invalidateQueries({ queryKey: ["equipo", documento.equipo.id] });
+         if (documento.mantenimiento?.id) queryClient.invalidateQueries({ queryKey: ["mantenimiento", documento.mantenimiento.id] });
+         if (documento.licencia?.id) queryClient.invalidateQueries({ queryKey: ["licencia", documento.licencia.id] });
+
          onSuccess();
       },
       onError: (err: unknown) => {
@@ -57,7 +66,7 @@ export function VerifyDocumentoForm({ documento, onSuccess }: VerifyDocumentoFor
    const onSubmit = (data: FormValues) => {
       mutation.mutate({
          estado: data.estado as typeof EstadoDocumentoEnum.Verificado | typeof EstadoDocumentoEnum.Rechazado,
-         notas_verificacion: data.notas_verificacion ?? null,
+         notas_verificacion: cleanString(data.notas_verificacion),
       });
    };
 
@@ -93,11 +102,16 @@ export function VerifyDocumentoForm({ documento, onSuccess }: VerifyDocumentoFor
                   <FormItem>
                      <FormLabel>
                         Notas de Verificación
-                        {estadoActual === EstadoDocumentoEnum.Rechazado && <span className="text-destructive ml-1">*</span>}
+                        {estadoActual === EstadoDocumentoEnum.Rechazado ? (
+                           <span className="text-destructive ml-1">*</span>
+                        ) : (
+                           <span className="text-muted-foreground font-normal text-xs ml-1">(Opcional)</span>
+                        )}
                      </FormLabel>
                      <FormControl>
                         <Textarea
                            placeholder={estadoActual === EstadoDocumentoEnum.Rechazado ? "Obligatorio: Indique por qué se rechaza el documento..." : "Ej: Documento validado y conforme."}
+                           className="resize-none"
                            {...field}
                            value={field.value ?? ""}
                         />
@@ -107,8 +121,8 @@ export function VerifyDocumentoForm({ documento, onSuccess }: VerifyDocumentoFor
                )}
             />
 
-            <div className="flex justify-end pt-4">
-               <Button type="submit" disabled={mutation.isPending}>
+            <div className="flex justify-end pt-4 border-t">
+               <Button type="submit" disabled={mutation.isPending} className="min-w-37.5">
                   {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Actualizar Estado
                </Button>

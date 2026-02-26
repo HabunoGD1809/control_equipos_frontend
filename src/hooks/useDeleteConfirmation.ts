@@ -50,11 +50,30 @@ export const useDeleteConfirmation = ({
          if (onSuccess) onSuccess();
       } catch (error) {
          const err = error as HttpError;
+
+         // --- CORRECCIÓN: Interceptor de errores de BD (ON DELETE RESTRICT) ---
+         let displayMessage = err.message || errorMessage;
+         const msgLower = displayMessage.toLowerCase();
+
+         const isConstraintError =
+            err.status === 409 ||
+            msgLower.includes("foreign key") ||
+            msgLower.includes("violates") ||
+            msgLower.includes("integrity");
+
+         if (isConstraintError) {
+            displayMessage = "No se puede eliminar este registro porque está actualmente en uso o tiene información vinculada en el sistema.";
+         }
+         // ---------------------------------------------------------------------
+
          toast({
             variant: "destructive",
-            title: "Error",
-            description: err.message || errorMessage,
+            title: isConstraintError ? "Acción Denegada" : "Error",
+            description: displayMessage,
          });
+
+         // Cerramos el modal de confirmación en caso de error restrictivo para no dejar la UI bloqueada
+         closeAlert();
       } finally {
          setIsDeleting(false);
       }

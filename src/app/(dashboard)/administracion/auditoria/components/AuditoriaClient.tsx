@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
-import { format } from "date-fns";
+import { format, subDays } from "date-fns";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
@@ -13,10 +13,17 @@ import { Button } from "@/components/ui/Button";
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/Form";
 import { Input } from "@/components/ui/Input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
+import { DatePickerField } from "@/components/ui/DatePickerField";
 
 import { AuditLog } from "@/types/api";
 import { auditFilterSchema } from "@/lib/zod";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
+
+// Mantenemos el Date object para el DatePickerField
+const extendedAuditSchema = auditFilterSchema.extend({
+  start_date: z.date().optional(),
+  end_date: z.date().optional(),
+});
 
 const DataDiffViewer = ({ oldData, newData }: { oldData: any; newData: any }) => {
   if (!oldData && !newData) return <span className="text-muted-foreground text-xs">-</span>;
@@ -117,33 +124,67 @@ const columns: ColumnDef<AuditLog>[] = [
 
 interface AuditoriaClientProps {
   initialData: AuditLog[];
+  pageSize?: number;
 }
 
-export function AuditoriaClient({ initialData }: AuditoriaClientProps) {
+const parseLocalSafeDate = (dateStr: string | null, fallback: Date) => {
+  if (!dateStr) return fallback;
+  const [y, m, d] = dateStr.split('-');
+  if (y && m && d) return new Date(Number(y), Number(m) - 1, Number(d));
+  return fallback;
+};
+
+export function AuditoriaClient({ initialData, pageSize = 100 }: AuditoriaClientProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { setFilters } = useUrlFilters();
 
   const currentPage = Number(searchParams.get("page")) || 1;
-  const limit = 20;
-  const hasNextPage = initialData.length === limit;
+  const hasNextPage = initialData.length === pageSize;
 
-  const form = useForm<z.infer<typeof auditFilterSchema>>({
-    resolver: standardSchemaResolver(auditFilterSchema),
+  const defaultStartDate = subDays(new Date(), 30);
+  const defaultEndDate = new Date();
+
+  const form = useForm<z.infer<typeof extendedAuditSchema>>({
+    resolver: standardSchemaResolver(extendedAuditSchema),
     defaultValues: {
       table_name: searchParams.get("table_name") || "",
       operation: searchParams.get("operation") || "",
       username: searchParams.get("username") || "",
+      start_date: parseLocalSafeDate(searchParams.get("start_date"), defaultStartDate),
+      end_date: parseLocalSafeDate(searchParams.get("end_date"), defaultEndDate),
     },
   });
 
-  function onSubmit(values: z.infer<typeof auditFilterSchema>) {
-    setFilters({ ...values, page: 1 });
+  function onSubmit(values: z.infer<typeof extendedAuditSchema>) {
+    // Formateamos las fechas de Date -> String para enviarlas limpias por la URL
+    const formattedFilters: Record<string, string | undefined> = {
+      table_name: values.table_name,
+      operation: values.operation,
+      username: values.username,
+      start_date: values.start_date ? format(values.start_date, "yyyy-MM-dd") : undefined,
+      end_date: values.end_date ? format(values.end_date, "yyyy-MM-dd") : undefined,
+      page: "1",
+    };
+
+    // Limpiamos los undefined antes de mandarlo a la URL
+    const cleanFilters = Object.fromEntries(
+      Object.entries(formattedFilters).filter(([_, v]) => v != null && v !== "")
+    );
+
+    setFilters(cleanFilters);
   }
 
   const handleReset = () => {
-    form.reset({ table_name: "", operation: "", username: "" });
+    form.reset({
+      table_name: "",
+      operation: "",
+      username: "",
+      start_date: defaultStartDate,
+      end_date: defaultEndDate,
+    });
+    // Navegamos a la ruta limpia, lo que forzará a `page.tsx` a usar los valores por defecto
     router.push(pathname);
   };
 
@@ -151,7 +192,16 @@ export function AuditoriaClient({ initialData }: AuditoriaClientProps) {
     <div className="space-y-6 animate-in fade-in duration-300">
       <div className="p-4 rounded-md border shadow-sm bg-muted/20">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
+
+            <FormField control={form.control} name="start_date" render={({ field }) => (
+              <DatePickerField label="Desde" value={field.value} onChange={field.onChange} />
+            )} />
+
+            <FormField control={form.control} name="end_date" render={({ field }) => (
+              <DatePickerField label="Hasta" value={field.value} onChange={field.onChange} />
+            )} />
+
             <FormField control={form.control} name="table_name" render={({ field }) => (
               <FormItem>
                 <FormLabel className="text-xs">Entidad / Tabla</FormLabel>
@@ -198,12 +248,13 @@ export function AuditoriaClient({ initialData }: AuditoriaClientProps) {
           showPagination={false}
           showFilter={false}
           showColumnToggle={false}
-          tableContainerClassName="shadow-sm"
+          tableContainerClassName="shadow-sm max-h-[600px] overflow-auto"
         />
 
         <div className="flex items-center justify-between px-2 text-sm">
           <div className="text-muted-foreground">
             Página <span className="font-medium text-foreground">{currentPage}</span>
+            <span className="ml-2 text-xs">(Mostrando {initialData.length} registros en esta página)</span>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => setFilters({ page: currentPage - 1 })} disabled={currentPage <= 1}>

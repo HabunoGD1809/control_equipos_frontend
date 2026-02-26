@@ -1,14 +1,15 @@
 import { cookies } from 'next/headers';
-import { UserCircle, Shield, Mail, Calendar } from 'lucide-react';
+import { Mail, Calendar, ShieldCheck, Activity } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/Avatar';
 import { Separator } from '@/components/ui/Separator';
+import { Badge } from '@/components/ui/Badge';
 import { ChangePasswordForm } from '@/components/features/usuarios/ChangePasswordForm';
-import { Usuario } from '@/types/api';
 import { UpdateProfileForm } from '@/components/features/usuarios/UpdateProfileForm';
+import { Usuario } from '@/types/api';
 
 async function getCurrentUser(): Promise<Usuario | null> {
    const accessToken = (await cookies()).get('access_token')?.value;
@@ -30,10 +31,12 @@ async function getCurrentUser(): Promise<Usuario | null> {
 function ProfileInfo({ icon: Icon, label, value }: { icon: React.ElementType, label: string, value?: string | null }) {
    if (!value) return null;
    return (
-      <div className="flex items-center text-sm">
-         <Icon className="h-4 w-4 mr-3 text-muted-foreground" />
-         <span className="font-semibold mr-2">{label}:</span>
-         <span className="text-muted-foreground">{value}</span>
+      <div className="flex items-center justify-between p-3 rounded-md bg-muted/30 border border-border/50 text-sm">
+         <div className="flex items-center text-muted-foreground">
+            <Icon className="h-4 w-4 mr-2" />
+            <span>{label}</span>
+         </div>
+         <span className="font-medium text-foreground">{value}</span>
       </div>
    );
 }
@@ -42,61 +45,88 @@ export default async function PerfilPage() {
    const user = await getCurrentUser();
 
    if (!user) {
-      return <div>No se pudo cargar la información del perfil.</div>;
+      return (
+         <div className="flex flex-col items-center justify-center h-[50vh] space-y-4">
+            <ShieldCheck className="h-12 w-12 text-muted-foreground opacity-50" />
+            <h2 className="text-xl font-semibold">Sesión no encontrada</h2>
+            <p className="text-muted-foreground">No se pudo cargar la información de tu perfil.</p>
+         </div>
+      );
    }
 
    return (
-      <div className="space-y-8 max-w-4xl mx-auto">
+      <div className="space-y-8 max-w-5xl mx-auto animate-in fade-in duration-500">
+
+         {/* Encabezado del Dashboard */}
          <div>
-            <h1 className="text-3xl font-bold">Mi Perfil</h1>
-            <p className="text-muted-foreground">
-               Gestiona tu información personal y la seguridad de tu cuenta.
+            <h1 className="text-3xl font-bold tracking-tight">Configuración de Perfil</h1>
+            <p className="text-muted-foreground mt-1">
+               Administra tus datos personales y las preferencias de seguridad de tu cuenta.
             </p>
          </div>
 
-         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-1 space-y-8">
-               <Card>
-                  <CardHeader>
-                     <div className="flex flex-col items-center space-y-4">
-                        <Avatar className="h-24 w-24">
-                           <AvatarImage src={`https://api.dicebear.com/8.x/initials/svg?seed=${user.nombre_usuario}`} />
-                           <AvatarFallback>{user.nombre_usuario.substring(0, 2).toUpperCase()}</AvatarFallback>
+         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+            {/* Columna Izquierda: Tarjeta de Identidad */}
+            <div className="lg:col-span-4 space-y-6">
+               <Card className="overflow-hidden border-border/60 shadow-sm">
+                  {/* Banner decorativo superior */}
+                  <div className="h-24 bg-linear-to-r from-primary/10 via-primary/5 text-transparent to-transparent w-full"></div>
+
+                  <CardContent className="px-6 pb-6 pt-0 relative">
+                     <div className="flex flex-col items-center">
+                        <Avatar className="h-24 w-24 border-4 border-background shadow-md -mt-12 mb-4 bg-muted">
+                           <AvatarImage src={`https://api.dicebear.com/8.x/initials/svg?seed=${user.nombre_usuario}&backgroundColor=1e293b,2563eb`} />
+                           <AvatarFallback className="text-xl font-bold">{user.nombre_usuario.substring(0, 2).toUpperCase()}</AvatarFallback>
                         </Avatar>
-                        <div>
-                           <CardTitle className="text-2xl text-center">{user.nombre_usuario}</CardTitle>
-                           <p className="text-muted-foreground text-center">{user.rol.nombre}</p>
+
+                        <div className="text-center space-y-1 mb-6">
+                           <h2 className="text-2xl font-bold tracking-tight">{user.nombre_usuario}</h2>
+                           <Badge variant="secondary" className="font-normal px-3 py-0.5 capitalize">
+                              {user.rol?.nombre || 'Usuario'}
+                           </Badge>
+                        </div>
+
+                        <Separator className="w-full mb-6 opacity-70" />
+
+                        <div className="w-full space-y-3">
+                           <ProfileInfo icon={Mail} label="Email" value={user.email || 'No registrado'} />
+                           <ProfileInfo icon={Calendar} label="Miembro desde" value={format(new Date(user.created_at), "dd MMM yyyy", { locale: es })} />
+                           <ProfileInfo icon={Activity} label="Último acceso" value={user.ultimo_login ? format(new Date(user.ultimo_login), "dd/MM/yy HH:mm", { locale: es }) : 'Primera sesión'} />
                         </div>
                      </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4 pt-4">
-                     <Separator />
-                     <ProfileInfo icon={Mail} label="Email" value={user.email} />
-                     <ProfileInfo icon={Calendar} label="Miembro desde" value={format(new Date(user.created_at), "PPP", { locale: es })} />
-                     <ProfileInfo icon={Calendar} label="Último acceso" value={user.ultimo_login ? format(new Date(user.ultimo_login), "Pp", { locale: es }) : 'N/A'} />
                   </CardContent>
                </Card>
             </div>
-            <div className="lg:col-span-2 space-y-8">
-               {/* NUEVO: Tarjeta para actualizar perfil */}
-               <Card>
-                  <CardHeader>
-                     <CardTitle>Información de la Cuenta</CardTitle>
-                     <CardDescription>Actualiza tu nombre de usuario y correo electrónico.</CardDescription>
+
+            {/* Columna Derecha: Formularios de Edición */}
+            <div className="lg:col-span-8 space-y-6">
+
+               {/* Tarjeta de Información General */}
+               <Card className="border-border/60 shadow-sm">
+                  <CardHeader className="bg-muted/10 border-b border-border/40 pb-4">
+                     <CardTitle className="text-lg">Información Pública</CardTitle>
+                     <CardDescription>Actualiza tu nombre de usuario y correo de contacto.</CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="pt-6">
                      <UpdateProfileForm currentUser={user} />
                   </CardContent>
                </Card>
-               <Card>
-                  <CardHeader>
-                     <CardTitle>Seguridad</CardTitle>
-                     <CardDescription>Cambia tu contraseña.</CardDescription>
+
+               {/* Tarjeta de Seguridad (Zona Sensible) */}
+               <Card className="border-border/60 shadow-sm">
+                  <CardHeader className="bg-muted/10 border-b border-border/40 pb-4">
+                     <div className="flex items-center gap-2">
+                        <ShieldCheck className="h-5 w-5 text-primary" />
+                        <CardTitle className="text-lg">Seguridad de la Cuenta</CardTitle>
+                     </div>
+                     <CardDescription>Asegúrate de usar una contraseña larga y combinada.</CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="pt-6">
                      <ChangePasswordForm />
                   </CardContent>
                </Card>
+
             </div>
          </div>
       </div>

@@ -75,9 +75,9 @@ export function EditarMantenimientoForm({
             proveedor_servicio_id: data.proveedor_servicio_id || null,
             costo_estimado: data.costo_estimado ?? null,
             costo_real: data.costo_real ?? null,
-            fecha_programada: data.fecha_programada ? data.fecha_programada.toISOString() : undefined,
-            fecha_inicio: data.fecha_inicio ? data.fecha_inicio.toISOString() : null,
-            fecha_finalizacion: data.fecha_finalizacion ? data.fecha_finalizacion.toISOString() : null,
+            fecha_programada: data.fecha_programada ? format(data.fecha_programada, "yyyy-MM-dd'T'HH:mm:ssXXX") : undefined,
+            fecha_inicio: data.fecha_inicio ? format(data.fecha_inicio, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
+            fecha_finalizacion: data.fecha_finalizacion ? format(data.fecha_finalizacion, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
             observaciones: data.observaciones || null,
             prioridad: data.prioridad,
          };
@@ -181,7 +181,16 @@ export function EditarMantenimientoForm({
                         <FormControl>
                            <div className="relative">
                               <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
-                              <Input type="number" step="0.01" className="pl-7" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? undefined : e.target.valueAsNumber)} />
+                              <Input
+                                 type="number"
+                                 step="0.01"
+                                 className="pl-7"
+                                 value={field.value ?? ""}
+                                 onChange={(e) => {
+                                    const val = e.target.value;
+                                    field.onChange(val === "" ? null : Number(val));
+                                 }}
+                              />
                            </div>
                         </FormControl>
                         <FormMessage />
@@ -200,7 +209,16 @@ export function EditarMantenimientoForm({
                         <FormControl>
                            <div className="relative">
                               <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
-                              <Input type="number" step="0.01" className="pl-7" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? undefined : e.target.valueAsNumber)} />
+                              <Input
+                                 type="number"
+                                 step="0.01"
+                                 className="pl-7"
+                                 value={field.value ?? ""}
+                                 onChange={(e) => {
+                                    const val = e.target.value;
+                                    field.onChange(val === "" ? null : Number(val));
+                                 }}
+                              />
                            </div>
                         </FormControl>
                         <FormDescription>Requerido para completar.</FormDescription>

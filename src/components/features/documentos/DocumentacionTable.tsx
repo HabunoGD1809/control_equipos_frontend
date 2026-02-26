@@ -1,4 +1,3 @@
-// [Mismos imports y variables iniciales]
 "use client";
 
 import { useState } from "react";
@@ -8,6 +7,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { PlusCircle, Download, Trash2, CheckCircle, XCircle, Clock, ShieldCheck } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
@@ -22,7 +22,6 @@ import { api } from "@/lib/http";
 import { VerifyDocumentoForm } from "./VerifyDocumentoForm";
 import { UploadDocumentoForm } from "./UploadDocumentoForm";
 
-// ... [Mismas props e interfaces] ...
 interface DocumentacionTableProps {
    documentos: Documentacion[];
    tiposDocumento: TipoDocumento[];
@@ -32,10 +31,17 @@ interface DocumentacionTableProps {
 
 const EstadoIcon = ({ estado }: { estado: string }) => {
    switch (estado) {
-      case EstadoDocumentoEnum.Verificado: return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case EstadoDocumentoEnum.Verificado: return <CheckCircle className="h-4 w-4 text-emerald-500" />;
       case EstadoDocumentoEnum.Rechazado: return <XCircle className="h-4 w-4 text-red-500" />;
       default: return <Clock className="h-4 w-4 text-yellow-500" />;
    }
+};
+
+const formatFileUrl = (enlace?: string | null) => {
+   if (!enlace) return "#";
+   if (enlace.startsWith("http")) return enlace;
+   const cleanPath = enlace.startsWith("/") ? enlace : `/${enlace}`;
+   return `/api/proxy${cleanPath}`;
 };
 
 export function DocumentacionTable({
@@ -44,18 +50,23 @@ export function DocumentacionTable({
    equipoId,
    showEquipoColumn = false,
 }: DocumentacionTableProps) {
-   // ... [Mismos Hooks y Columnas, los he conservado intactos en tu código original, omitiendo repetición aquí por brevedad, asumiendo que insertas el código anterior de React y `columns` aquí] ...
    const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
    const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
    const [selectedDocumento, setSelectedDocumento] = useState<Documentacion | null>(null);
 
    const router = useRouter();
+   const queryClient = useQueryClient(); // Cliente de caché añadido
    const canVerify = useHasPermission(["verificar_documentacion"]);
    const canUpload = useHasPermission(["gestionar_documentacion"]);
 
    const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } = useDeleteConfirmation({
       onDelete: (id) => api.delete(`/documentacion/${id}`),
-      onSuccess: () => router.refresh(),
+      onSuccess: () => {
+         // 🚀 CORRECCIÓN DE CACHÉ:
+         queryClient.invalidateQueries({ queryKey: ["documentos"] });
+         if (equipoId) queryClient.invalidateQueries({ queryKey: ["equipo", equipoId] });
+         router.refresh();
+      },
       successMessage: "Documento eliminado permanentemente.",
    });
 
@@ -97,7 +108,7 @@ export function DocumentacionTable({
          cell: ({ row }) => (
             <div className="flex gap-2 justify-end">
                <Button variant="outline" size="icon" title="Descargar / Ver" asChild>
-                  <a href={row.original.enlace} target="_blank" rel="noopener noreferrer">
+                  <a href={formatFileUrl(row.original.enlace)} target="_blank" rel="noopener noreferrer">
                      <Download className="h-4 w-4 text-blue-600" />
                   </a>
                </Button>
@@ -126,7 +137,6 @@ export function DocumentacionTable({
          />
 
          <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
-            {/* Modal content intacto */}
             <DialogContent>
                <DialogHeader>
                   <DialogTitle>Subir Nuevo Documento</DialogTitle>
@@ -142,7 +152,6 @@ export function DocumentacionTable({
 
          {selectedDocumento && (
             <Dialog open={isVerifyModalOpen} onOpenChange={setIsVerifyModalOpen}>
-               {/* Modal content intacto */}
                <DialogContent>
                   <DialogHeader>
                      <DialogTitle>Verificar Documento</DialogTitle>
@@ -164,7 +173,6 @@ export function DocumentacionTable({
             </div>
          )}
 
-         {/* Refactorizado */}
          <DataTable
             columns={columns}
             data={documentos}

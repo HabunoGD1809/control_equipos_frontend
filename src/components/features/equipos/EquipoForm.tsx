@@ -103,6 +103,7 @@ export function EquipoForm({
    const onSubmit: SubmitHandler<EquipoFormValues> = async (data) => {
       setIsLoading(true);
       try {
+         // FASE UX: Aseguramos que todo string opcional vacío viaje como null al backend
          const payload: EquipoCreate = {
             ...data,
             codigo_interno: cleanString(data.codigo_interno),
@@ -208,7 +209,7 @@ export function EquipoForm({
                      name="codigo_interno"
                      render={({ field }) => (
                         <FormItem>
-                           <FormLabel>Código Interno</FormLabel>
+                           <FormLabel>Código Interno <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                            <FormControl>
                               <Input placeholder="Ej: AF-2024-001" {...field} value={field.value ?? ""} />
                            </FormControl>
@@ -245,7 +246,7 @@ export function EquipoForm({
                      name="marca"
                      render={({ field }) => (
                         <FormItem>
-                           <FormLabel>Marca</FormLabel>
+                           <FormLabel>Marca <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                            <FormControl>
                               <Input placeholder="Ej: Dell" {...field} value={field.value ?? ""} />
                            </FormControl>
@@ -259,7 +260,7 @@ export function EquipoForm({
                      name="modelo"
                      render={({ field }) => (
                         <FormItem>
-                           <FormLabel>Modelo</FormLabel>
+                           <FormLabel>Modelo <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                            <FormControl>
                               <Input placeholder="Ej: XPS 15" {...field} value={field.value ?? ""} />
                            </FormControl>
@@ -273,7 +274,7 @@ export function EquipoForm({
                      name="ubicacion_actual"
                      render={({ field }) => (
                         <FormItem className="md:col-span-2 lg:col-span-3">
-                           <FormLabel>Ubicación Actual</FormLabel>
+                           <FormLabel>Ubicación Actual <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                            <FormControl>
                               <Input placeholder="Ej: Almacén Principal, Oficina 102..." {...field} value={field.value ?? ""} />
                            </FormControl>
@@ -294,7 +295,7 @@ export function EquipoForm({
                      name="fecha_adquisicion"
                      render={({ field }) => (
                         <DatePickerField
-                           label="Fecha Adquisición"
+                           label="Fecha Adquisición (Opcional)"
                            value={field.value}
                            onChange={field.onChange}
                            disabled={(date) =>
@@ -309,7 +310,7 @@ export function EquipoForm({
                      name="fecha_puesta_marcha"
                      render={({ field }) => (
                         <DatePickerField
-                           label="Puesta en Marcha"
+                           label="Puesta en Marcha (Opcional)"
                            value={field.value}
                            onChange={field.onChange}
                            description="Debe ser posterior a la adquisición."
@@ -327,7 +328,7 @@ export function EquipoForm({
                      name="fecha_garantia_expiracion"
                      render={({ field }) => (
                         <DatePickerField
-                           label="Expira Garantía"
+                           label="Expira Garantía (Opcional)"
                            value={field.value}
                            onChange={field.onChange}
                            disabled={(date) => {
@@ -344,7 +345,7 @@ export function EquipoForm({
                      name="proveedor_id"
                      render={({ field }) => (
                         <FormItem>
-                           <FormLabel>Proveedor</FormLabel>
+                           <FormLabel>Proveedor <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                            <Select
                               value={field.value ?? "none"}
                               onValueChange={(v) => field.onChange(v === "none" ? null : v)}
@@ -371,7 +372,7 @@ export function EquipoForm({
                      name="valor_adquisicion"
                      render={({ field }) => (
                         <FormItem>
-                           <FormLabel>Valor Adquisición</FormLabel>
+                           <FormLabel>Valor Adquisición <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                            <FormControl>
                               <div className="relative">
                                  <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
@@ -397,7 +398,7 @@ export function EquipoForm({
                      name="centro_costo"
                      render={({ field }) => (
                         <FormItem>
-                           <FormLabel>Centro de Costo</FormLabel>
+                           <FormLabel>Centro de Costo <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                            <FormControl>
                               <Input placeholder="Ej: IT-001" {...field} value={field.value ?? ""} />
                            </FormControl>
@@ -411,7 +412,7 @@ export function EquipoForm({
                      name="notas"
                      render={({ field }) => (
                         <FormItem className="md:col-span-2 lg:col-span-3">
-                           <FormLabel>Notas / Observaciones</FormLabel>
+                           <FormLabel>Notas / Observaciones <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                            <FormControl>
                               <Textarea
                                  placeholder="Detalles adicionales sobre el equipo..."

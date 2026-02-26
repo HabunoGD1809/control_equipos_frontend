@@ -41,6 +41,8 @@ interface UsuarioFormProps {
    onCancel: () => void;
 }
 
+const cleanString = (str?: string | null) => (str && str.trim() !== "" ? str.trim() : null);
+
 export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormProps) {
    const { toast } = useToast();
    const isEditing = !!initialData;
@@ -111,9 +113,8 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
       setIsSubmitting(true);
       try {
          await usuariosService.create({
-            nombre_usuario: data.nombre_usuario,
-            // Aseguramos null estricto si está vacío para pasar la Regex constraint
-            email: data.email?.trim() ? data.email : null,
+            nombre_usuario: data.nombre_usuario.trim(),
+            email: cleanString(data.email),
             password: data.password,
             rol_id: data.rol_id,
          });
@@ -131,15 +132,14 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
       setIsSubmitting(true);
       try {
          const payload: any = {
-            nombre_usuario: data.nombre_usuario ?? undefined,
-            email: data.email?.trim() ? data.email : null,
+            nombre_usuario: data.nombre_usuario?.trim() || undefined,
+            email: cleanString(data.email),
             rol_id: data.rol_id ?? undefined,
             bloqueado: data.bloqueado,
             requiere_cambio_contrasena: data.requiere_cambio_contrasena,
          };
 
-         // 🚨 CRÍTICO: Si no escriben contraseña, omitimos la propiedad. NO enviamos null.
-         if (data.password && data.password.trim() !== "") {
+         if (data.password && data.password !== "") {
             payload.password = data.password;
          }
 
@@ -185,7 +185,7 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
                name="email"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Email <span className="text-muted-foreground text-xs">(opcional)</span></FormLabel>
+                     <FormLabel>Email <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                      <FormControl>
                         <Input type="email" placeholder="ej. jperez@empresa.com" {...field} value={field.value ?? ""} />
                      </FormControl>
@@ -200,7 +200,7 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
                   <FormItem>
                      <FormLabel>
                         {isEditing ? "Nueva Contraseña" : "Contraseña"} <span className="text-destructive">{!isEditing && "*"}</span>
-                        {isEditing && <span className="text-muted-foreground text-xs ml-1">(dejar vacío para no cambiar)</span>}
+                        {isEditing && <span className="text-muted-foreground font-normal text-xs ml-1">(dejar vacío para no cambiar)</span>}
                      </FormLabel>
                      <FormControl>
                         <Input type="password" placeholder="Mínimo 8 caracteres" {...field} value={field.value ?? ""} />
@@ -267,11 +267,11 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
                </>
             )}
 
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex justify-end gap-2 pt-2 border-t mt-4">
                <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
                   Cancelar
                </Button>
-               <Button type="submit" disabled={isSubmitting || loadingRoles}>
+               <Button type="submit" disabled={isSubmitting || loadingRoles} className="min-w-37.5">
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {isEditing ? "Guardar Cambios" : "Crear Usuario"}
                </Button>

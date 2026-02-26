@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
-import { Loader2, KeyRound } from "lucide-react";
+import { Loader2, Save } from "lucide-react";
 import type { z } from "zod";
 
 import { Button } from "@/components/ui/Button";
@@ -48,7 +48,6 @@ export function ChangePasswordForm() {
 
          form.reset();
       } catch (error) {
-         // ✅ Tipado genérico — sin dependencia directa de axios en el componente
          const detail =
             (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
             (error instanceof Error ? error.message : null) ||
@@ -68,7 +67,7 @@ export function ChangePasswordForm() {
       <Form {...form}>
          <form
             onSubmit={form.handleSubmit(onSubmit)}
-            className="space-y-4 max-w-md"
+            className="space-y-5"
          >
             <FormField
                control={form.control}
@@ -77,49 +76,53 @@ export function ChangePasswordForm() {
                   <FormItem>
                      <FormLabel>Contraseña Actual</FormLabel>
                      <FormControl>
-                        <Input type="password" {...field} value={field.value ?? ""} />
+                        <Input type="password" {...field} value={field.value ?? ""} className="bg-background max-w-md" />
                      </FormControl>
                      <FormMessage />
                   </FormItem>
                )}
             />
 
-            <FormField
-               control={form.control}
-               name="new_password"
-               render={({ field }) => (
-                  <FormItem>
-                     <FormLabel>Nueva Contraseña</FormLabel>
-                     <FormControl>
-                        <Input type="password" {...field} value={field.value ?? ""} />
-                     </FormControl>
-                     <FormMessage />
-                  </FormItem>
-               )}
-            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
+               <FormField
+                  control={form.control}
+                  name="new_password"
+                  render={({ field }) => (
+                     <FormItem>
+                        <FormLabel>Nueva Contraseña</FormLabel>
+                        <FormControl>
+                           <Input type="password" {...field} value={field.value ?? ""} className="bg-background" />
+                        </FormControl>
+                        <FormMessage />
+                     </FormItem>
+                  )}
+               />
 
-            <FormField
-               control={form.control}
-               name="confirm_password"
-               render={({ field }) => (
-                  <FormItem>
-                     <FormLabel>Confirmar Nueva Contraseña</FormLabel>
-                     <FormControl>
-                        <Input type="password" {...field} value={field.value ?? ""} />
-                     </FormControl>
-                     <FormMessage />
-                  </FormItem>
-               )}
-            />
+               <FormField
+                  control={form.control}
+                  name="confirm_password"
+                  render={({ field }) => (
+                     <FormItem>
+                        <FormLabel>Confirmar Nueva Contraseña</FormLabel>
+                        <FormControl>
+                           <Input type="password" {...field} value={field.value ?? ""} className="bg-background" />
+                        </FormControl>
+                        <FormMessage />
+                     </FormItem>
+                  )}
+               />
+            </div>
 
-            <Button type="submit" disabled={isLoading} className="w-full">
-               {isLoading ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-               ) : (
-                  <KeyRound className="mr-2 h-4 w-4" />
-               )}
-               Actualizar Contraseña
-            </Button>
+            <div className="flex justify-end pt-4">
+               <Button type="submit" disabled={isLoading} className="min-w-32 shadow-sm">
+                  {isLoading ? (
+                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                     <Save className="mr-2 h-4 w-4" />
+                  )}
+                  Actualizar Contraseña
+               </Button>
+            </div>
          </form>
       </Form>
    );

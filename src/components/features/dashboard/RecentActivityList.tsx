@@ -21,7 +21,7 @@ interface RecentActivityListProps {
 export function RecentActivityList({ logs }: RecentActivityListProps) {
    if (!logs || logs.length === 0) {
       return (
-         <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+         <div className="flex flex-col items-center justify-center h-75 text-muted-foreground">
             <History className="h-10 w-10 mb-2 opacity-20" />
             <p>No hay actividad reciente registrada.</p>
          </div>

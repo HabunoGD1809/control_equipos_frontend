@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-import { Loader2 } from "lucide-react";
+import { Loader2, Save } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
@@ -20,6 +20,8 @@ interface UpdateProfileFormProps {
    currentUser: Usuario;
 }
 
+const cleanString = (str?: string | null) => (str && str.trim() !== "" ? str.trim() : null);
+
 export function UpdateProfileForm({ currentUser }: UpdateProfileFormProps) {
    const { toast } = useToast();
    const [isPending, startTransition] = useTransition();
@@ -28,13 +30,20 @@ export function UpdateProfileForm({ currentUser }: UpdateProfileFormProps) {
       resolver: standardSchemaResolver(updateProfileSchema),
       defaultValues: {
          nombre_usuario: currentUser.nombre_usuario,
-         email: currentUser.email,
+         email: currentUser.email || "",
       },
    });
 
    const onSubmit = (data: FormValues) => {
       startTransition(async () => {
-         const result = await updateProfileAction(data);
+         // Sanitizamos el payload antes de enviarlo al Server Action
+         // TypeScript Fix: Asegurarse de que data.nombre_usuario exista antes de hacer trim()
+         const cleanPayload = {
+            nombre_usuario: data.nombre_usuario ? data.nombre_usuario.trim() : "",
+            email: cleanString(data.email),
+         };
+
+         const result = await updateProfileAction(cleanPayload as any);
 
          if (result.error) {
             toast({
@@ -44,8 +53,8 @@ export function UpdateProfileForm({ currentUser }: UpdateProfileFormProps) {
             });
          } else {
             toast({
-               title: "Éxito",
-               description: "Perfil actualizado correctamente.",
+               title: "Perfil actualizado",
+               description: "Tus datos han sido guardados correctamente.",
             });
          }
       });
@@ -53,36 +62,55 @@ export function UpdateProfileForm({ currentUser }: UpdateProfileFormProps) {
 
    return (
       <Form {...form}>
-         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-               control={form.control}
-               name="nombre_usuario"
-               render={({ field }) => (
-                  <FormItem>
-                     <FormLabel>Nombre de Usuario</FormLabel>
-                     <FormControl>
-                        <Input {...field} disabled={isPending} value={field.value ?? ""} />
-                     </FormControl>
-                     <FormMessage />
-                  </FormItem>
-               )}
-            />
-            <FormField
-               control={form.control}
-               name="email"
-               render={({ field }) => (
-                  <FormItem>
-                     <FormLabel>Email</FormLabel>
-                     <FormControl>
-                        <Input type="email" {...field} value={field.value ?? ""} disabled={isPending} />
-                     </FormControl>
-                     <FormMessage />
-                  </FormItem>
-               )}
-            />
-            <div className="flex justify-end pt-2">
-               <Button type="submit" disabled={isPending}>
-                  {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+               <FormField
+                  control={form.control}
+                  name="nombre_usuario"
+                  render={({ field }) => (
+                     <FormItem>
+                        <FormLabel>Nombre de Usuario</FormLabel>
+                        <FormControl>
+                           <Input
+                              {...field}
+                              disabled={isPending}
+                              value={field.value ?? ""}
+                              className="bg-background"
+                           />
+                        </FormControl>
+                        <FormMessage />
+                     </FormItem>
+                  )}
+               />
+               <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                     <FormItem>
+                        <FormLabel>Correo Electrónico <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
+                        <FormControl>
+                           <Input
+                              type="email"
+                              {...field}
+                              value={field.value ?? ""}
+                              disabled={isPending}
+                              placeholder="tucorreo@empresa.com"
+                              className="bg-background"
+                           />
+                        </FormControl>
+                        <FormMessage />
+                     </FormItem>
+                  )}
+               />
+            </div>
+
+            <div className="flex justify-end pt-4">
+               <Button type="submit" disabled={isPending} className="min-w-32 shadow-sm">
+                  {isPending ? (
+                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                     <Save className="mr-2 h-4 w-4" />
+                  )}
                   Guardar Cambios
                </Button>
             </div>

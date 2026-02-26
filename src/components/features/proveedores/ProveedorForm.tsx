@@ -41,11 +41,20 @@ export function ProveedorForm({ initialData, onSuccess }: ProveedorFormProps) {
    const onSubmit = async (data: FormValues) => {
       setIsLoading(true);
       try {
+         const cleanPayload = {
+            nombre: data.nombre,
+            descripcion: data.descripcion?.trim() || null,
+            rnc: data.rnc?.trim() || null,
+            contacto: data.contacto?.trim() || null,
+            direccion: data.direccion?.trim() || null,
+            sitio_web: data.sitio_web?.trim() || null,
+         };
+
          if (initialData) {
-            await proveedoresService.update(initialData.id, data as any);
+            await proveedoresService.update(initialData.id, cleanPayload as any);
             toast({ title: "Proveedor actualizado" });
          } else {
-            await proveedoresService.create(data as any);
+            await proveedoresService.create(cleanPayload as any);
             toast({ title: "Proveedor registrado" });
          }
          onSuccess();
@@ -69,7 +78,7 @@ export function ProveedorForm({ initialData, onSuccess }: ProveedorFormProps) {
                name="nombre"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Nombre de la Empresa</FormLabel>
+                     <FormLabel>Nombre de la Empresa <span className="text-destructive">*</span></FormLabel>
                      <FormControl>
                         <Input placeholder="Ej: Tech Solutions SRL" {...field} value={field.value ?? ""} />
                      </FormControl>
@@ -84,7 +93,7 @@ export function ProveedorForm({ initialData, onSuccess }: ProveedorFormProps) {
                   name="rnc"
                   render={({ field }) => (
                      <FormItem>
-                        <FormLabel>RNC / Identificación</FormLabel>
+                        <FormLabel>RNC / Identificación <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                         <FormControl>
                            <Input placeholder="101-xxxxx-x" {...field} value={field.value ?? ""} />
                         </FormControl>
@@ -98,7 +107,7 @@ export function ProveedorForm({ initialData, onSuccess }: ProveedorFormProps) {
                   name="contacto"
                   render={({ field }) => (
                      <FormItem>
-                        <FormLabel>Email de Contacto</FormLabel>
+                        <FormLabel>Email de Contacto <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                         <FormControl>
                            <Input placeholder="ventas@empresa.com" {...field} value={field.value ?? ""} />
                         </FormControl>
@@ -113,7 +122,7 @@ export function ProveedorForm({ initialData, onSuccess }: ProveedorFormProps) {
                name="sitio_web"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Sitio Web</FormLabel>
+                     <FormLabel>Sitio Web <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                      <FormControl>
                         <Input placeholder="https://..." {...field} value={field.value ?? ""} />
                      </FormControl>
@@ -127,7 +136,7 @@ export function ProveedorForm({ initialData, onSuccess }: ProveedorFormProps) {
                name="direccion"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Dirección Física</FormLabel>
+                     <FormLabel>Dirección Física <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                      <FormControl>
                         <Textarea className="resize-none" placeholder="Av. Principal #123..." {...field} value={field.value ?? ""} />
                      </FormControl>
@@ -141,7 +150,7 @@ export function ProveedorForm({ initialData, onSuccess }: ProveedorFormProps) {
                name="descripcion"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Notas / Descripción</FormLabel>
+                     <FormLabel>Notas / Descripción <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                      <FormControl>
                         <Input placeholder="Proveedor de hardware..." {...field} value={field.value ?? ""} />
                      </FormControl>

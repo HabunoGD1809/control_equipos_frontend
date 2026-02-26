@@ -105,7 +105,7 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuc
                   name="descripcion"
                   render={({ field }) => (
                      <FormItem>
-                        <FormLabel>Descripción</FormLabel>
+                        <FormLabel>Descripción <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                         <FormControl>
                            <Input {...field} value={field.value ?? ""} />
                         </FormControl>
@@ -121,12 +121,24 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuc
                   name="color_hex"
                   render={({ field }) => (
                      <FormItem>
-                        <FormLabel>Color (Hex)</FormLabel>
-                        <div className="flex gap-2">
+                        <FormLabel>Color (Hex) <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
+                        <div className="flex gap-2 items-center">
                            <FormControl>
-                              <Input placeholder="#4CAF50" {...field} value={field.value ?? ""} />
+                              <Input
+                                 placeholder="#4CAF50"
+                                 {...field}
+                                 value={field.value ?? ""}
+                                 onChange={(e) => field.onChange(e.target.value)}
+                              />
                            </FormControl>
-                           <div className="w-10 h-10 rounded border shrink-0" style={{ backgroundColor: field.value || "#ffffff" }} />
+                           <div className="relative w-10 h-10 shrink-0 rounded overflow-hidden border cursor-pointer">
+                              <input
+                                 type="color"
+                                 value={field.value || "#000000"}
+                                 onChange={(e) => field.onChange(e.target.value)}
+                                 className="absolute -inset-2.5 w-[50px] h-[50px] cursor-pointer"
+                              />
+                           </div>
                         </div>
                         <FormMessage />
                      </FormItem>
@@ -140,7 +152,7 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuc
                   name="periodicidad_dias"
                   render={({ field }) => (
                      <FormItem>
-                        <FormLabel>Periodicidad (días)</FormLabel>
+                        <FormLabel>Periodicidad (días) <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                         <FormControl>
                            <Input
                               type="number"

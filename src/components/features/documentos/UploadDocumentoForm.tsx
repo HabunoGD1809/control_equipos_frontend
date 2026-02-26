@@ -5,7 +5,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import * as z from "zod";
 import { Loader2, UploadCloud } from "lucide-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/Button";
 import {
@@ -28,9 +28,10 @@ import {
 import { Textarea } from "@/components/ui/Textarea";
 import { useToast } from "@/components/ui/use-toast";
 
-import { TipoDocumento } from "@/types/api";
+import { TipoDocumento, EquipoSimple } from "@/types/api";
 import { createDocumentoSchema, MIME_TYPE_MAP } from "@/lib/zod";
 import { documentosService } from "@/app/services/documentosService";
+import { api } from "@/lib/http";
 
 interface UploadDocumentoFormProps {
    equipoId?: string;
@@ -42,6 +43,8 @@ interface UploadDocumentoFormProps {
 
 type UploadDocumentoValues = z.infer<ReturnType<typeof createDocumentoSchema>>;
 
+const cleanString = (str?: string | null) => (str && str.trim() !== "" ? str.trim() : null);
+
 export function UploadDocumentoForm({
    equipoId,
    mantenimientoId,
@@ -51,6 +54,19 @@ export function UploadDocumentoForm({
 }: UploadDocumentoFormProps) {
    const { toast } = useToast();
    const queryClient = useQueryClient();
+
+   // FASE UX: Detectamos si el formulario se abrió en la página global (sin dependencias previas)
+   const isStandalone = !equipoId && !mantenimientoId && !licenciaId;
+
+   // Si es global, el propio formulario consulta los equipos para no forzar "Prop Drilling" desde arriba
+   const { data: equiposDisponibles = [], isLoading: isLoadingEquipos } = useQuery({
+      queryKey: ["equipos-dropdown"],
+      queryFn: async () => {
+         const res = await api.get<any>("/equipos", { params: { limit: 1000 } });
+         return (Array.isArray(res) ? res : res.items || []) as EquipoSimple[];
+      },
+      enabled: isStandalone, // Solo se ejecuta si estamos en la vista independiente
+   });
 
    const dynamicSchema = useMemo(
       () => createDocumentoSchema(tiposDocumento),
@@ -96,18 +112,23 @@ export function UploadDocumentoForm({
             equipo_id: values.equipo_id,
             mantenimiento_id: values.mantenimiento_id,
             licencia_id: values.licencia_id,
-            titulo: values.titulo,
+            titulo: values.titulo.trim(),
             tipo_documento_id: values.tipo_documento_id,
-            descripcion: values.descripcion || null,
+            descripcion: cleanString(values.descripcion),
             file: values.file as File,
          });
       },
-      onSuccess: () => {
+      onSuccess: (_, values) => {
          toast({
             title: "Documento subido",
             description: "El archivo se ha almacenado correctamente.",
          });
+
          queryClient.invalidateQueries({ queryKey: ["documentos"] });
+         if (values.equipo_id) queryClient.invalidateQueries({ queryKey: ["equipo", values.equipo_id] });
+         if (values.mantenimiento_id) queryClient.invalidateQueries({ queryKey: ["mantenimiento", values.mantenimiento_id] });
+         if (values.licencia_id) queryClient.invalidateQueries({ queryKey: ["licencia", values.licencia_id] });
+
          form.reset();
          onSuccess();
       },
@@ -124,6 +145,14 @@ export function UploadDocumentoForm({
    });
 
    const onSubmit = (values: UploadDocumentoValues) => {
+      // Bloqueamos nativamente si intentan subir un doc suelto en la vista global
+      if (isStandalone && !values.equipo_id) {
+         form.setError("equipo_id", {
+            type: "manual",
+            message: "Debe seleccionar un equipo para vincular este documento."
+         });
+         return;
+      }
       uploadMutation.mutate(values);
    };
 
@@ -144,13 +173,44 @@ export function UploadDocumentoForm({
                )}
             />
 
+            {/* SECCIÓN INTELIGENTE: Selector de Equipo (Solo visible en vista Global) */}
+            {isStandalone && (
+               <FormField
+                  control={form.control}
+                  name="equipo_id"
+                  render={({ field }) => (
+                     <FormItem>
+                        <FormLabel>Vincular a un Equipo <span className="text-destructive">*</span></FormLabel>
+                        <Select
+                           value={field.value || undefined}
+                           onValueChange={field.onChange}
+                           disabled={isLoadingEquipos}
+                        >
+                           <FormControl>
+                              <SelectTrigger>
+                                 <SelectValue placeholder={isLoadingEquipos ? "Cargando equipos..." : "Seleccione un equipo..."} />
+                              </SelectTrigger>
+                           </FormControl>
+                           <SelectContent>
+                              {equiposDisponibles.map((e) => (
+                                 <SelectItem key={e.id} value={e.id}>
+                                    {e.nombre} ({e.numero_serie})
+                                 </SelectItem>
+                              ))}
+                           </SelectContent>
+                        </Select>
+                        <FormMessage />
+                     </FormItem>
+                  )}
+               />
+            )}
+
             <FormField
                control={form.control}
                name="tipo_documento_id"
                render={({ field }) => (
                   <FormItem>
                      <FormLabel>Tipo de Documento <span className="text-destructive">*</span></FormLabel>
-
                      <Select
                         value={field.value || undefined}
                         onValueChange={(val) => {
@@ -163,7 +223,6 @@ export function UploadDocumentoForm({
                               <SelectValue placeholder="Seleccione categoría..." />
                            </SelectTrigger>
                         </FormControl>
-
                         <SelectContent>
                            {tiposDocumento.map((tipo) => (
                               <SelectItem key={tipo.id} value={tipo.id}>
@@ -173,7 +232,6 @@ export function UploadDocumentoForm({
                            ))}
                         </SelectContent>
                      </Select>
-
                      <FormMessage />
                   </FormItem>
                )}
@@ -213,7 +271,7 @@ export function UploadDocumentoForm({
                name="descripcion"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Descripción (Opcional)</FormLabel>
+                     <FormLabel>Descripción <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                      <FormControl>
                         <Textarea
                            {...field}
@@ -227,8 +285,8 @@ export function UploadDocumentoForm({
                )}
             />
 
-            <div className="flex justify-end pt-2">
-               <Button type="submit" disabled={uploadMutation.isPending}>
+            <div className="flex justify-end pt-2 border-t mt-4">
+               <Button type="submit" disabled={uploadMutation.isPending} className="min-w-37.5">
                   {uploadMutation.isPending ? (
                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (

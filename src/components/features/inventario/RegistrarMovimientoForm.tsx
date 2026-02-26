@@ -124,9 +124,27 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
    });
 
    const onSubmit = (values: FormValues) => {
+      if (reqOrigen) {
+         const stockSeleccionado = stockDisponibleDelItem.find(
+            (s) => s.ubicacion === values.ubicacion_origen && s.lote === (values.lote_origen || "N/A")
+         );
+
+         if (!stockSeleccionado) {
+            form.setError("ubicacion_origen", { message: "No hay stock registrado en esta ubicación/lote." });
+            return;
+         }
+
+         if (values.cantidad > stockSeleccionado.cantidad_actual) {
+            form.setError("cantidad", {
+               type: "manual",
+               message: `Stock insuficiente. El máximo disponible es ${stockSeleccionado.cantidad_actual}.`
+            });
+            return;
+         }
+      }
+
       const payload: Partial<InventarioMovimientoCreate> = { ...values };
 
-      // Limpiamos la basura del payload antes de mandarlo al backend
       if (!reqOrigen) {
          delete payload.ubicacion_origen;
          delete payload.lote_origen;
@@ -162,6 +180,7 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                            field.onChange(val);
                            form.setValue("ubicacion_origen", "");
                            form.setValue("lote_origen", "N/A");
+                           form.clearErrors("cantidad"); // Limpiar error de cantidad al cambiar item
                         }}
                         value={field.value ?? undefined}
                      >
@@ -270,7 +289,14 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                         render={({ field }) => (
                            <FormItem>
                               <FormLabel>Ubicación Origen <span className="text-destructive">*</span></FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value || undefined} disabled={!tipoItemId || ubicacionesOrigenDisponibles.length === 0}>
+                              <Select
+                                 onValueChange={(val) => {
+                                    field.onChange(val);
+                                    form.clearErrors("ubicacion_origen");
+                                 }}
+                                 value={field.value || undefined}
+                                 disabled={!tipoItemId || ubicacionesOrigenDisponibles.length === 0}
+                              >
                                  <FormControl>
                                     <SelectTrigger>
                                        <SelectValue placeholder="Seleccione origen..." />

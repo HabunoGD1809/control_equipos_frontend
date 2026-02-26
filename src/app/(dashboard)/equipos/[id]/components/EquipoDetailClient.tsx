@@ -76,7 +76,6 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
    const [tiposDocumento, setTiposDocumento] = useState<TipoDocumento[]>([]);
    const [proveedores, setProveedores] = useState<Proveedor[]>([]);
 
-   // Rastreador para saber si una pestaña ya se cargó (y no hacer fetch doble)
    const [loadedTabs, setLoadedTabs] = useState<Record<string, boolean>>({
       detalles: true,
       componentes: true,
@@ -89,25 +88,26 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
       successMessage: "El equipo ha sido eliminado correctamente.",
    });
 
-   // 🚀 EFECTO LAZY FETCHING
    useEffect(() => {
       const loadTabData = async () => {
-         if (loadedTabs[activeTab]) return; // Si ya se cargó, no hace nada
+         if (loadedTabs[activeTab]) return;
 
          setIsLoadingTab(true);
          try {
+            // CORRECCIÓN: Quitamos las barras finales (/) para evitar 
+            // discrepancias de ruta y errores 422 en la validación de query params de FastAPI.
+
             if (activeTab === "movimientos") {
-               // ✅ Usando el objeto `params` de forma limpia
-               const res = await api.get<any>("/movimientos/", {
+               const res = await api.get<any>("/movimientos", {
                   params: { equipo_id: equipo.id, limit: 100 }
                });
                setMovimientos(unwrapClient(res));
             }
             else if (activeTab === "mantenimiento") {
                const [mtoRes, tiposMtoRes, provRes] = await Promise.all([
-                  api.get<any>("/mantenimientos/", { params: { equipo_id: equipo.id, limit: 100 } }),
-                  api.get<any>("/catalogos/tipos-mantenimiento/"),
-                  api.get<any>("/proveedores/", { params: { limit: 500 } })
+                  api.get<any>("/mantenimientos", { params: { equipo_id: equipo.id, limit: 100 } }),
+                  api.get<any>("/catalogos/tipos-mantenimiento"),
+                  api.get<any>("/proveedores", { params: { limit: 500 } })
                ]);
                setMantenimientos(unwrapClient(mtoRes));
                setTiposMantenimiento(unwrapClient(tiposMtoRes));
@@ -115,26 +115,24 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
             }
             else if (activeTab === "documentacion") {
                const [docsRes, tiposDocRes] = await Promise.all([
-                  // Aquí es un path param mezclado con query param
                   api.get<any>(`/documentacion/equipo/${equipo.id}`, { params: { limit: 100 } }),
-                  api.get<any>("/catalogos/tipos-documento/")
+                  api.get<any>("/catalogos/tipos-documento")
                ]);
                setDocumentos(unwrapClient(docsRes));
                setTiposDocumento(unwrapClient(tiposDocRes));
             }
             else if (activeTab === "licencias") {
-               const res = await api.get<any>("/licencias/asignaciones/", {
+               const res = await api.get<any>("/licencias/asignaciones", {
                   params: { equipo_id: equipo.id, limit: 100 }
                });
                const asignaciones = unwrapClient<{ licencia: LicenciaSoftware }>(res);
                setLicencias(asignaciones.map(a => a.licencia));
             }
             else if (activeTab === "componentes") {
-               const res = await api.get<any>("/equipos/", { params: { limit: 500 } });
+               const res = await api.get<any>("/equipos", { params: { limit: 500 } });
                setEquiposDisponibles(unwrapClient(res));
             }
 
-            // Marca la pestaña como cargada para no volver a consultar
             setLoadedTabs(prev => ({ ...prev, [activeTab]: true }));
          } catch (error) {
             console.error("Error cargando datos de la pestaña:", error);
@@ -209,7 +207,6 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
             </TabsList>
 
             <div className="mt-6 relative min-h-50">
-               {/* 🚀 Indicador de carga cuando se está obteniendo data asíncrona */}
                {isLoadingTab && (
                   <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/50 backdrop-blur-sm rounded-md">
                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -226,7 +223,7 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
                      componentes={componentes}
                      padres={padres}
                      equiposDisponibles={equiposDisponibles}
-                     onRefresh={() => router.refresh()} // O puedes refetch local
+                     onRefresh={() => router.refresh()}
                   />
                </TabsContent>
 
@@ -269,7 +266,6 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
                            <CardDescription>Registro inmutable de cambios realizados a este registro.</CardDescription>
                         </CardHeader>
                         <CardContent className="pt-6">
-                           {/* Asumo que AuditTimeline hace su propio fetch internamente */}
                            <AuditTimeline tableName="equipos" entityId={equipo.id} />
                         </CardContent>
                      </Card>
@@ -278,7 +274,6 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
             </div>
          </Tabs>
 
-         {/* Alerta Eliminación */}
          <AlertDialog open={isAlertOpen} onOpenChange={(isOpen) => { if (!isOpen) closeAlert(); }}>
             <AlertDialogContent>
                <AlertDialogHeader>

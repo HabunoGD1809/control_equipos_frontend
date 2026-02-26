@@ -55,11 +55,7 @@ export const documentosService = {
       if (payload.mantenimiento_id) formData.append("mantenimiento_id", payload.mantenimiento_id);
       if (payload.licencia_id) formData.append("licencia_id", payload.licencia_id);
 
-      return api.post<Documentacion>("/documentacion/", formData, {
-         headers: {
-            "Content-Type": "multipart/form-data",
-         },
-      });
+      return api.post<Documentacion>("/documentacion/", formData);
    },
 
    update(

@@ -6,7 +6,9 @@ export const auditService = {
       skip?: number;
       limit?: number;
       username?: string;
-      table_name?: string
+      table_name?: string;
+      start_date?: string;
+      end_date?: string;
    }): Promise<AuditLog[]> => {
       return api.get<AuditLog[]>('/auditoria/', { params });
    },

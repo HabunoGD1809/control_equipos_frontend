@@ -13,8 +13,6 @@ import { AUTH_COOKIE_NAME, REFRESH_COOKIE_NAME } from "@/lib/constants";
 import { serverApi } from "@/lib/http-server";
 import type { ResetTokenResponse, Usuario } from "@/types/api";
 
-// ─── TIPOS DE RETORNO ─────────────────────────────────────────────────────────
-
 type ResetActionResult =
    | { success: true; data: ResetTokenResponse }
    | { success?: never; error: string };
@@ -25,7 +23,8 @@ type LoginResponse = {
    token_type: string;
 };
 
-// ─── LOGIN ────────────────────────────────────────────────────────────────────
+const ACCESS_COOKIE_MAX_AGE = 60 * 60 * 24; // 24h
+const REFRESH_COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7d
 
 export async function loginAction(values: z.infer<typeof loginSchema>) {
    const parsed = loginSchema.safeParse(values);
@@ -37,17 +36,14 @@ export async function loginAction(values: z.infer<typeof loginSchema>) {
    params.append("password", password);
 
    try {
-      const tokens = await serverApi.post<LoginResponse>(
-         "/auth/login/access-token",
-         params
-      );
+      const tokens = await serverApi.post<LoginResponse>("/auth/login/access-token", params);
 
       const cookieStore = await cookies();
 
       cookieStore.set(AUTH_COOKIE_NAME, tokens.access_token, {
          httpOnly: true,
          secure: process.env.NODE_ENV === "production",
-         maxAge: 60 * 60 * 24 * 7,
+         maxAge: ACCESS_COOKIE_MAX_AGE,
          path: "/",
          sameSite: "lax",
       });
@@ -56,14 +52,13 @@ export async function loginAction(values: z.infer<typeof loginSchema>) {
          cookieStore.set(REFRESH_COOKIE_NAME, tokens.refresh_token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
-            maxAge: 60 * 60 * 24 * 30,
+            maxAge: REFRESH_COOKIE_MAX_AGE,
             path: "/",
             sameSite: "lax",
          });
       }
 
       const user = await serverApi.get<Usuario>("/usuarios/me");
-
       return { success: true, user };
    } catch (error: any) {
       console.error("Login error:", error);
@@ -74,16 +69,12 @@ export async function loginAction(values: z.infer<typeof loginSchema>) {
    }
 }
 
-// ─── LOGOUT ───────────────────────────────────────────────────────────────────
-
 export async function logoutAction() {
    const cookieStore = await cookies();
    cookieStore.delete(AUTH_COOKIE_NAME);
    cookieStore.delete(REFRESH_COOKIE_NAME);
    redirect("/login");
 }
-
-// ─── RECUPERACIÓN DE CONTRASEÑA ───────────────────────────────────────────────
 
 export async function requestPasswordResetAction(
    values: z.infer<typeof resetPasswordRequestSchema>
@@ -107,9 +98,7 @@ export async function requestPasswordResetAction(
    }
 }
 
-export async function confirmPasswordResetAction(
-   values: z.infer<typeof resetPasswordConfirmSchema>
-) {
+export async function confirmPasswordResetAction(values: z.infer<typeof resetPasswordConfirmSchema>) {
    const parsed = resetPasswordConfirmSchema.safeParse(values);
    if (!parsed.success) return { error: "Datos inválidos" };
 
@@ -124,9 +113,7 @@ export async function confirmPasswordResetAction(
    }
 }
 
-export async function changePasswordAction(
-   values: z.infer<typeof changePasswordSchema>
-) {
+export async function changePasswordAction(values: z.infer<typeof changePasswordSchema>) {
    const parsed = changePasswordSchema.safeParse(values);
    if (!parsed.success) return { error: "Datos inválidos" };
 

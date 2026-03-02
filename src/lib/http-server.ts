@@ -1,15 +1,14 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { AUTH_COOKIE_NAME } from "@/lib/constants";
+import { AUTH_COOKIE_NAME, REFRESH_COOKIE_NAME } from "@/lib/constants";
 import { refreshAccessToken } from "@/lib/token-refresh";
 
 const BASE_URL: string = (() => {
    const v = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
-   if (!v)
-      throw new Error(
-         "API_BASE_URL (or NEXT_PUBLIC_API_BASE_URL) is not defined",
-      );
+   if (!v) {
+      throw new Error("API_BASE_URL (or NEXT_PUBLIC_API_BASE_URL) is not defined");
+   }
    return v;
 })();
 
@@ -22,10 +21,7 @@ interface FetchOptions extends RequestInit {
 
 type HttpError = Error & { status?: number; detail?: any };
 
-async function httpServer<T>(
-   path: string,
-   options: FetchOptions = {},
-): Promise<T> {
+async function httpServer<T>(path: string, options: FetchOptions = {}): Promise<T> {
    const { params, headers, _retry, ...rest } = options;
 
    const cleanBase = BASE_URL.replace(/\/$/, "");
@@ -54,23 +50,33 @@ async function httpServer<T>(
       cache: rest.cache ?? "no-store",
    });
 
+   // 401 → intenta refresh 1 vez
    if (response.status === 401 && !_retry) {
       const newAccessToken = await refreshAccessToken();
 
       if (newAccessToken) {
+         // Reintenta una vez con el token actualizado en cookie
          return httpServer<T>(path, { ...options, _retry: true });
       }
+
+      // Refresh falló → limpiar cookies para evitar loop con tokens viejos
+      cookieStore.delete(AUTH_COOKIE_NAME);
+      cookieStore.delete(REFRESH_COOKIE_NAME);
 
       redirect("/login");
    }
 
    if (!response.ok) {
       if (response.status === 401) {
+         // Si llega aquí con 401 (ej. _retry ya true), igual limpia y manda a login
+         cookieStore.delete(AUTH_COOKIE_NAME);
+         cookieStore.delete(REFRESH_COOKIE_NAME);
          redirect("/login");
       }
 
       let message = `HTTP ${response.status}`;
       let detail = null;
+
       try {
          const ct = response.headers.get("content-type") || "";
          if (ct.includes("application/json")) {
@@ -81,12 +87,14 @@ async function httpServer<T>(
             const text = await response.text();
             message = text || message;
          }
-      } catch { }
+      } catch {
+         // ignore parse errors
+      }
 
       const err = new Error(message) as HttpError;
       err.status = response.status;
       err.detail = detail;
-      throw err; // Esto activará automáticamente el error.tsx de Next.js
+      throw err;
    }
 
    if (response.status === 204) return null as T;
@@ -104,10 +112,7 @@ const formatPayload = (body: unknown, options?: FetchOptions): FetchOptions => {
    const isUrlEncoded = body instanceof URLSearchParams;
    const isString = typeof body === "string";
 
-   const parsedBody =
-      isFormData || isUrlEncoded || isString
-         ? (body as BodyInit)
-         : JSON.stringify(body);
+   const parsedBody = isFormData || isUrlEncoded || isString ? (body as BodyInit) : JSON.stringify(body);
 
    let defaultContentType: string | undefined = "application/json";
    if (isFormData) defaultContentType = undefined;
@@ -122,14 +127,12 @@ const formatPayload = (body: unknown, options?: FetchOptions): FetchOptions => {
 };
 
 export const serverApi = {
-   get: <T>(path: string, options?: FetchOptions) =>
-      httpServer<T>(path, { method: "GET", ...options }),
+   get: <T>(path: string, options?: FetchOptions) => httpServer<T>(path, { method: "GET", ...options }),
    post: <T>(path: string, body: unknown, options?: FetchOptions) =>
       httpServer<T>(path, { method: "POST", ...formatPayload(body, options) }),
    put: <T>(path: string, body: unknown, options?: FetchOptions) =>
       httpServer<T>(path, { method: "PUT", ...formatPayload(body, options) }),
    patch: <T>(path: string, body: unknown, options?: FetchOptions) =>
       httpServer<T>(path, { method: "PATCH", ...formatPayload(body, options) }),
-   delete: <T>(path: string, options?: FetchOptions) =>
-      httpServer<T>(path, { method: "DELETE", ...options }),
+   delete: <T>(path: string, options?: FetchOptions) => httpServer<T>(path, { method: "DELETE", ...options }),
 };

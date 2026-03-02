@@ -11,6 +11,9 @@ const COOKIE_BASE_OPTIONS = {
    sameSite: "lax" as const,
 };
 
+const ACCESS_COOKIE_MAX_AGE = 60 * 60 * 24; // 24h
+const REFRESH_COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7d
+
 export async function refreshAccessToken(): Promise<string | null> {
    const cookieStore = await cookies();
    const refreshToken = cookieStore.get(REFRESH_COOKIE_NAME)?.value;
@@ -35,13 +38,13 @@ export async function refreshAccessToken(): Promise<string | null> {
 
       cookieStore.set(AUTH_COOKIE_NAME, tokens.access_token, {
          ...COOKIE_BASE_OPTIONS,
-         maxAge: 60 * 60 * 24 * 7, // 7 días
+         maxAge: ACCESS_COOKIE_MAX_AGE,
       });
 
       if (tokens.refresh_token) {
          cookieStore.set(REFRESH_COOKIE_NAME, tokens.refresh_token, {
             ...COOKIE_BASE_OPTIONS,
-            maxAge: 60 * 60 * 24 * 30, // 30 días
+            maxAge: REFRESH_COOKIE_MAX_AGE,
          });
       }
 

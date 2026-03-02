@@ -6,6 +6,16 @@ import { ReactQueryProvider } from "@/contexts/ReactQueryProvider";
 import { serverApi } from "@/lib/http-server";
 import type { Usuario } from "@/types/api";
 
+function isNextRedirect(err: unknown) {
+   return (
+      typeof err === "object" &&
+      err !== null &&
+      "digest" in err &&
+      typeof (err as any).digest === "string" &&
+      (err as any).digest.startsWith("NEXT_REDIRECT")
+   );
+}
+
 export default async function DashboardLayout({
    children,
 }: {
@@ -16,6 +26,10 @@ export default async function DashboardLayout({
    try {
       user = await serverApi.get<Usuario>("/usuarios/me");
    } catch (error) {
+      // Si serverApi ya llamó redirect(), Next lanza NEXT_REDIRECT.
+      // No lo loguees; re-lánzalo para que Next lo maneje.
+      if (isNextRedirect(error)) throw error;
+
       console.error("Error validando sesión en servidor:", error);
       redirect("/login");
    }

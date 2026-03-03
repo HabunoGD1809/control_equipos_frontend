@@ -20,13 +20,10 @@ type GetAllParams = {
 
 export const equiposService = {
    async getAll(params: GetAllParams = {}): Promise<EquipoRead[]> {
-      const limit = params.limit ?? 10;
-      const skip = params.skip ?? 0;
-
-      return api.get<EquipoRead[]>("/equipos", {
+      return api.get<EquipoRead[]>("/equipos/", {
          params: {
-            limit,
-            skip,
+            limit: params.limit ?? 10,
+            skip: params.skip ?? 0,
             q: params.q || undefined,
             estado_id: params.estado_id || undefined,
             proveedor_id: params.proveedor_id || undefined,
@@ -37,7 +34,7 @@ export const equiposService = {
 
    getById: (id: string) => api.get<EquipoRead>(`/equipos/${id}`),
 
-   create: (payload: EquipoCreate) => api.post<EquipoRead>("/equipos", payload),
+   create: (payload: EquipoCreate) => api.post<EquipoRead>("/equipos/", payload),
 
    update: (id: string, payload: EquipoUpdate) =>
       api.put<EquipoRead>(`/equipos/${id}`, payload),
@@ -46,7 +43,7 @@ export const equiposService = {
 
    search: async (termino: string) => {
       if (!termino) return [];
-      return api.get<EquipoSearchResult[]>("/equipos/search", {
+      return api.get<EquipoSearchResult[]>("/equipos/search/", {
          params: { q: termino },
       });
    },
@@ -74,9 +71,22 @@ export const equiposService = {
    removeComponente: (relacionId: string) =>
       api.delete<void>(`/equipos/componentes/${relacionId}`),
 
-   getOptions: async (): Promise<EquipoSimple[]> => {
-      const data = await api.get<EquipoRead[]>("/equipos", {
-         params: { limit: 1000, skip: 0 },
+   getOptions: async (termino?: string): Promise<EquipoSimple[]> => {
+      if (termino && termino.length > 2) {
+         const results = await api.get<EquipoSearchResult[]>("/equipos/search/", {
+            params: { q: termino },
+         });
+         return results.map((e) => ({
+            id: e.id,
+            nombre: e.nombre,
+            numero_serie: e.numero_serie,
+            marca: e.marca,
+            modelo: e.modelo,
+         }));
+      }
+
+      const data = await api.get<EquipoRead[]>("/equipos/", {
+         params: { limit: 100, skip: 0 },
       });
 
       return data.map((e) => ({

@@ -18,8 +18,18 @@ type ReservasQuery = {
 };
 
 export const reservasService = {
-   async getAll(params?: ReservasQuery): Promise<ReservaEquipo[]> {
-      return api.get<ReservaEquipo[]>("/reservas/", { params });
+   async getAll(params: ReservasQuery = {}): Promise<ReservaEquipo[]> {
+      const apiParams: Record<string, any> = {
+         skip: params.skip,
+         limit: params.limit,
+         equipo_id: params.equipo_id || undefined,
+         usuario_id: params.usuario_id || undefined,
+         estado: params.estado || undefined,
+         start_date: params.fecha_inicio || undefined,
+         end_date: params.fecha_fin || undefined,
+      };
+
+      return api.get<ReservaEquipo[]>("/reservas/", { params: apiParams });
    },
 
    getById: (id: string): Promise<ReservaEquipo> =>

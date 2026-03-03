@@ -8,21 +8,25 @@ import type {
    AsignacionLicenciaCreate,
 } from "@/types/api";
 
-type SoftwareCatalogoCreate = Omit<SoftwareCatalogo, "id" | "created_at" | "updated_at"> & {
-};
+type SoftwareCatalogoCreate = Omit<
+   SoftwareCatalogo,
+   "id" | "created_at" | "updated_at"
+>;
 
 export const licenciasService = {
-
    // --- Catálogo ---
-   async getCatalogo(): Promise<SoftwareCatalogo[]> {
-      return api.get<SoftwareCatalogo[]>("/licencias/catalogo");
+   getCatalogo(): Promise<SoftwareCatalogo[]> {
+      return api.get<SoftwareCatalogo[]>("/licencias/catalogo/");
    },
 
    createSoftware(payload: SoftwareCatalogoCreate): Promise<SoftwareCatalogo> {
-      return api.post<SoftwareCatalogo>("/licencias/catalogo", payload);
+      return api.post<SoftwareCatalogo>("/licencias/catalogo/", payload);
    },
 
-   updateSoftware(id: string, payload: Partial<SoftwareCatalogoCreate>): Promise<SoftwareCatalogo> {
+   updateSoftware(
+      id: string,
+      payload: Partial<SoftwareCatalogoCreate>,
+   ): Promise<SoftwareCatalogo> {
       return api.put<SoftwareCatalogo>(`/licencias/catalogo/${id}`, payload);
    },
 
@@ -31,8 +35,8 @@ export const licenciasService = {
    },
 
    // --- Licencias ---
-   async getAll(): Promise<LicenciaSoftware[]> {
-      return api.get<LicenciaSoftware[]>("/licencias");
+   getAll(): Promise<LicenciaSoftware[]> {
+      return api.get<LicenciaSoftware[]>("/licencias/");
    },
 
    getById(id: string): Promise<LicenciaSoftware> {
@@ -40,7 +44,7 @@ export const licenciasService = {
    },
 
    create(payload: LicenciaSoftwareCreate): Promise<LicenciaSoftware> {
-      return api.post<LicenciaSoftware>("/licencias", payload);
+      return api.post<LicenciaSoftware>("/licencias/", payload);
    },
 
    update(id: string, payload: LicenciaSoftwareUpdate): Promise<LicenciaSoftware> {
@@ -52,12 +56,18 @@ export const licenciasService = {
    },
 
    // --- Asignaciones ---
-   getAsignaciones(params?: { licencia_id?: string; equipo_id?: string; usuario_id?: string; limit?: number; skip?: number; }): Promise<AsignacionLicencia[]> {
-      return api.get<AsignacionLicencia[]>("/licencias/asignaciones", { params });
+   getAsignaciones(params?: {
+      licencia_id?: string;
+      equipo_id?: string;
+      usuario_id?: string;
+      limit?: number;
+      skip?: number;
+   }): Promise<AsignacionLicencia[]> {
+      return api.get<AsignacionLicencia[]>("/licencias/asignaciones/", { params });
    },
 
    asignar(payload: AsignacionLicenciaCreate): Promise<AsignacionLicencia> {
-      return api.post<AsignacionLicencia>("/licencias/asignaciones", payload);
+      return api.post<AsignacionLicencia>("/licencias/asignaciones/", payload);
    },
 
    revocarAsignacion(id: string): Promise<void> {

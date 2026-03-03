@@ -2,7 +2,6 @@
 
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema"
 import { useForm } from "react-hook-form"
-import * as z from "zod"
 import { useState } from "react"
 import { motion } from "framer-motion"
 import { KeyRound, AlertCircle, Copy, Loader2, ShieldAlert } from "lucide-react"
@@ -14,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { useToast } from "@/components/ui/use-toast"
 import { resetPasswordRequestSchema } from "@/lib/zod"
 import { requestPasswordResetAction } from "@/actions/auth-actions"
-import type { ResetTokenResponse } from "@/types/api"
+import type { ResetTokenResponse, PasswordResetRequest } from "@/types/api"
 import Link from "next/link"
 
 export default function ForgotPasswordPage() {
@@ -23,12 +22,12 @@ export default function ForgotPasswordPage() {
    const [isPending, setIsPending] = useState(false)
    const { toast } = useToast()
 
-   const form = useForm<z.infer<typeof resetPasswordRequestSchema>>({
+   const form = useForm<PasswordResetRequest>({
       resolver: standardSchemaResolver(resetPasswordRequestSchema),
       defaultValues: { username: "" },
    })
 
-   async function onSubmit(values: z.infer<typeof resetPasswordRequestSchema>) {
+   async function onSubmit(values: PasswordResetRequest) {
       setError(null)
       setResetInfo(null)
       setIsPending(true)

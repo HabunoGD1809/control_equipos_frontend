@@ -1,6 +1,5 @@
 "use client";
 
-import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -11,7 +10,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/Input";
 import { Switch } from "@/components/ui/Switch";
 import { useToast } from "@/components/ui/use-toast";
-import { genericCatalogSchema } from "@/lib/zod";
 import { api } from "@/lib/http";
 
 type FormValues = {
@@ -37,7 +35,6 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuc
    const isEditing = !!initialData;
 
    const form = useForm<FormValues>({
-      resolver: standardSchemaResolver(genericCatalogSchema),
       defaultValues: {
          nombre: initialData?.nombre ?? "",
          descripcion: initialData?.descripcion ?? "",
@@ -49,14 +46,36 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuc
    });
 
    const onSubmit = async (data: FormValues) => {
+      if (!data.nombre || data.nombre.trim().length < 2) {
+         form.setError("nombre", { type: "manual", message: "El nombre debe tener al menos 2 caracteres." });
+         return;
+      }
+
       setIsLoading(true);
       try {
-         const payload = {
-            ...data,
-            descripcion: data.descripcion?.trim() ? data.descripcion : null,
-            color_hex: data.color_hex?.trim() ? data.color_hex : null,
-            periodicidad_dias: (data.periodicidad_dias && data.periodicidad_dias > 0) ? data.periodicidad_dias : null,
-         };
+         const payload: Record<string, any> = {};
+
+         formFields.forEach((field) => {
+            const val = (data as any)[field];
+            if (val === "") {
+               payload[field] = null;
+            } else if (typeof val === "string") {
+               payload[field] = val.trim();
+            } else {
+               payload[field] = val;
+            }
+         });
+
+         // Casos especiales para limpieza de datos
+         if (payload.color_hex && !/^#[0-9A-F]{6}$/i.test(payload.color_hex)) {
+            form.setError("color_hex", { type: "manual", message: "Formato Hex inválido." });
+            setIsLoading(false);
+            return;
+         }
+
+         if (payload.periodicidad_dias !== undefined && payload.periodicidad_dias <= 0) {
+            payload.periodicidad_dias = null;
+         }
 
          if (isEditing) {
             await api.put(`${apiEndpoint}/${initialData.id}`, payload);
@@ -84,125 +103,77 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuc
       <Form {...form}>
          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
             {formFields.includes("nombre") && (
-               <FormField
-                  control={form.control}
-                  name="nombre"
-                  render={({ field }) => (
-                     <FormItem>
-                        <FormLabel>Nombre <span className="text-destructive">*</span></FormLabel>
-                        <FormControl>
-                           <Input {...field} value={field.value ?? ""} />
-                        </FormControl>
-                        <FormMessage />
-                     </FormItem>
-                  )}
-               />
+               <FormField control={form.control} name="nombre" render={({ field }) => (
+                  <FormItem>
+                     <FormLabel>Nombre <span className="text-destructive">*</span></FormLabel>
+                     <FormControl>
+                        <Input {...field} value={field.value ?? ""} />
+                     </FormControl>
+                     <FormMessage />
+                  </FormItem>
+               )} />
             )}
 
             {formFields.includes("descripcion") && (
-               <FormField
-                  control={form.control}
-                  name="descripcion"
-                  render={({ field }) => (
-                     <FormItem>
-                        <FormLabel>Descripción <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
-                        <FormControl>
-                           <Input {...field} value={field.value ?? ""} />
-                        </FormControl>
-                        <FormMessage />
-                     </FormItem>
-                  )}
-               />
+               <FormField control={form.control} name="descripcion" render={({ field }) => (
+                  <FormItem>
+                     <FormLabel>Descripción <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
+                     <FormControl>
+                        <Input {...field} value={field.value ?? ""} />
+                     </FormControl>
+                     <FormMessage />
+                  </FormItem>
+               )} />
             )}
 
             {formFields.includes("color_hex") && (
-               <FormField
-                  control={form.control}
-                  name="color_hex"
-                  render={({ field }) => (
-                     <FormItem>
-                        <FormLabel>Color (Hex) <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
-                        <div className="flex gap-2 items-center">
-                           <FormControl>
-                              <Input
-                                 placeholder="#4CAF50"
-                                 {...field}
-                                 value={field.value ?? ""}
-                                 onChange={(e) => field.onChange(e.target.value)}
-                              />
-                           </FormControl>
-                           <div className="relative w-10 h-10 shrink-0 rounded overflow-hidden border cursor-pointer">
-                              <input
-                                 type="color"
-                                 value={field.value || "#000000"}
-                                 onChange={(e) => field.onChange(e.target.value)}
-                                 className="absolute -inset-2.5 w-[50px] h-[50px] cursor-pointer"
-                              />
-                           </div>
+               <FormField control={form.control} name="color_hex" render={({ field }) => (
+                  <FormItem>
+                     <FormLabel>Color (Hex) <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
+                     <div className="flex gap-2 items-center">
+                        <FormControl>
+                           <Input placeholder="#4CAF50" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value)} />
+                        </FormControl>
+                        <div className="relative w-10 h-10 shrink-0 rounded overflow-hidden border cursor-pointer">
+                           <input type="color" value={field.value || "#000000"} onChange={(e) => field.onChange(e.target.value)} className="absolute -inset-2.5 w-12.5 h-12.5 cursor-pointer" />
                         </div>
-                        <FormMessage />
-                     </FormItem>
-                  )}
-               />
+                     </div>
+                     <FormMessage />
+                  </FormItem>
+               )} />
             )}
 
             {formFields.includes("periodicidad_dias") && (
-               <FormField
-                  control={form.control}
-                  name="periodicidad_dias"
-                  render={({ field }) => (
-                     <FormItem>
-                        <FormLabel>Periodicidad (días) <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
-                        <FormControl>
-                           <Input
-                              type="number"
-                              min="1"
-                              placeholder="Ej: 90"
-                              value={field.value ?? ""}
-                              onChange={(e) => {
-                                 const n = e.target.valueAsNumber;
-                                 field.onChange(Number.isFinite(n) ? n : null);
-                              }}
-                           />
-                        </FormControl>
-                        <FormMessage />
-                     </FormItem>
-                  )}
-               />
+               <FormField control={form.control} name="periodicidad_dias" render={({ field }) => (
+                  <FormItem>
+                     <FormLabel>Periodicidad (días) <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
+                     <FormControl>
+                        <Input type="number" min="1" placeholder="Ej: 90" value={field.value ?? ""} onChange={(e) => {
+                           const n = e.target.valueAsNumber;
+                           field.onChange(Number.isFinite(n) ? n : null);
+                        }} />
+                     </FormControl>
+                     <FormMessage />
+                  </FormItem>
+               )} />
             )}
 
             {formFields.includes("requiere_documentacion") && (
-               <FormField
-                  control={form.control}
-                  name="requiere_documentacion"
-                  render={({ field }) => (
-                     <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                        <div className="space-y-0.5">
-                           <FormLabel className="text-base">Requiere Documentación</FormLabel>
-                        </div>
-                        <FormControl>
-                           <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
-                        </FormControl>
-                     </FormItem>
-                  )}
-               />
+               <FormField control={form.control} name="requiere_documentacion" render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                     <div className="space-y-0.5"><FormLabel className="text-base">Requiere Documentación</FormLabel></div>
+                     <FormControl><Switch checked={field.value ?? false} onCheckedChange={field.onChange} /></FormControl>
+                  </FormItem>
+               )} />
             )}
 
             {formFields.includes("es_preventivo") && (
-               <FormField
-                  control={form.control}
-                  name="es_preventivo"
-                  render={({ field }) => (
-                     <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                        <div className="space-y-0.5">
-                           <FormLabel className="text-base">Es Preventivo</FormLabel>
-                        </div>
-                        <FormControl>
-                           <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
-                        </FormControl>
-                     </FormItem>
-                  )}
-               />
+               <FormField control={form.control} name="es_preventivo" render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                     <div className="space-y-0.5"><FormLabel className="text-base">Es Preventivo</FormLabel></div>
+                     <FormControl><Switch checked={field.value ?? false} onCheckedChange={field.onChange} /></FormControl>
+                  </FormItem>
+               )} />
             )}
 
             <div className="flex justify-end pt-4">

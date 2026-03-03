@@ -35,9 +35,7 @@ export const EstadoMovimientoEquipoEnum = {
   Rechazado: "Rechazado",
 } as const satisfies Record<string, string>;
 
-export type EstadoMovimientoEquipo = ValuesOf<
-  typeof EstadoMovimientoEquipoEnum
->;
+export type EstadoMovimientoEquipo = ValuesOf<typeof EstadoMovimientoEquipoEnum>;
 
 // ---
 
@@ -75,9 +73,7 @@ export const TipoRelacionComponenteEnum = {
   Accesorio: "accesorio",
 } as const satisfies Record<string, string>;
 
-export type TipoRelacionComponente = ValuesOf<
-  typeof TipoRelacionComponenteEnum
->;
+export type TipoRelacionComponente = ValuesOf<typeof TipoRelacionComponenteEnum>;
 
 // ---
 
@@ -208,9 +204,6 @@ export interface UsuarioSimple {
   email?: string | null;
 }
 
-// Tipo explícito para el subconjunto de Rol que devuelve el endpoint de usuario.
-// El backend retorna este shape reducido (sin lista de permisos) en lugar del
-// tipo completo `Rol` — expresado en el sistema de tipos en lugar de un comentario.
 export interface RolResumen {
   id: string;
   nombre: string;
@@ -286,7 +279,6 @@ export interface EquipoRead {
   fecha_adquisicion?: string | null;
   fecha_puesta_marcha?: string | null;
   fecha_garantia_expiracion?: string | null;
-  // El backend serializa Decimal como string; se acepta ambos para compatibilidad
   valor_adquisicion?: string | number | null;
   proveedor_id?: string | null;
   centro_costo?: string | null;
@@ -308,9 +300,6 @@ export interface EquipoSearchResult {
   relevancia: number;
 }
 
-// Record<string, any> → Record<string, unknown>:
-// `unknown` fuerza a hacer type narrowing antes de usar el valor,
-// evitando errores silenciosos al acceder a propiedades arbitrarias.
 export interface GlobalSearchResult {
   tipo: "equipo" | "documento" | "mantenimiento";
   id: string;
@@ -334,12 +323,26 @@ export interface ResetTokenResponse {
   expires_at: string;
 }
 
+export interface PasswordChange {
+  current_password: string;
+  new_password: string;
+}
+
+export interface PasswordResetRequest {
+  username: string;
+}
+
+export interface PasswordResetConfirm {
+  username: string;
+  token: string;
+  new_password: string;
+}
+
 // ─── COMPONENTES ─────────────────────────────────────────────────────────────
 
 export interface ComponenteInfo {
   id: string;
   componente: EquipoSimple;
-  // Usamos el type derivado del as const en lugar del enum directamente
   tipo_relacion: TipoRelacionComponente;
   cantidad: number;
   notas?: string | null;
@@ -383,7 +386,6 @@ export interface Mantenimiento {
   fecha_programada?: string | null;
   fecha_inicio?: string | null;
   fecha_finalizacion?: string | null;
-  // El backend serializa Numeric como string; se acepta ambos para compatibilidad
   costo_estimado?: string | number | null;
   costo_real?: string | number | null;
   tecnico_responsable: string;
@@ -489,7 +491,6 @@ export interface LicenciaSoftware {
   clave_producto?: string | null;
   fecha_expiracion?: string | null;
   proveedor_id?: string | null;
-  // El backend serializa Numeric como string; se acepta ambos para compatibilidad
   costo_adquisicion?: string | number | null;
   numero_orden_compra?: string | null;
   cantidad_total: number;
@@ -558,9 +559,10 @@ export interface TipoItemInventario extends TipoItemInventarioSimple {
   proveedor_preferido?: ProveedorSimple | null;
 }
 
-// Tipo explícito para el shape reducido que devuelve el endpoint de stock.
-// El backend retorna TipoItemInventarioSimple (sin stock_minimo ni categoria)
-// en lugar del tipo completo TipoItemInventario.
+export interface TipoItemInventarioConStock extends TipoItemInventario {
+  stock_total_actual: number;
+}
+
 export interface InventarioStock {
   id: string;
   tipo_item_id: string;
@@ -571,6 +573,10 @@ export interface InventarioStock {
   costo_promedio_ponderado?: string | null;
   ultima_actualizacion: string;
   tipo_item: TipoItemInventarioSimple;
+}
+
+export interface InventarioStockTotal {
+  total: number;
 }
 
 export interface InventarioMovimiento {
@@ -609,6 +615,10 @@ export interface Notificacion {
   fecha_leido?: string | null;
 }
 
+export interface NotificacionUpdate {
+  leido: boolean;
+}
+
 // ─── LOGS Y AUDITORÍA ────────────────────────────────────────────────────────
 
 export interface AuditLog {
@@ -618,9 +628,6 @@ export interface AuditLog {
   operation: "INSERT" | "UPDATE" | "DELETE";
   username?: string | null;
   app_user_id?: string | null;
-  // Record<string, any> → Record<string, unknown>:
-  // `unknown` requiere narrowing explícito antes de usar cualquier propiedad,
-  // previniendo accesos inseguros a datos arbitrarios de auditoría.
   old_data?: Record<string, unknown> | null;
   new_data?: Record<string, unknown> | null;
 }
@@ -637,11 +644,6 @@ export interface BackupLog {
 }
 
 // ─── DTOs DE CREACIÓN Y ACTUALIZACIÓN ───────────────────────────────────────
-//
-// Usamos `type` en lugar de `interface` para los DTOs de request por dos razones:
-//   1. Son aliases de forma (shape aliases), no contratos extensibles.
-//   2. `type` con `Partial<>` es más honesto: deja claro que no se pretende
-//      que otros tipos extiendan este DTO en el futuro.
 
 export interface RolCreate {
   nombre: string;
@@ -649,10 +651,7 @@ export interface RolCreate {
   permiso_ids?: string[] | null;
 }
 
-// type en lugar de interface: alias de Partial puro, sin intención de extensión
 export type RolUpdate = Partial<RolCreate>;
-
-// ---
 
 export interface ProveedorCreate {
   nombre: string;
@@ -664,8 +663,6 @@ export interface ProveedorCreate {
 }
 
 export type ProveedorUpdate = Partial<ProveedorCreate>;
-
-// ---
 
 export interface UsuarioCreate {
   nombre_usuario: string;
@@ -684,7 +681,45 @@ export interface UsuarioUpdate {
   requiere_cambio_contrasena?: boolean | null;
 }
 
-// ---
+// Catálogos
+export interface EstadoEquipoCreate {
+  nombre: string;
+  descripcion?: string | null;
+  permite_movimientos?: boolean;
+  requiere_autorizacion?: boolean;
+  es_estado_final?: boolean;
+  color_hex?: string | null;
+  icono?: string | null;
+}
+export type EstadoEquipoUpdate = Partial<EstadoEquipoCreate>;
+
+export interface TipoDocumentoCreate {
+  nombre: string;
+  descripcion?: string | null;
+  requiere_verificacion?: boolean;
+  formato_permitido?: string[] | null;
+}
+export type TipoDocumentoUpdate = Partial<TipoDocumentoCreate>;
+
+export interface TipoMantenimientoCreate {
+  nombre: string;
+  descripcion?: string | null;
+  periodicidad_dias?: number | null;
+  requiere_documentacion?: boolean;
+  es_preventivo?: boolean;
+}
+export type TipoMantenimientoUpdate = Partial<TipoMantenimientoCreate>;
+
+export interface SoftwareCatalogoCreate {
+  nombre: string;
+  version?: string | null;
+  fabricante?: string | null;
+  descripcion?: string | null;
+  categoria?: string | null;
+  tipo_licencia: TipoLicenciaSoftware;
+  metrica_licenciamiento: MetricaLicenciamiento;
+}
+export type SoftwareCatalogoUpdate = Partial<SoftwareCatalogoCreate>;
 
 export interface EquipoCreate {
   nombre: string;
@@ -705,8 +740,6 @@ export interface EquipoCreate {
 
 export type EquipoUpdate = Partial<EquipoCreate>;
 
-// ---
-
 export interface EquipoComponenteBodyCreate {
   equipo_componente_id: string;
   tipo_relacion?: TipoRelacionComponente;
@@ -719,8 +752,6 @@ export interface EquipoComponenteUpdate {
   cantidad?: number | null;
   notas?: string | null;
 }
-
-// ---
 
 export interface MantenimientoCreate {
   equipo_id: string;
@@ -750,8 +781,6 @@ export interface MantenimientoUpdate {
   observaciones?: string | null;
 }
 
-// ---
-
 export interface MovimientoCreate {
   equipo_id: string;
   tipo_movimiento: TipoMovimientoEquipo;
@@ -768,8 +797,6 @@ export interface MovimientoUpdate {
   recibido_por?: string | null;
   observaciones?: string | null;
 }
-
-// ---
 
 export interface ReservaEquipoCreate {
   equipo_id: string;
@@ -797,14 +824,8 @@ export interface ReservaEquipoCheckInOut {
   notas_devolucion?: string | null;
 }
 
-// ---
-
 export interface DocumentacionVerify {
-  // Solo "Verificado" o "Rechazado" son válidos lógicamente;
-  // el tipo narrowed lo expresa explícitamente en lugar de aceptar todo EstadoDocumento
-  estado:
-  | typeof EstadoDocumentoEnum.Verificado
-  | typeof EstadoDocumentoEnum.Rechazado;
+  estado: typeof EstadoDocumentoEnum.Verificado | typeof EstadoDocumentoEnum.Rechazado;
   notas_verificacion?: string | null;
 }
 
@@ -813,8 +834,6 @@ export interface DocumentacionUpdate {
   descripcion?: string | null;
   tipo_documento_id?: string | null;
 }
-
-// ---
 
 export interface TipoItemInventarioCreate {
   nombre: string;
@@ -831,12 +850,11 @@ export interface TipoItemInventarioCreate {
 
 export type TipoItemInventarioUpdate = Partial<TipoItemInventarioCreate>;
 
-// ---
-
 export interface InventarioMovimientoCreate {
   tipo_item_id: string;
   tipo_movimiento: TipoMovimientoInv;
   cantidad: number;
+  fecha_hora?: string | null;
   costo_unitario?: number | string | null;
   ubicacion_origen?: string | null;
   ubicacion_destino?: string | null;
@@ -849,8 +867,6 @@ export interface InventarioMovimientoCreate {
   referencia_transferencia?: string | null;
   notas?: string | null;
 }
-
-// ---
 
 export interface LicenciaSoftwareCreate {
   software_catalogo_id: string;
@@ -875,8 +891,6 @@ export interface LicenciaSoftwareUpdate {
   notas?: string | null;
 }
 
-// ---
-
 export interface AsignacionLicenciaCreate {
   licencia_id: string;
   equipo_id?: string | null;
@@ -890,17 +904,8 @@ export interface AsignacionLicenciaUpdate {
   notas?: string | null;
 }
 
-// ─── HELPERS UI ──────────────────────────────────────────────────────────────
-
-// `type` en lugar de `interface`: es un DTO de parámetros de query,
-// no un contrato extensible — semánticamente más correcto como alias.
 export type ReporteParams = {
-  tipo_reporte:
-  | "equipos"
-  | "mantenimientos"
-  | "inventario"
-  | "movimientos"
-  | "auditoria";
+  tipo_reporte: "equipos" | "mantenimientos" | "inventario" | "movimientos" | "auditoria";
   formato: "pdf" | "excel";
   fecha_inicio: string;
   fecha_fin: string;

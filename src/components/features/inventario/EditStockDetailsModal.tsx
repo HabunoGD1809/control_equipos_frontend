@@ -10,12 +10,7 @@ import { es } from "date-fns/locale";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
-   Dialog,
-   DialogContent,
-   DialogHeader,
-   DialogTitle,
-   DialogDescription,
-   DialogFooter,
+   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/Dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
 import { Input } from "@/components/ui/Input";
@@ -42,7 +37,7 @@ export function EditStockDetailsModal({ stock, isOpen, onClose }: EditStockDetai
    const queryClient = useQueryClient();
 
    const form = useForm<EditStockFormValues>({
-      resolver: standardSchemaResolver(editStockSchema),
+      resolver: standardSchemaResolver(editStockSchema) as any,
       defaultValues: {
          lote: "",
          fecha_caducidad: null,
@@ -73,9 +68,10 @@ export function EditStockDetailsModal({ stock, isOpen, onClose }: EditStockDetai
 
    const onSubmit = (values: EditStockFormValues) => {
       if (!stock) return;
+
       mutation.mutate({
-         lote: values.lote,
-         fecha_caducidad: values.fecha_caducidad ? values.fecha_caducidad.toISOString() : null,
+         lote: values.lote || undefined,
+         fecha_caducidad: values.fecha_caducidad ? values.fecha_caducidad.toISOString() : undefined,
       });
    };
 
@@ -93,59 +89,38 @@ export function EditStockDetailsModal({ stock, isOpen, onClose }: EditStockDetai
 
             <Form {...form}>
                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <FormField
-                     control={form.control}
-                     name="lote"
-                     render={({ field }) => (
-                        <FormItem>
-                           <FormLabel>Código de Lote / Serie</FormLabel>
-                           <FormControl>
-                              <Input {...field} />
-                           </FormControl>
-                           <FormMessage />
-                        </FormItem>
-                     )}
+                  <FormField control={form.control} name="lote" render={({ field }) => (
+                     <FormItem>
+                        <FormLabel>Código de Lote / Serie (Opcional)</FormLabel>
+                        <FormControl><Input {...field} value={field.value ?? ""} placeholder="Ej: LOTE-2026-X" /></FormControl>
+                        <FormMessage />
+                     </FormItem>
+                  )}
                   />
 
-                  <FormField
-                     control={form.control}
-                     name="fecha_caducidad"
-                     render={({ field }) => (
-                        <FormItem className="flex flex-col">
-                           <FormLabel>Fecha de Caducidad</FormLabel>
-                           <Popover>
-                              <PopoverTrigger asChild>
-                                 <FormControl>
-                                    <Button
-                                       variant={"outline"}
-                                       className={cn(
-                                          "w-full pl-3 text-left font-normal",
-                                          !field.value && "text-muted-foreground"
-                                       )}
-                                    >
-                                       {field.value ? format(field.value, "PPP", { locale: es }) : <span>Sin vencimiento</span>}
-                                       <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                    </Button>
-                                 </FormControl>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0" align="start">
-                                 <Calendar
-                                    mode="single"
-                                    selected={field.value || undefined}
-                                    onSelect={field.onChange}
-                                    autoFocus
-                                 />
-                              </PopoverContent>
-                           </Popover>
-                           <FormMessage />
-                        </FormItem>
-                     )}
+                  <FormField control={form.control} name="fecha_caducidad" render={({ field }) => (
+                     <FormItem className="flex flex-col">
+                        <FormLabel>Fecha de Caducidad</FormLabel>
+                        <Popover>
+                           <PopoverTrigger asChild>
+                              <FormControl>
+                                 <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                    {field.value ? format(field.value, "PPP", { locale: es }) : <span>Sin vencimiento</span>}
+                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                 </Button>
+                              </FormControl>
+                           </PopoverTrigger>
+                           <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar mode="single" selected={field.value || undefined} onSelect={field.onChange} autoFocus />
+                           </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                     </FormItem>
+                  )}
                   />
 
                   <DialogFooter className="pt-4">
-                     <Button type="button" variant="ghost" onClick={onClose}>
-                        Cancelar
-                     </Button>
+                     <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
                      <Button type="submit" disabled={mutation.isPending}>
                         {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Guardar Cambios

@@ -30,7 +30,7 @@ export const movimientosService = {
    cancelar: (id: string): Promise<Movimiento> =>
       api.post<Movimiento>(`/movimientos/${id}/cancelar`, {}),
 
-   predecirEstadoFinal: (tipo: TipoMovimientoEquipo): string => {
+   predecirEstadoFinal: (tipo: TipoMovimientoEquipo, estadoNombreActual: string): string => {
       switch (tipo) {
          case TipoMovimientoEquipoEnum.SalidaTemporal:
             return "Prestado";
@@ -41,9 +41,9 @@ export const movimientosService = {
          case TipoMovimientoEquipoEnum.AsignacionInterna:
             return "En Uso";
          case TipoMovimientoEquipoEnum.TransferenciaBodega:
-            return "Disponible";
+            return estadoNombreActual;
          default:
-            return "Desconocido";
+            return estadoNombreActual;
       }
    },
 };

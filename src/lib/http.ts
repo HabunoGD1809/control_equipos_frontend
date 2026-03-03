@@ -1,4 +1,4 @@
-type Primitive = string | number | boolean;
+type Primitive = string | number | boolean | Date;
 
 export interface FetchOptions extends Omit<RequestInit, "headers" | "body" | "method"> {
    params?: Record<string, Primitive | null | undefined>;
@@ -29,7 +29,11 @@ function buildQuery(params?: FetchOptions["params"]): string {
 
    for (const [k, v] of Object.entries(params)) {
       if (v === undefined || v === null) continue;
-      sp.set(k, String(v));
+      if (v instanceof Date) {
+         sp.set(k, v.toISOString());
+      } else {
+         sp.set(k, String(v));
+      }
    }
 
    const qs = sp.toString();
@@ -66,6 +70,7 @@ function prepareBodyAndHeaders(
    const isURLSearchParams = typeof URLSearchParams !== "undefined" && body instanceof URLSearchParams;
    const isBlob = typeof Blob !== "undefined" && body instanceof Blob;
 
+   // Al enviar FormData, fetch calcula automáticamente el boundary. No debemos forzar application/json.
    if (isFormData || isString || isURLSearchParams || isBlob) {
       return {
          body: body as BodyInit,
@@ -89,9 +94,7 @@ async function http<T>(path: string, options: FetchOptions & { method: string; b
    const proxyPath = `${PROXY_PREFIX}${cleanPath}${buildQuery(params)}`;
 
    const isServer = typeof window === "undefined";
-   const url = isServer
-      ? new URL(proxyPath, await getServerOrigin()).toString()
-      : proxyPath;
+   const url = isServer ? new URL(proxyPath, await getServerOrigin()).toString() : proxyPath;
 
    let cookieHeader: string | null = null;
    if (isServer) {
@@ -110,10 +113,8 @@ async function http<T>(path: string, options: FetchOptions & { method: string; b
 
    let res = await fetch(url, fetchOptions);
 
-   // Lógica de intercepción de expiración de token
    if (res.status === 401 && !_retry) {
       if (isRefreshing) {
-         // Si ya hay un refresco en curso, encolamos esta petición
          return new Promise<T>((resolve, reject) => {
             subscribeTokenRefresh(async (success: boolean) => {
                if (success) {
@@ -146,7 +147,7 @@ async function http<T>(path: string, options: FetchOptions & { method: string; b
          if (refreshRes.ok) {
             isRefreshing = false;
             onRefreshed(true);
-            res = await fetch(url, fetchOptions); // Reintenta la petición original
+            res = await fetch(url, fetchOptions);
          } else {
             isRefreshing = false;
             onRefreshed(false);
@@ -161,7 +162,6 @@ async function http<T>(path: string, options: FetchOptions & { method: string; b
       }
    }
 
-   // Manejo de errores estándar
    if (!res.ok) {
       if (res.status === 401) handleUnauthorizedClient();
 
@@ -170,13 +170,17 @@ async function http<T>(path: string, options: FetchOptions & { method: string; b
          const ct = res.headers.get("content-type") || "";
          if (ct.includes("application/json")) {
             const body = await res.json();
-            message = body?.detail || body?.message || message;
+            if (Array.isArray(body?.detail)) {
+               message = body.detail.map((e: any) => e.msg).join(" | ");
+            } else {
+               message = body?.detail || body?.message || message;
+            }
          } else {
             const text = await res.text();
             message = text || message;
          }
       } catch {
-         // Silencia errores de parseo si el backend no devuelve un body coherente
+         // Fallback silencioso
       }
 
       const err = new Error(message) as Error & { status?: number };
@@ -184,21 +188,12 @@ async function http<T>(path: string, options: FetchOptions & { method: string; b
       throw err;
    }
 
-   // Respuestas exitosas sin contenido
    if (res.status === 204) return null as T;
 
-   // Manejo de flujos binarios para descargas (Reportes, Documentos)
-   if (responseType === "blob") {
-      return (await res.blob()) as unknown as T;
-   }
-   if (responseType === "arraybuffer") {
-      return (await res.arrayBuffer()) as unknown as T;
-   }
-   if (responseType === "text") {
-      return (await res.text()) as unknown as T;
-   }
+   if (responseType === "blob") return (await res.blob()) as unknown as T;
+   if (responseType === "arraybuffer") return (await res.arrayBuffer()) as unknown as T;
+   if (responseType === "text") return (await res.text()) as unknown as T;
 
-   // Por defecto asume JSON, pero previene errores si el header no cuadra
    const ct = res.headers.get("content-type") || "";
    if (!ct.includes("application/json")) {
       return (await res.text()) as unknown as T;
@@ -221,12 +216,8 @@ function createMethod(method: "POST" | "PUT" | "PATCH") {
 }
 
 export const api = {
-   get: <T>(path: string, options?: FetchOptions) =>
-      http<T>(path, { method: "GET", ...options }),
-
-   delete: <T>(path: string, options?: FetchOptions) =>
-      http<T>(path, { method: "DELETE", ...options }),
-
+   get: <T>(path: string, options?: FetchOptions) => http<T>(path, { method: "GET", ...options }),
+   delete: <T>(path: string, options?: FetchOptions) => http<T>(path, { method: "DELETE", ...options }),
    post: createMethod("POST"),
    put: createMethod("PUT"),
    patch: createMethod("PATCH"),

@@ -15,12 +15,14 @@ import { resetPasswordConfirmSchema } from "@/lib/zod"
 import { confirmPasswordResetAction } from "@/actions/auth-actions"
 import Link from "next/link"
 
+type ResetFormValues = z.infer<typeof resetPasswordConfirmSchema>;
+
 export default function ResetPasswordPage() {
    const [error, setError] = useState<string | null>(null);
    const [success, setSuccess] = useState(false);
    const [isPending, setIsPending] = useState(false);
 
-   const form = useForm<z.infer<typeof resetPasswordConfirmSchema>>({
+   const form = useForm<ResetFormValues>({
       resolver: standardSchemaResolver(resetPasswordConfirmSchema),
       defaultValues: {
          username: "",
@@ -30,7 +32,7 @@ export default function ResetPasswordPage() {
       },
    });
 
-   async function onSubmit(values: z.infer<typeof resetPasswordConfirmSchema>) {
+   async function onSubmit(values: ResetFormValues) {
       setError(null);
       setIsPending(true);
 

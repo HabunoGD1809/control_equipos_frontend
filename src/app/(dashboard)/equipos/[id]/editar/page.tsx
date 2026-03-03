@@ -30,7 +30,7 @@ export default async function EditarEquipoPage({ params }: PageProps) {
       );
    } catch (error: any) {
       if (error?.status === 401) {
-         redirect("/api/auth/logout");
+         redirect("/login");
       }
 
       if (error?.status === 404) {

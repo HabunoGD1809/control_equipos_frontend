@@ -2,17 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { AUTH_COOKIE_NAME } from "@/lib/constants";
 
-const API_BASE = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE =
+   process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
 
 if (!API_BASE) {
    throw new Error("API_BASE_URL (or NEXT_PUBLIC_API_BASE_URL) is not defined");
 }
 
-function buildBackendUrl(base: string, parts: string[], request: NextRequest): string {
+function buildBackendUrl(base: string, request: NextRequest): string {
    const cleanBase = base.replace(/\/$/, "");
-   const cleanPath = parts.join("/");
-   // Trailing slash para respetar las rutas definidas en FastAPI con barra final
-   const url = new URL(`${cleanBase}/${cleanPath}/`);
+   const targetPath = request.nextUrl.pathname.replace(/^\/api\/proxy/, "");
+   const url = new URL(`${cleanBase}${targetPath}`);
 
    request.nextUrl.searchParams.forEach((value, key) => {
       url.searchParams.append(key, value);
@@ -26,11 +26,10 @@ type RouteContext = { params: Promise<{ path: string[] }> };
 async function proxyRequest(
    request: NextRequest,
    ctx: RouteContext,
-   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
+   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
 ) {
-   const { path } = await ctx.params;
    const token = (await cookies()).get(AUTH_COOKIE_NAME)?.value;
-   const backendUrl = buildBackendUrl(API_BASE!, path, request);
+   const backendUrl = buildBackendUrl(API_BASE!, request);
 
    const headers = new Headers();
 
@@ -45,17 +44,13 @@ async function proxyRequest(
 
    if (method !== "GET" && method !== "DELETE") {
       const contentType = request.headers.get("content-type");
-      if (contentType) {
-         headers.set("Content-Type", contentType);
-      }
 
-      try {
-         const ab = await request.arrayBuffer();
-         if (ab.byteLength > 0) {
-            body = new Uint8Array(ab);
+      if (request.body) {
+         body = request.body;
+
+         if (contentType) {
+            headers.set("Content-Type", contentType);
          }
-      } catch {
-         body = undefined;
       }
    }
 
@@ -64,11 +59,13 @@ async function proxyRequest(
          method,
          headers,
          body,
+         // ✅ Requerido cuando body es un ReadableStream: deshabilita duplex restriction
+         // @ts-expect-error — duplex es requerido por la spec pero aún no está en los tipos de TS
+         duplex: "half",
          cache: "no-store",
       });
 
       const buffer = await backendResponse.arrayBuffer();
-
       const resHeaders = new Headers();
 
       const contentType = backendResponse.headers.get("content-type");
@@ -87,8 +84,8 @@ async function proxyRequest(
    } catch (error) {
       console.error(`[Proxy] ${method} ${backendUrl} failed:`, error);
       return NextResponse.json(
-         { detail: "Error de conexión con el servidor" },
-         { status: 503 }
+         { detail: "Error de conexión con el servidor interno." },
+         { status: 503 },
       );
    }
 }

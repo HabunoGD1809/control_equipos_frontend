@@ -7,7 +7,7 @@ export const rolesService = {
    },
 
    getById: async (id: string): Promise<Rol> => {
-      return await api.get<Rol>(`/gestion/roles/${id}/`);
+      return await api.get<Rol>(`/gestion/roles/${id}`);
    },
 
    create: async (payload: RolCreate): Promise<Rol> => {
@@ -15,11 +15,11 @@ export const rolesService = {
    },
 
    update: async (id: string, payload: Partial<RolCreate>): Promise<Rol> => {
-      return await api.put<Rol>(`/gestion/roles/${id}/`, payload);
+      return await api.put<Rol>(`/gestion/roles/${id}`, payload);
    },
 
    delete: async (id: string): Promise<void> => {
-      await api.delete(`/gestion/roles/${id}/`);
+      await api.delete(`/gestion/roles/${id}`);
    },
 
    // --- PERMISOS ---

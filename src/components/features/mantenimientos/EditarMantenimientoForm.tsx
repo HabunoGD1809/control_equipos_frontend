@@ -90,7 +90,14 @@ export function EditarMantenimientoForm({
                ? "La orden ha sido cerrada exitosamente."
                : "Cambios guardados correctamente."
          });
+
+         // 1. Refresca la lista general de mantenimientos
          queryClient.invalidateQueries({ queryKey: ["mantenimientos"] });
+         // 2. Refresca el equipo actual (por si se muestra el historial o la fecha del próximo)
+         queryClient.invalidateQueries({ queryKey: ["equipos", mantenimiento.equipo_id] });
+         // 3. Refresca el dashboard (para el widget de mantenimientos próximos)
+         queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+
          onSuccess();
       },
       onError: (err: any) => {

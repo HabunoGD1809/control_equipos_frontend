@@ -1,12 +1,13 @@
 "use client"
 
 import {
-   LayoutDashboard, HardDrive, Settings, History, Package, Wrench, ShieldCheck, Calendar, ShoppingCart, Shield, User, BookUser, Book, ShieldAlert, DatabaseBackup, FileText
+   LayoutDashboard, HardDrive, Settings, History, Package, Wrench, ShieldCheck, Calendar, ShoppingCart, Shield, User, BookUser, Book, ShieldAlert, DatabaseBackup, FileText, LogOut
 } from "lucide-react";
-import { useSession } from "@/contexts/SessionProvider"; // ✅ Cambio aquí
+import { useSession } from "@/contexts/SessionProvider";
+import { useAuthStore } from "@/store/authStore";
+import { useQueryClient } from "@tanstack/react-query";
+import { logoutAction } from "@/actions/auth-actions";
 import { SidebarNav, NavItemProps } from "./SidebarNav";
-
-// --- Estructura de Rutas (Tu código original) ---
 
 const mainRoutes: NavItemProps[] = [
    { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard", permissions: ["ver_dashboard"] },
@@ -49,19 +50,24 @@ const adminRoutes: NavItemProps[] = [
    }
 ];
 
-// --- Componente Principal del Sidebar ---
-
 export function Sidebar() {
-   const { user } = useSession(); // ✅ Usamos el contexto seguro
+   const { user } = useSession();
+   const logoutZustand = useAuthStore(state => state.logout);
+   const queryClient = useQueryClient();
 
-   // Nota: Ya no necesitamos isLoading aquí porque el Layout padre espera a tener los datos
-   // antes de mostrar el dashboard. Si user es null, el layout ya habrá redirigido.
+   const handleLogout = async () => {
+      // 1. Limpiamos estados del cliente
+      logoutZustand();
+      queryClient.clear();
+      // 2. Ejecutamos el Server Action
+      await logoutAction();
+   };
 
    if (!user) return null;
 
    return (
       <aside className="hidden md:flex flex-col w-64 bg-card border-r h-full fixed">
-         <div className="p-4 border-b">
+         <div className="p-4 border-b shrink-0">
             <h1 className="text-2xl font-bold text-primary">ControlEquipos</h1>
          </div>
          <div className="flex-1 px-4 py-4 space-y-4 overflow-y-auto">
@@ -73,6 +79,17 @@ export function Sidebar() {
                <p className="px-2 mb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Sistema</p>
                <SidebarNav items={adminRoutes} />
             </div>
+         </div>
+
+         {/* BOTÓN CERRAR SESIÓN EN SIDEBAR */}
+         <div className="p-4 border-t shrink-0">
+            <button
+               onClick={handleLogout}
+               className="flex w-full items-center px-3 py-2 text-sm font-medium rounded-md transition-colors text-red-500 hover:bg-red-500/10"
+            >
+               <LogOut className="h-5 w-5 mr-3 shrink-0" />
+               <span>Cerrar sesión</span>
+            </button>
          </div>
       </aside>
    );

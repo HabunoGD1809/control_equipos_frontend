@@ -5,7 +5,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import * as z from "zod";
 import { Loader2, UploadCloud } from "lucide-react";
-import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/Button";
 import {
@@ -27,11 +27,12 @@ import {
 } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { useToast } from "@/components/ui/use-toast";
+import { AsyncCombobox } from "@/components/ui/AsyncCombobox";
 
-import { TipoDocumento, EquipoSimple } from "@/types/api";
+import { TipoDocumento } from "@/types/api";
 import { createDocumentoSchema, MIME_TYPE_MAP } from "@/lib/zod";
 import { documentosService } from "@/app/services/documentosService";
-import { api } from "@/lib/http";
+import { equiposService } from "@/app/services/equiposService";
 
 interface UploadDocumentoFormProps {
    equipoId?: string;
@@ -55,18 +56,7 @@ export function UploadDocumentoForm({
    const { toast } = useToast();
    const queryClient = useQueryClient();
 
-   // FASE UX: Detectamos si el formulario se abrió en la página global (sin dependencias previas)
    const isStandalone = !equipoId && !mantenimientoId && !licenciaId;
-
-   // Si es global, el propio formulario consulta los equipos para no forzar "Prop Drilling" desde arriba
-   const { data: equiposDisponibles = [], isLoading: isLoadingEquipos } = useQuery({
-      queryKey: ["equipos-dropdown"],
-      queryFn: async () => {
-         const res = await api.get<any>("/equipos", { params: { limit: 1000 } });
-         return (Array.isArray(res) ? res : res.items || []) as EquipoSimple[];
-      },
-      enabled: isStandalone, // Solo se ejecuta si estamos en la vista independiente
-   });
 
    const dynamicSchema = useMemo(
       () => createDocumentoSchema(tiposDocumento),
@@ -145,7 +135,7 @@ export function UploadDocumentoForm({
    });
 
    const onSubmit = (values: UploadDocumentoValues) => {
-      // Bloqueamos nativamente si intentan subir un doc suelto en la vista global
+      // Bloqueamos nativamente si intentan subir un doc suelto en la vista global sin seleccionar equipo
       if (isStandalone && !values.equipo_id) {
          form.setError("equipo_id", {
             type: "manual",
@@ -173,7 +163,6 @@ export function UploadDocumentoForm({
                )}
             />
 
-            {/* SECCIÓN INTELIGENTE: Selector de Equipo (Solo visible en vista Global) */}
             {isStandalone && (
                <FormField
                   control={form.control}
@@ -181,24 +170,21 @@ export function UploadDocumentoForm({
                   render={({ field }) => (
                      <FormItem>
                         <FormLabel>Vincular a un Equipo <span className="text-destructive">*</span></FormLabel>
-                        <Select
-                           value={field.value || undefined}
-                           onValueChange={field.onChange}
-                           disabled={isLoadingEquipos}
-                        >
-                           <FormControl>
-                              <SelectTrigger>
-                                 <SelectValue placeholder={isLoadingEquipos ? "Cargando equipos..." : "Seleccione un equipo..."} />
-                              </SelectTrigger>
-                           </FormControl>
-                           <SelectContent>
-                              {equiposDisponibles.map((e) => (
-                                 <SelectItem key={e.id} value={e.id}>
-                                    {e.nombre} ({e.numero_serie})
-                                 </SelectItem>
-                              ))}
-                           </SelectContent>
-                        </Select>
+                        <FormControl>
+                           <AsyncCombobox
+                              value={field.value}
+                              onChange={field.onChange}
+                              placeholder="Buscar equipo por nombre o serie..."
+                              emptyMessage="No se encontraron equipos."
+                              fetcher={async (query) => {
+                                 const resultados = await equiposService.search(query);
+                                 return resultados.map((eq) => ({
+                                    value: eq.id,
+                                    label: `${eq.nombre} (${eq.numero_serie})`
+                                 }));
+                              }}
+                           />
+                        </FormControl>
                         <FormMessage />
                      </FormItem>
                   )}

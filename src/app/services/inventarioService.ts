@@ -21,8 +21,11 @@ export interface ItemBajoStock extends Omit<InventarioStock, "tipo_item"> {
 
 export const inventarioService = {
    // --- Tipos ---
-   getTipos(): Promise<TipoItemInventario[]> {
-      return api.get<TipoItemInventario[]>("/inventario/tipos/");
+   getTipos(params?: {
+      skip?: number;
+      limit?: number;
+   }): Promise<TipoItemInventario[]> {
+      return api.get<TipoItemInventario[]>("/inventario/tipos/", { params });
    },
 
    getTipoById(id: string): Promise<TipoItemInventario> {
@@ -33,36 +36,71 @@ export const inventarioService = {
       return api.post<TipoItemInventario>("/inventario/tipos/", payload);
    },
 
-   updateTipo(id: string, payload: TipoItemInventarioUpdate): Promise<TipoItemInventario> {
+   updateTipo(
+      id: string,
+      payload: TipoItemInventarioUpdate,
+   ): Promise<TipoItemInventario> {
       return api.put<TipoItemInventario>(`/inventario/tipos/${id}`, payload);
    },
 
+   deleteTipo(id: string): Promise<void> {
+      return api.delete<void>(`/inventario/tipos/${id}`);
+   },
+
    // --- Stock ---
-   getStock(params?: { tipo_item_id?: string; ubicacion?: string }): Promise<InventarioStock[]> {
+   getStock(params?: {
+      tipo_item_id?: string;
+      ubicacion?: string;
+      lote?: string;
+      skip?: number;
+      limit?: number;
+   }): Promise<InventarioStock[]> {
       return api.get<InventarioStock[]>("/inventario/stock/", { params });
    },
 
    getStockTotal(tipoItemId: string): Promise<{ total: number }> {
-      return api.get<{ total: number }>(`/inventario/stock/item/${tipoItemId}/total`);
+      // El backend devuelve { tipo_item_id: "...", cantidad_total: number }.
+      // Por compatibilidad con tu UI lo mapeamos a { total: number }
+      return api
+         .get<any>(`/inventario/stock/item/${tipoItemId}/total`)
+         .then((res) => ({ total: res.cantidad_total || 0 }));
    },
 
    getItemsBajoStock(): Promise<ItemBajoStock[]> {
       return api.get<ItemBajoStock[]>("/inventario/tipos/bajo-stock/");
    },
 
-   updateStockDetails(stockId: string, payload: StockDetailsUpdate): Promise<InventarioStock> {
-      return api.put<InventarioStock>(`/inventario/stock/${stockId}/details`, payload);
+   updateStockDetails(
+      stockId: string,
+      payload: StockDetailsUpdate,
+   ): Promise<InventarioStock> {
+      return api.put<InventarioStock>(
+         `/inventario/stock/${stockId}/details`,
+         payload,
+      );
    },
 
    // --- Movimientos ---
-   getMovimientos(page = 1, limit = 50): Promise<InventarioMovimiento[]> {
-      const skip = (page - 1) * limit;
+   getMovimientos(params?: {
+      skip?: number;
+      limit?: number;
+      tipo_item_id?: string;
+      tipo_movimiento?: string;
+      start_date?: string;
+      end_date?: string;
+   }): Promise<InventarioMovimiento[]> {
       return api.get<InventarioMovimiento[]>("/inventario/movimientos/", {
-         params: { skip, limit },
+         params,
       });
    },
 
-   registrarMovimiento(payload: InventarioMovimientoCreate): Promise<InventarioMovimiento> {
+   getMovimientoById(id: string): Promise<InventarioMovimiento> {
+      return api.get<InventarioMovimiento>(`/inventario/movimientos/${id}`);
+   },
+
+   registrarMovimiento(
+      payload: InventarioMovimientoCreate,
+   ): Promise<InventarioMovimiento> {
       return api.post<InventarioMovimiento>("/inventario/movimientos/", payload);
    },
 };

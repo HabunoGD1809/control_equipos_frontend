@@ -2,8 +2,10 @@
 
 import { LogOut, UserCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useSession } from "@/contexts/SessionProvider"; // ✅ Cambio aquí
-import { logoutAction } from "@/actions/auth-actions"; // ✅ Usamos Server Action
+import { useSession } from "@/contexts/SessionProvider";
+import { logoutAction } from "@/actions/auth-actions";
+import { useAuthStore } from "@/store/authStore";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button"
 import {
    DropdownMenu,
@@ -18,13 +20,16 @@ import { Notifications } from "./Notifications"
 import { GlobalSearch } from "./GlobalSearch"
 
 export function Header() {
-   const { user } = useSession(); // ✅ Datos desde el contexto
+   const { user } = useSession();
    const router = useRouter();
+   const logoutZustand = useAuthStore(state => state.logout);
+   const queryClient = useQueryClient();
 
    const handleLogout = async () => {
-      await logoutAction(); // ✅ Limpieza segura de cookies
-      // El action ya redirige, pero por seguridad en UI:
-      // router.push('/login');
+      logoutZustand();
+      queryClient.clear();
+
+      await logoutAction();
    };
 
    return (

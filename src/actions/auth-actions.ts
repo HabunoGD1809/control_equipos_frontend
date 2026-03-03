@@ -71,6 +71,20 @@ export async function loginAction(values: z.infer<typeof loginSchema>) {
 
 export async function logoutAction() {
    const cookieStore = await cookies();
+   const refreshToken = cookieStore.get(REFRESH_COOKIE_NAME)?.value;
+
+   if (refreshToken) {
+      try {
+         // 🚨 NUEVO: Revocamos el token explícitamente en la Base de Datos
+         await serverApi.post("/auth/logout", { refresh_token: refreshToken });
+      } catch (error) {
+         // Si falla (ej: el token ya expiró o el backend no responde), 
+         // capturamos el error silenciosamente para asegurar que las 
+         // cookies locales siempre se borren y el usuario no quede atascado.
+         console.error("No se pudo revocar el token en el servidor:", error);
+      }
+   }
+
    cookieStore.delete(AUTH_COOKIE_NAME);
    cookieStore.delete(REFRESH_COOKIE_NAME);
    redirect("/login");

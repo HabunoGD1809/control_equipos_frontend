@@ -5,18 +5,13 @@ import { useForm } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { z } from "zod";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
-import { format, setHours, setMinutes } from "date-fns";
+import { format, setHours, setMinutes, isAfter } from "date-fns";
 import { es } from "date-fns/locale";
 import { CalendarIcon, Loader2, AlertCircle } from "lucide-react";
 
 import { reservaSchema } from "@/lib/zod";
 import { useCheckAvailability } from "@/hooks/useCheckAvailability";
-import type {
-   EquipoSimple,
-   ReservaEquipo,
-   ReservaEquipoCreate,
-   ReservaEquipoUpdate
-} from "@/types/api";
+import type { EquipoSimple, ReservaEquipo, ReservaEquipoCreate, ReservaEquipoUpdate } from "@/types/api";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -27,8 +22,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/Popover
 import { Calendar } from "@/components/ui/Calendar";
 import { Textarea } from "@/components/ui/Textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/Alert";
+import { AsyncCombobox } from "@/components/ui/AsyncCombobox";
 
 import { reservasService } from "@/app/services/reservasService";
+import { equiposService } from "@/app/services/equiposService";
 
 const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
    const h = String(Math.floor(i / 2)).padStart(2, "0");
@@ -128,6 +125,11 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
       const fecha_hora_inicio = setMinutes(setHours(data.fecha_inicio, sh), sm);
       const fecha_hora_fin = setMinutes(setHours(data.fecha_fin, eh), em);
 
+      if (!isAfter(fecha_hora_fin, fecha_hora_inicio)) {
+         form.setError("fecha_fin", { type: "manual", message: "La fecha/hora de fin debe ser posterior al inicio." });
+         return;
+      }
+
       const hasConflict = await checkOverlap({
          equipoId: data.equipo_id,
          startDate: fecha_hora_inicio,
@@ -148,14 +150,14 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
             fecha_hora_inicio: isoStart,
             fecha_hora_fin: isoEnd,
             proposito: data.proposito,
-            notas: data.notas ? data.notas : null,
+            notas: data.notas || null,
          };
          mutation.mutate(updatePayload);
       } else {
          const createPayload: ReservaEquipoCreate = {
             equipo_id: data.equipo_id,
             proposito: data.proposito,
-            notas: data.notas ? data.notas : null,
+            notas: data.notas || null,
             fecha_hora_inicio: isoStart,
             fecha_hora_fin: isoEnd,
          };
@@ -176,22 +178,13 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
                </Alert>
             )}
 
-            <FormField
-               control={form.control}
-               name="equipo_id"
-               render={({ field }) => (
-                  <FormItem>
-                     <FormLabel>Equipo a Reservar <span className="text-destructive">*</span></FormLabel>
-                     <Select
-                        onValueChange={(val) => {
-                           field.onChange(val);
-                           setAvailabilityError(null);
-                        }}
-                        value={field.value}
-                        disabled={!!initialData}
-                     >
+            <FormField control={form.control} name="equipo_id" render={({ field }) => (
+               <FormItem>
+                  <FormLabel>Equipo a Reservar <span className="text-destructive">*</span></FormLabel>
+                  {initialData ? (
+                     <Select disabled value={field.value}>
                         <FormControl>
-                           <SelectTrigger><SelectValue placeholder="Seleccione un equipo..." /></SelectTrigger>
+                           <SelectTrigger><SelectValue placeholder="Cargando..." /></SelectTrigger>
                         </FormControl>
                         <SelectContent>
                            {equipos.map((e) => (
@@ -201,138 +194,131 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
                            ))}
                         </SelectContent>
                      </Select>
-                     <FormMessage />
-                  </FormItem>
-               )}
-            />
+                  ) : (
+                     <FormControl>
+                        <AsyncCombobox
+                           value={field.value}
+                           onChange={(val) => {
+                              field.onChange(val);
+                              setAvailabilityError(null);
+                           }}
+                           placeholder="Buscar equipo por nombre o serie..."
+                           emptyMessage="No se encontraron equipos."
+                           fetcher={async (query) => {
+                              const resultados = await equiposService.search(query);
+                              return resultados.map((eq) => ({
+                                 value: eq.id,
+                                 label: `${eq.nombre} (${eq.numero_serie})`
+                              }));
+                           }}
+                           defaultOptions={equipos.slice(0, 100).map((e) => ({
+                              value: e.id,
+                              label: `${e.nombre} (${e.numero_serie})`
+                           }))}
+                        />
+                     </FormControl>
+                  )}
+                  <FormMessage />
+               </FormItem>
+            )} />
 
             <div className="grid grid-cols-2 gap-4">
-               <FormField
-                  control={form.control}
-                  name="fecha_inicio"
-                  render={({ field }) => (
-                     <FormItem className="flex flex-col">
-                        <FormLabel>Fecha de Inicio <span className="text-destructive">*</span></FormLabel>
-                        <Popover>
-                           <PopoverTrigger asChild>
-                              <FormControl>
-                                 <Button
-                                    variant="outline"
-                                    className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
-                                 >
-                                    {field.value ? format(field.value, "PPP", { locale: es }) : "Seleccione fecha"}
-                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                 </Button>
-                              </FormControl>
-                           </PopoverTrigger>
-                           <PopoverContent className="w-auto p-0" align="start">
-                              <Calendar mode="single" selected={field.value} onSelect={field.onChange} autoFocus />
-                           </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                     </FormItem>
-                  )}
-               />
-
-               <FormField
-                  control={form.control}
-                  name="hora_inicio"
-                  render={({ field }) => (
-                     <FormItem>
-                        <FormLabel>Hora de Inicio <span className="text-destructive">*</span></FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+               <FormField control={form.control} name="fecha_inicio" render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                     <FormLabel>Fecha de Inicio <span className="text-destructive">*</span></FormLabel>
+                     <Popover>
+                        <PopoverTrigger asChild>
                            <FormControl>
-                              <SelectTrigger><SelectValue placeholder="HH:MM" /></SelectTrigger>
+                              <Button variant="outline" className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                 {field.value ? format(field.value, "PPP", { locale: es }) : "Seleccione fecha"}
+                                 <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                              </Button>
                            </FormControl>
-                           <SelectContent>
-                              {TIME_OPTIONS.map((t) => (
-                                 <SelectItem key={t} value={t}>{t}</SelectItem>
-                              ))}
-                           </SelectContent>
-                        </Select>
-                        <FormMessage />
-                     </FormItem>
-                  )}
-               />
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                           <Calendar mode="single" selected={field.value} onSelect={field.onChange} autoFocus />
+                        </PopoverContent>
+                     </Popover>
+                     <FormMessage />
+                  </FormItem>
+               )} />
+
+               <FormField control={form.control} name="hora_inicio" render={({ field }) => (
+                  <FormItem>
+                     <FormLabel>Hora de Inicio <span className="text-destructive">*</span></FormLabel>
+                     <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                           <SelectTrigger><SelectValue placeholder="HH:MM" /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                           {TIME_OPTIONS.map((t) => (
+                              <SelectItem key={t} value={t}>{t}</SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
+                     <FormMessage />
+                  </FormItem>
+               )} />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-               <FormField
-                  control={form.control}
-                  name="fecha_fin"
-                  render={({ field }) => (
-                     <FormItem className="flex flex-col">
-                        <FormLabel>Fecha de Fin <span className="text-destructive">*</span></FormLabel>
-                        <Popover>
-                           <PopoverTrigger asChild>
-                              <FormControl>
-                                 <Button
-                                    variant="outline"
-                                    className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
-                                 >
-                                    {field.value ? format(field.value, "PPP", { locale: es }) : "Seleccione fecha"}
-                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                 </Button>
-                              </FormControl>
-                           </PopoverTrigger>
-                           <PopoverContent className="w-auto p-0" align="start">
-                              <Calendar mode="single" selected={field.value} onSelect={field.onChange} autoFocus />
-                           </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                     </FormItem>
-                  )}
-               />
-
-               <FormField
-                  control={form.control}
-                  name="hora_fin"
-                  render={({ field }) => (
-                     <FormItem>
-                        <FormLabel>Hora de Fin <span className="text-destructive">*</span></FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+               <FormField control={form.control} name="fecha_fin" render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                     <FormLabel>Fecha de Fin <span className="text-destructive">*</span></FormLabel>
+                     <Popover>
+                        <PopoverTrigger asChild>
                            <FormControl>
-                              <SelectTrigger><SelectValue placeholder="HH:MM" /></SelectTrigger>
+                              <Button variant="outline" className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                 {field.value ? format(field.value, "PPP", { locale: es }) : "Seleccione fecha"}
+                                 <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                              </Button>
                            </FormControl>
-                           <SelectContent>
-                              {TIME_OPTIONS.map((t) => (
-                                 <SelectItem key={t} value={t}>{t}</SelectItem>
-                              ))}
-                           </SelectContent>
-                        </Select>
-                        <FormMessage />
-                     </FormItem>
-                  )}
-               />
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                           <Calendar mode="single" selected={field.value} onSelect={field.onChange} autoFocus />
+                        </PopoverContent>
+                     </Popover>
+                     <FormMessage />
+                  </FormItem>
+               )} />
+
+               <FormField control={form.control} name="hora_fin" render={({ field }) => (
+                  <FormItem>
+                     <FormLabel>Hora de Fin <span className="text-destructive">*</span></FormLabel>
+                     <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                           <SelectTrigger><SelectValue placeholder="HH:MM" /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                           {TIME_OPTIONS.map((t) => (
+                              <SelectItem key={t} value={t}>{t}</SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
+                     <FormMessage />
+                  </FormItem>
+               )} />
             </div>
 
-            <FormField
-               control={form.control}
-               name="proposito"
-               render={({ field }) => (
-                  <FormItem>
-                     <FormLabel>Propósito de la Reserva <span className="text-destructive">*</span></FormLabel>
-                     <FormControl>
-                        <Textarea placeholder="Ej: Evento de marketing..." {...field} value={field.value ?? ""} className="resize-none" />
-                     </FormControl>
-                     <FormMessage />
-                  </FormItem>
-               )}
-            />
+            <FormField control={form.control} name="proposito" render={({ field }) => (
+               <FormItem>
+                  <FormLabel>Propósito de la Reserva <span className="text-destructive">*</span></FormLabel>
+                  <FormControl>
+                     <Textarea placeholder="Ej: Evento de marketing..." {...field} value={field.value ?? ""} className="resize-none" />
+                  </FormControl>
+                  <FormMessage />
+               </FormItem>
+            )} />
 
-            <FormField
-               control={form.control}
-               name="notas"
-               render={({ field }) => (
-                  <FormItem>
-                     <FormLabel>Notas Adicionales (Opcional)</FormLabel>
-                     <FormControl>
-                        <Textarea placeholder="Requerimientos especiales..." {...field} value={field.value ?? ""} className="resize-none" />
-                     </FormControl>
-                     <FormMessage />
-                  </FormItem>
-               )}
-            />
+            <FormField control={form.control} name="notas" render={({ field }) => (
+               <FormItem>
+                  <FormLabel>Notas Adicionales (Opcional)</FormLabel>
+                  <FormControl>
+                     <Textarea placeholder="Requerimientos especiales..." {...field} value={field.value ?? ""} className="resize-none" />
+                  </FormControl>
+                  <FormMessage />
+               </FormItem>
+            )} />
 
             <div className="flex justify-end pt-4">
                <Button type="submit" disabled={isSubmitting}>

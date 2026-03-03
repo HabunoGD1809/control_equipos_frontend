@@ -40,8 +40,8 @@ export function ValidarReservaModal({ reserva, isOpen, onClose, onSuccess }: Val
    const form = useForm<ValidarFormValues>({
       resolver: standardSchemaResolver(aprobarReservaSchema),
       defaultValues: {
-         accion: undefined,
-         notas_admin: "",
+         estado: undefined as any,
+         notas_administrador: "",
       },
    });
 
@@ -49,19 +49,18 @@ export function ValidarReservaModal({ reserva, isOpen, onClose, onSuccess }: Val
       mutationFn: (values: ValidarFormValues) => {
          if (!reserva) throw new Error("No hay reserva seleccionada");
 
-         const nuevoEstado = values.accion === "Aprobar" ? EstadoReservaEnum.Confirmada : EstadoReservaEnum.Rechazada;
-
          return reservasService.cambiarEstado(reserva.id, {
-            estado: nuevoEstado,
-            notas_administrador: values.notas_admin || null,
+            estado: values.estado,
+            notas_administrador: values.notas_administrador || null,
          });
       },
       onSuccess: (_, variables) => {
          toast({
-            title: variables.accion === "Aprobar" ? "Reserva Aprobada" : "Reserva Rechazada",
+            title: variables.estado === EstadoReservaEnum.Confirmada ? "Reserva Aprobada" : "Reserva Rechazada",
             description: "El estado de la reserva se ha actualizado correctamente."
          });
          queryClient.invalidateQueries({ queryKey: ["reservas"] });
+         queryClient.invalidateQueries({ queryKey: ["dashboard"] });
          form.reset();
          onClose();
          onSuccess?.();
@@ -98,7 +97,7 @@ export function ValidarReservaModal({ reserva, isOpen, onClose, onSuccess }: Val
                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-2">
                   <FormField
                      control={form.control}
-                     name="accion"
+                     name="estado"
                      render={({ field }) => (
                         <FormItem>
                            <FormLabel>Decisión</FormLabel>
@@ -110,13 +109,13 @@ export function ValidarReservaModal({ reserva, isOpen, onClose, onSuccess }: Val
                               >
                                  <FormItem className="flex items-center space-x-2 space-y-0">
                                     <FormControl>
-                                       <RadioGroupItem value="Aprobar" />
+                                       <RadioGroupItem value={EstadoReservaEnum.Confirmada} />
                                     </FormControl>
                                     <FormLabel className="font-normal text-green-600">Aprobar</FormLabel>
                                  </FormItem>
                                  <FormItem className="flex items-center space-x-2 space-y-0">
                                     <FormControl>
-                                       <RadioGroupItem value="Rechazar" />
+                                       <RadioGroupItem value={EstadoReservaEnum.Rechazada} />
                                     </FormControl>
                                     <FormLabel className="font-normal text-red-600">Rechazar</FormLabel>
                                  </FormItem>
@@ -129,7 +128,7 @@ export function ValidarReservaModal({ reserva, isOpen, onClose, onSuccess }: Val
 
                   <FormField
                      control={form.control}
-                     name="notas_admin"
+                     name="notas_administrador"
                      render={({ field }) => (
                         <FormItem>
                            <FormLabel>Notas del Administrador (Obligatorio si rechaza)</FormLabel>

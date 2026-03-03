@@ -11,7 +11,7 @@ import {
    Movimiento,
    Mantenimiento,
    Documentacion,
-   LicenciaSoftware,
+   AsignacionLicencia,
    EquipoSimple,
    TipoMantenimiento,
    TipoDocumento,
@@ -28,9 +28,13 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { useHasPermission } from "@/hooks/useHasPermission";
 import { equiposService } from "@/app/services/equiposService";
-import { api } from "@/lib/http";
+import { licenciasService } from "@/app/services/licenciasService";
+import { documentosService } from "@/app/services/documentosService";
+import { mantenimientosService } from "@/app/services/mantenimientosService";
+import { movimientosService } from "@/app/services/movimientosService";
+import { catalogosService } from "@/app/services/catalogosService";
+import { proveedoresService } from "@/app/services/proveedoresService";
 
-// Imports de Tabs
 import { EquipoDetailTab } from "@/components/features/equipos/EquipoDetailTab";
 import { EquipoComponentesTab } from "@/components/features/equipos/EquipoComponentesTab";
 import { EquipoPadreTab } from "@/components/features/equipos/EquipoPadreTab";
@@ -69,8 +73,7 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
    const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
    const [mantenimientos, setMantenimientos] = useState<Mantenimiento[]>([]);
    const [documentos, setDocumentos] = useState<Documentacion[]>([]);
-   const [licencias, setLicencias] = useState<LicenciaSoftware[]>([]);
-
+   const [asignaciones, setAsignaciones] = useState<AsignacionLicencia[]>([]);
    const [equiposDisponibles, setEquiposDisponibles] = useState<EquipoSimple[]>([]);
    const [tiposMantenimiento, setTiposMantenimiento] = useState<TipoMantenimiento[]>([]);
    const [tiposDocumento, setTiposDocumento] = useState<TipoDocumento[]>([]);
@@ -79,7 +82,7 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
    const [loadedTabs, setLoadedTabs] = useState<Record<string, boolean>>({
       detalles: true,
       componentes: true,
-      jerarquia: true
+      jerarquia: true,
    });
 
    const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } = useDeleteConfirmation({
@@ -94,20 +97,15 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
 
          setIsLoadingTab(true);
          try {
-            // CORRECCIÓN: Quitamos las barras finales (/) para evitar 
-            // discrepancias de ruta y errores 422 en la validación de query params de FastAPI.
-
             if (activeTab === "movimientos") {
-               const res = await api.get<any>("/movimientos", {
-                  params: { equipo_id: equipo.id, limit: 100 }
-               });
+               const res = await movimientosService.getAll({ equipo_id: equipo.id });
                setMovimientos(unwrapClient(res));
             }
             else if (activeTab === "mantenimiento") {
                const [mtoRes, tiposMtoRes, provRes] = await Promise.all([
-                  api.get<any>("/mantenimientos", { params: { equipo_id: equipo.id, limit: 100 } }),
-                  api.get<any>("/catalogos/tipos-mantenimiento"),
-                  api.get<any>("/proveedores", { params: { limit: 500 } })
+                  mantenimientosService.getAll({ equipo_id: equipo.id }),
+                  catalogosService.getTiposMantenimiento(),
+                  proveedoresService.getAll(),
                ]);
                setMantenimientos(unwrapClient(mtoRes));
                setTiposMantenimiento(unwrapClient(tiposMtoRes));
@@ -115,27 +113,24 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
             }
             else if (activeTab === "documentacion") {
                const [docsRes, tiposDocRes] = await Promise.all([
-                  api.get<any>(`/documentacion/equipo/${equipo.id}`, { params: { limit: 100 } }),
-                  api.get<any>("/catalogos/tipos-documento")
+                  documentosService.getByEquipo(equipo.id),
+                  catalogosService.getTiposDocumento(),
                ]);
                setDocumentos(unwrapClient(docsRes));
                setTiposDocumento(unwrapClient(tiposDocRes));
             }
             else if (activeTab === "licencias") {
-               const res = await api.get<any>("/licencias/asignaciones", {
-                  params: { equipo_id: equipo.id, limit: 100 }
-               });
-               const asignaciones = unwrapClient<{ licencia: LicenciaSoftware }>(res);
-               setLicencias(asignaciones.map(a => a.licencia));
+               const asigRes = await licenciasService.getAsignaciones({ equipo_id: equipo.id });
+               setAsignaciones(unwrapClient(asigRes));
             }
             else if (activeTab === "componentes") {
-               const res = await api.get<any>("/equipos", { params: { limit: 500 } });
+               const res = await equiposService.getAll({ limit: 500 });
                setEquiposDisponibles(unwrapClient(res));
             }
 
             setLoadedTabs(prev => ({ ...prev, [activeTab]: true }));
          } catch (error) {
-            console.error("Error cargando datos de la pestaña:", error);
+            console.error(`Error cargando datos de la pestaña ${activeTab}:`, error);
          } finally {
             setIsLoadingTab(false);
          }
@@ -169,7 +164,6 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
                      <Edit className="mr-2 h-4 w-4" /> Editar
                   </Button>
                )}
-
                <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                      <Button variant="secondary" className="shadow-sm">Acciones</Button>
@@ -195,14 +189,14 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2 md:grid-cols-8 h-auto shadow-sm">
                <TabsTrigger value="detalles">Detalles</TabsTrigger>
-               <TabsTrigger value="componentes" className="gap-2"><Box className="h-4 w-4" /> <span className="hidden md:inline">Componentes</span></TabsTrigger>
-               <TabsTrigger value="jerarquia" className="gap-2"><Share2 className="h-4 w-4" /> <span className="hidden md:inline">Jerarquía</span></TabsTrigger>
-               <TabsTrigger value="movimientos" className="gap-2"><Activity className="h-4 w-4" /> <span className="hidden md:inline">Movimientos</span></TabsTrigger>
+               <TabsTrigger value="componentes" className="gap-2"><Box className="h-4 w-4" /><span className="hidden md:inline">Componentes</span></TabsTrigger>
+               <TabsTrigger value="jerarquia" className="gap-2"><Share2 className="h-4 w-4" /><span className="hidden md:inline">Jerarquía</span></TabsTrigger>
+               <TabsTrigger value="movimientos" className="gap-2"><Activity className="h-4 w-4" /><span className="hidden md:inline">Movimientos</span></TabsTrigger>
                <TabsTrigger value="mantenimiento">Mantenimiento</TabsTrigger>
-               <TabsTrigger value="documentacion" className="gap-2"><FileText className="h-4 w-4" /> <span className="hidden md:inline">Docs</span></TabsTrigger>
+               <TabsTrigger value="documentacion" className="gap-2"><FileText className="h-4 w-4" /><span className="hidden md:inline">Docs</span></TabsTrigger>
                <TabsTrigger value="licencias">Licencias</TabsTrigger>
                {canAudit && (
-                  <TabsTrigger value="auditoria" className="gap-2"><History className="h-4 w-4" /> <span className="hidden md:inline">Auditoría</span></TabsTrigger>
+                  <TabsTrigger value="auditoria" className="gap-2"><History className="h-4 w-4" /><span className="hidden md:inline">Auditoría</span></TabsTrigger>
                )}
             </TabsList>
 
@@ -254,7 +248,8 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
 
                <TabsContent value="licencias" className="mt-0 animate-in fade-in duration-300">
                   <EquipoLicenciasTab
-                     licenciasAsignadas={licencias}
+                     asignaciones={asignaciones}
+                     equipoId={equipo.id}
                   />
                </TabsContent>
 

@@ -70,14 +70,12 @@ export function AsignarLicenciaForm({ licenciaId, equipos, usuarios, onSuccess }
 
          onSuccess();
       },
-      onError: (err: unknown) => {
-         const e = err as Error & { status?: number };
+      onError: (err: any) => {
          toast({
             variant: "destructive",
             title: "Error de asignación",
             description:
-               e.message ||
-               "No se pudo realizar la asignación. Verifique si ya existe una asignación o si no hay stock.",
+               err.detail || err.message || "No se pudo realizar la asignación. Verifique si ya existe una asignación o si no hay stock.",
          });
       }
    });
@@ -85,9 +83,9 @@ export function AsignarLicenciaForm({ licenciaId, equipos, usuarios, onSuccess }
    const onSubmit = (values: FormValues) => {
       mutation.mutate({
          licencia_id: licenciaId,
-         equipo_id: values.asignar_a === "equipo" ? values.equipo_id ?? null : null,
-         usuario_id: values.asignar_a === "usuario" ? values.usuario_id ?? null : null,
-         notas: values.notas ?? null,
+         equipo_id: (values.asignar_a === "equipo" && values.equipo_id) ? values.equipo_id : null,
+         usuario_id: (values.asignar_a === "usuario" && values.usuario_id) ? values.usuario_id : null,
+         notas: values.notas || null,
          instalado: values.instalado,
       });
    };

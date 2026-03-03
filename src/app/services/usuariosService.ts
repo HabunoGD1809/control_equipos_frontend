@@ -1,14 +1,17 @@
-import { api } from '@/lib/http';
-import type { Usuario, UsuarioCreate, UsuarioUpdate } from '@/types/api';
+import { api } from "@/lib/http";
+import type { Usuario, UsuarioCreate, UsuarioUpdate } from "@/types/api";
 
 export const usuariosService = {
-   getAll: async (params?: { skip?: number; limit?: number; q?: string }): Promise<Usuario[]> => {
-      const rawLimit = params?.limit || 100;
-      return await api.get<Usuario[]>('/usuarios', {
+   getAll: async (params?: {
+      skip?: number;
+      limit?: number;
+      q?: string;
+   }): Promise<Usuario[]> => {
+      return await api.get<Usuario[]>("/usuarios/", {
          params: {
             ...params,
-            limit: rawLimit,
-         }
+            limit: params?.limit || 100,
+         },
       });
    },
 
@@ -17,11 +20,11 @@ export const usuariosService = {
    },
 
    getMe: async (): Promise<Usuario> => {
-      return await api.get<Usuario>('/usuarios/me');
+      return await api.get<Usuario>("/usuarios/me/");
    },
 
    create: async (payload: UsuarioCreate): Promise<Usuario> => {
-      return await api.post<Usuario>('/usuarios', payload);
+      return await api.post<Usuario>("/usuarios/", payload);
    },
 
    update: async (id: string, payload: UsuarioUpdate): Promise<Usuario> => {
@@ -37,6 +40,6 @@ export const usuariosService = {
    },
 
    updateMe: async (payload: Partial<UsuarioUpdate>): Promise<Usuario> => {
-      return await api.put<Usuario>('/usuarios/me', payload);
+      return await api.put<Usuario>("/usuarios/me/", payload);
    },
 };

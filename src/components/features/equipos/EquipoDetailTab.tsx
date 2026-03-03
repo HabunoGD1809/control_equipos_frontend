@@ -5,7 +5,8 @@ import {
    Tag,
    Building2,
    Hash,
-   Info
+   Info,
+   ShieldAlert
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -13,6 +14,7 @@ import { es } from "date-fns/locale";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Separator } from "@/components/ui/Separator";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/Alert";
 import type { EquipoRead } from "@/types/api";
 
 interface EquipoDetailTabProps {
@@ -34,8 +36,26 @@ export function EquipoDetailTab({ equipo }: EquipoDetailTabProps) {
       return format(new Date(dateString), "PPP", { locale: es });
    };
 
+   const estadosMovibles = ["Disponible", "En Uso"];
+   const estadoNombre = equipo.estado?.nombre || "";
+   const permiteMovimientos = estadosMovibles.includes(estadoNombre);
+   const movimientosBloqueados = !permiteMovimientos;
+
    return (
       <div className="space-y-6">
+
+         {/* 🚨 ALERTA DE RESTRICCIÓN DE NEGOCIO 🚨 */}
+         {movimientosBloqueados && (
+            <Alert variant="destructive" className="bg-destructive/10 text-destructive border-destructive/20">
+               <ShieldAlert className="h-5 w-5" />
+               <AlertTitle>Movimientos Bloqueados</AlertTitle>
+               <AlertDescription>
+                  Este equipo se encuentra en estado <strong>&quot;{estadoNombre}&quot;</strong>.
+                  Por reglas del sistema, no es posible registrar traslados ni asignaciones hasta que cambie a un estado que permita movimientos (ej: Disponible o En Uso).
+               </AlertDescription>
+            </Alert>
+         )}
+
          {/* Encabezado Rápido */}
          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
@@ -54,13 +74,13 @@ export function EquipoDetailTab({ equipo }: EquipoDetailTabProps) {
                         }}
                         className="text-sm font-bold"
                      >
-                        {equipo.estado?.nombre || "Desconocido"}
+                        {estadoNombre || "Desconocido"}
                      </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                     {equipo.estado?.nombre === "Disponible"
-                        ? "Listo para asignación"
-                        : "Requiere autorización para mover"}
+                     {permiteMovimientos
+                        ? "Permite asignaciones y traslados"
+                        : "Requiere revisión para mover"}
                   </p>
                </CardContent>
             </Card>

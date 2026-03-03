@@ -7,12 +7,14 @@ import { refreshAccessToken } from "@/lib/token-refresh";
 const BASE_URL: string = (() => {
    const v = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
    if (!v) {
-      throw new Error("API_BASE_URL (or NEXT_PUBLIC_API_BASE_URL) is not defined");
+      throw new Error(
+         "API_BASE_URL (or NEXT_PUBLIC_API_BASE_URL) is not defined",
+      );
    }
    return v;
 })();
 
-type Primitive = string | number | boolean;
+type Primitive = string | number | boolean | Date;
 
 interface FetchOptions extends RequestInit {
    params?: Record<string, Primitive | undefined | null>;
@@ -21,7 +23,19 @@ interface FetchOptions extends RequestInit {
 
 type HttpError = Error & { status?: number; detail?: any };
 
-async function httpServer<T>(path: string, options: FetchOptions = {}): Promise<T> {
+function clearAuthCookiesSafely(cookieStore: any) {
+   try {
+      cookieStore.delete(AUTH_COOKIE_NAME);
+      cookieStore.delete(REFRESH_COOKIE_NAME);
+   } catch (e) {
+      // Ignorar en RSC
+   }
+}
+
+async function httpServer<T>(
+   path: string,
+   options: FetchOptions = {},
+): Promise<T> {
    const { params, headers, _retry, ...rest } = options;
 
    const cleanBase = BASE_URL.replace(/\/$/, "");
@@ -31,7 +45,11 @@ async function httpServer<T>(path: string, options: FetchOptions = {}): Promise<
    if (params) {
       for (const [key, value] of Object.entries(params)) {
          if (value === undefined || value === null) continue;
-         url.searchParams.set(key, String(value));
+         if (value instanceof Date) {
+            url.searchParams.set(key, value.toISOString());
+         } else {
+            url.searchParams.set(key, String(value));
+         }
       }
    }
 
@@ -50,27 +68,20 @@ async function httpServer<T>(path: string, options: FetchOptions = {}): Promise<
       cache: rest.cache ?? "no-store",
    });
 
-   // 401 → intenta refresh 1 vez
    if (response.status === 401 && !_retry) {
       const newAccessToken = await refreshAccessToken();
 
       if (newAccessToken) {
-         // Reintenta una vez con el token actualizado en cookie
          return httpServer<T>(path, { ...options, _retry: true });
       }
 
-      // Refresh falló → limpiar cookies para evitar loop con tokens viejos
-      cookieStore.delete(AUTH_COOKIE_NAME);
-      cookieStore.delete(REFRESH_COOKIE_NAME);
-
+      clearAuthCookiesSafely(cookieStore);
       redirect("/login");
    }
 
    if (!response.ok) {
       if (response.status === 401) {
-         // Si llega aquí con 401 (ej. _retry ya true), igual limpia y manda a login
-         cookieStore.delete(AUTH_COOKIE_NAME);
-         cookieStore.delete(REFRESH_COOKIE_NAME);
+         clearAuthCookiesSafely(cookieStore);
          redirect("/login");
       }
 
@@ -82,13 +93,18 @@ async function httpServer<T>(path: string, options: FetchOptions = {}): Promise<
          if (ct.includes("application/json")) {
             const body = await response.json();
             detail = body?.detail || body?.message;
-            message = detail || message;
+
+            if (Array.isArray(detail)) {
+               message = detail.map((e: any) => e.msg).join(" | ");
+            } else {
+               message = detail || message;
+            }
          } else {
             const text = await response.text();
             message = text || message;
          }
       } catch {
-         // ignore parse errors
+         // Silenciado
       }
 
       const err = new Error(message) as HttpError;
@@ -112,7 +128,10 @@ const formatPayload = (body: unknown, options?: FetchOptions): FetchOptions => {
    const isUrlEncoded = body instanceof URLSearchParams;
    const isString = typeof body === "string";
 
-   const parsedBody = isFormData || isUrlEncoded || isString ? (body as BodyInit) : JSON.stringify(body);
+   const parsedBody =
+      isFormData || isUrlEncoded || isString
+         ? (body as BodyInit)
+         : JSON.stringify(body);
 
    let defaultContentType: string | undefined = "application/json";
    if (isFormData) defaultContentType = undefined;
@@ -127,12 +146,14 @@ const formatPayload = (body: unknown, options?: FetchOptions): FetchOptions => {
 };
 
 export const serverApi = {
-   get: <T>(path: string, options?: FetchOptions) => httpServer<T>(path, { method: "GET", ...options }),
+   get: <T>(path: string, options?: FetchOptions) =>
+      httpServer<T>(path, { method: "GET", ...options }),
    post: <T>(path: string, body: unknown, options?: FetchOptions) =>
       httpServer<T>(path, { method: "POST", ...formatPayload(body, options) }),
    put: <T>(path: string, body: unknown, options?: FetchOptions) =>
       httpServer<T>(path, { method: "PUT", ...formatPayload(body, options) }),
    patch: <T>(path: string, body: unknown, options?: FetchOptions) =>
       httpServer<T>(path, { method: "PATCH", ...formatPayload(body, options) }),
-   delete: <T>(path: string, options?: FetchOptions) => httpServer<T>(path, { method: "DELETE", ...options }),
+   delete: <T>(path: string, options?: FetchOptions) =>
+      httpServer<T>(path, { method: "DELETE", ...options }),
 };

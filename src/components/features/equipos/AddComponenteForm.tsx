@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
-import { Loader2, Search } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import * as z from "zod";
 
 import { Button } from "@/components/ui/Button";
@@ -16,7 +16,6 @@ import {
    FormMessage,
 } from "@/components/ui/Form";
 import { Input } from "@/components/ui/Input";
-import { Label } from "@/components/ui/Label";
 import {
    Select,
    SelectContent,
@@ -26,13 +25,11 @@ import {
 } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { useToast } from "@/components/ui/use-toast";
+import { AsyncCombobox } from "@/components/ui/AsyncCombobox";
 
 import { addComponenteSchema } from "@/lib/zod";
 import { equiposService } from "@/app/services/equiposService";
-import { useDebounce } from "@/hooks/useDebounce";
-
 import { TipoRelacionComponenteEnum } from "@/types/api";
-import type { EquipoSearchResult } from "@/types/api";
 
 type AddComponenteValues = z.infer<typeof addComponenteSchema>;
 
@@ -45,11 +42,6 @@ export function AddComponenteForm({ padreId, onSuccess }: AddComponenteFormProps
    const { toast } = useToast();
    const [isLoading, setIsLoading] = useState(false);
 
-   const [searchTerm, setSearchTerm] = useState("");
-   const debouncedSearch = useDebounce(searchTerm, 500);
-   const [searchResults, setSearchResults] = useState<EquipoSearchResult[]>([]);
-   const [isSearching, setIsSearching] = useState(false);
-
    const form = useForm<AddComponenteValues>({
       resolver: standardSchemaResolver(addComponenteSchema),
       defaultValues: {
@@ -59,25 +51,6 @@ export function AddComponenteForm({ padreId, onSuccess }: AddComponenteFormProps
          notas: "",
       },
    });
-
-   useEffect(() => {
-      const search = async () => {
-         if (!debouncedSearch || debouncedSearch.length < 2) {
-            setSearchResults([]);
-            return;
-         }
-         setIsSearching(true);
-         try {
-            const results = await equiposService.search(debouncedSearch);
-            setSearchResults(results.filter(r => r.id !== padreId));
-         } catch (error) {
-            console.error("Error buscando equipos:", error);
-         } finally {
-            setIsSearching(false);
-         }
-      };
-      search();
-   }, [debouncedSearch, padreId]);
 
    const onSubmit = async (data: AddComponenteValues) => {
       setIsLoading(true);
@@ -105,45 +78,29 @@ export function AddComponenteForm({ padreId, onSuccess }: AddComponenteFormProps
       <Form {...form}>
          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-2">
 
-            {/* Búsqueda Independiente (No atada al react-hook-form) */}
-            <div className="space-y-2 bg-muted/30 p-3 rounded-md border">
-               <Label>1. Buscar Equipo para Vincular</Label>
-               <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                     placeholder="Escriba nombre o número de serie..."
-                     value={searchTerm}
-                     onChange={(e) => setSearchTerm(e.target.value)}
-                     className="pl-9 bg-background"
-                  />
-               </div>
-               {isSearching && <p className="text-xs text-muted-foreground ml-1">Buscando en la base de datos...</p>}
-            </div>
-
-            {/* Campo conectado a react-hook-form */}
             <FormField
                control={form.control}
                name="equipo_componente_id"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>2. Seleccione el Equipo Encontrado</FormLabel>
-                     <Select onValueChange={field.onChange} value={field.value || undefined}>
-                        <FormControl>
-                           <SelectTrigger>
-                              <SelectValue placeholder="Seleccione un resultado de la búsqueda..." />
-                           </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                           {searchResults.length === 0 && !isSearching && (
-                              <SelectItem value="none" disabled>No hay resultados. Use la barra de búsqueda.</SelectItem>
-                           )}
-                           {searchResults.map((equipo) => (
-                              <SelectItem key={equipo.id} value={equipo.id}>
-                                 {equipo.nombre} ({equipo.numero_serie})
-                              </SelectItem>
-                           ))}
-                        </SelectContent>
-                     </Select>
+                     <FormLabel>Buscar y Seleccionar Componente</FormLabel>
+                     <FormControl>
+                        <AsyncCombobox
+                           value={field.value}
+                           onChange={field.onChange}
+                           placeholder="Escriba nombre o número de serie..."
+                           emptyMessage="No hay resultados. Pruebe otro término."
+                           fetcher={async (query) => {
+                              const res = await equiposService.search(query);
+                              return res
+                                 .filter((eq) => eq.id !== padreId)
+                                 .map((eq) => ({
+                                    value: eq.id,
+                                    label: `${eq.nombre} (${eq.numero_serie})`
+                                 }));
+                           }}
+                        />
+                     </FormControl>
                      <FormMessage />
                   </FormItem>
                )}

@@ -29,6 +29,6 @@ export const backupsService = {
    },
 
    triggerBackup: async (): Promise<any> => {
-      return await api.post<any>("/backups/logs/");
+      return await api.post<any>("/backups/logs/", {});
    },
 };

@@ -5,7 +5,7 @@ import { MantenimientosClient } from "./components/MantenimientosClient";
 // Helper genérico para obtener datos en el servidor
 async function fetchData(endpoint: string) {
    const accessToken = (await cookies()).get('access_token')?.value;
-   if (!accessToken) return []; // Retorna un array vacío si no hay token
+   if (!accessToken) return [];
 
    try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}${endpoint}`, {
@@ -32,13 +32,7 @@ export default async function MantenimientosPage() {
    ]);
 
    return (
-      <div className="container mx-auto py-10">
-         <div className="mb-6">
-            <h1 className="text-3xl font-bold tracking-tight">Gestión de Mantenimientos</h1>
-            <p className="text-muted-foreground">
-               Programa, visualiza y gestiona todos los mantenimientos de los equipos.
-            </p>
-         </div>
+      <div className="flex-1 space-y-6">
          <MantenimientosClient
             initialData={mantenimientos}
             equipos={equipos}

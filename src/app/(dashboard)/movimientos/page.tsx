@@ -2,6 +2,7 @@ import { MovimientosClient } from "./components/MovimientosClient";
 import { movimientosServerService } from "@/app/services/movimientosService.server";
 import { equiposServerService } from "@/app/services/equiposService.server";
 import { usuariosServerService } from "@/app/services/usuariosService.server";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 async function getMovimientosPageData() {
    try {
@@ -13,7 +14,7 @@ async function getMovimientosPageData() {
 
       return {
          movimientos,
-         equipos: equiposData.items,
+         equipos: equiposData,
          usuarios,
       };
    } catch (error) {
@@ -26,13 +27,11 @@ export default async function MovimientosPage() {
    const { movimientos, equipos, usuarios } = await getMovimientosPageData();
 
    return (
-      <div className="space-y-8">
-         <div>
-            <h1 className="text-3xl font-bold">Historial de Movimientos</h1>
-            <p className="text-muted-foreground">
-               Consulta y registra todos los movimientos y asignaciones de equipos.
-            </p>
-         </div>
+      <div className="flex-1 space-y-6">
+         <PageHeader
+            title="Historial de Movimientos"
+            description="Consulta y registra todos los movimientos y asignaciones de equipos."
+         />
          <MovimientosClient
             initialData={movimientos}
             equipos={equipos}

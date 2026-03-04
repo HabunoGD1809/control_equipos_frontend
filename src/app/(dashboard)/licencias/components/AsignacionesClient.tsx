@@ -13,7 +13,7 @@ import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
 
 import { useHasPermission } from "@/hooks/useHasPermission";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
-import { api } from "@/lib/http";
+import { licenciasService } from "@/app/services/licenciasService";
 import type { AsignacionLicencia } from "@/types/api";
 
 interface AsignacionesClientProps {
@@ -25,7 +25,7 @@ export function AsignacionesClient({ data }: AsignacionesClientProps) {
    const canUnassign = useHasPermission(['desasignar_licencias']);
 
    const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } = useDeleteConfirmation({
-      onDelete: (id) => api.delete(`/licencias/asignaciones/${id}`),
+      onDelete: (id) => licenciasService.revocarAsignacion(id as string),
       onSuccess: () => router.refresh(),
       successMessage: "Licencia desasignada correctamente.",
    });
@@ -89,7 +89,7 @@ export function AsignacionesClient({ data }: AsignacionesClientProps) {
             columns={columns}
             data={data}
             filterColumn="software"
-            tableContainerClassName="shadow-sm"
+            tableContainerClassName="shadow-sm border rounded-lg bg-card"
          />
       </div>
    )

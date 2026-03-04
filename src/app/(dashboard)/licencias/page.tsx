@@ -40,13 +40,7 @@ export default async function LicenciasPage() {
    const safeAsignaciones = Array.isArray(asignaciones) ? asignaciones : [];
 
    return (
-      <div className="space-y-8">
-         <div>
-            <h1 className="text-3xl font-bold">Gestión de Licencias de Software</h1>
-            <p className="text-muted-foreground">
-               Administre el catálogo de software, licencias adquiridas y sus asignaciones.
-            </p>
-         </div>
+      <div className="flex-1 space-y-6">
          <LicenciasClient
             initialLicencias={safeLicencias}
             initialCatalogo={safeCatalogo}

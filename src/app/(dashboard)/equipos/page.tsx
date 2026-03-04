@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 
 import { EquiposClient } from "./components/EquiposClient";
 import { equiposServerService } from "@/app/services/equiposService.server";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 export const metadata: Metadata = {
    title: "Gestión de Equipos | Control de Activos",
@@ -29,14 +30,11 @@ export default async function EquiposPage({ searchParams }: PageProps) {
    });
 
    return (
-      <div className="flex-1 space-y-6 p-8 pt-6">
-         {/* 🚀 Cabecera estandarizada con descripción */}
-         <div>
-            <h2 className="text-3xl font-bold tracking-tight text-foreground">Equipos</h2>
-            <p className="text-muted-foreground mt-2">
-               Gestión e inventario centralizado de todos los activos físicos y tecnológicos.
-            </p>
-         </div>
+      <div className="flex-1 space-y-6">
+         <PageHeader
+            title="Equipos"
+            description="Gestión e inventario centralizado de todos los activos físicos y tecnológicos."
+         />
 
          <Suspense
             fallback={

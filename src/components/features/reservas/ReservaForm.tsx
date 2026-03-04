@@ -7,7 +7,7 @@ import { z } from "zod";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { format, setHours, setMinutes, isAfter } from "date-fns";
 import { es } from "date-fns/locale";
-import { CalendarIcon, Loader2, AlertCircle } from "lucide-react";
+import { CalendarIcon, Loader2, AlertCircle, Eraser } from "lucide-react";
 
 import { reservaSchema } from "@/lib/zod";
 import { useCheckAvailability } from "@/hooks/useCheckAvailability";
@@ -93,26 +93,20 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
          return await reservasService.create(payload as ReservaEquipoCreate);
       },
       onSuccess: (data) => {
-         toast({
-            title: initialData ? "Reserva Actualizada" : "Reserva Creada",
-            description: "La operación se completó correctamente."
-         });
+         toast({ title: initialData ? "Reserva Actualizada" : "Reserva Creada", description: "La operación se completó correctamente." });
          queryClient.invalidateQueries({ queryKey: ["reservas"] });
          onSuccess(data);
       },
-      onError: (err: any) => {
+      onError: (error: unknown) => {
+         const err = error as { status?: number; response?: { status?: number }; message?: string };
          const status = err?.status || err?.response?.status;
          const msg = err?.message?.toLowerCase() || "";
 
          if (status === 409 || msg.includes("overlap") || msg.includes("solapamiento") || msg.includes("excl")) {
-            setAvailabilityError("El sistema ha detectado un conflicto de horario (El equipo fue reservado en este instante).");
+            setAvailabilityError("El sistema ha detectado un conflicto de horario (El equipo ya fue reservado en este instante).");
             return;
          }
-         toast({
-            variant: "destructive",
-            title: "Error",
-            description: err.message || "No se pudo procesar la solicitud."
-         });
+         toast({ variant: "destructive", title: "Error", description: err.message || "No se pudo procesar la solicitud." });
       },
    });
 
@@ -138,7 +132,7 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
       });
 
       if (hasConflict) {
-         setAvailabilityError("El equipo ya tiene una reserva confirmada en este horario. Seleccione otro rango.");
+         setAvailabilityError("El equipo ya tiene una reserva confirmada en este horario. Seleccione otro rango o equipo.");
          return;
       }
 
@@ -146,22 +140,9 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
       const isoEnd = format(fecha_hora_fin, "yyyy-MM-dd'T'HH:mm:ssXXX");
 
       if (initialData) {
-         const updatePayload: ReservaEquipoUpdate = {
-            fecha_hora_inicio: isoStart,
-            fecha_hora_fin: isoEnd,
-            proposito: data.proposito,
-            notas: data.notas || null,
-         };
-         mutation.mutate(updatePayload);
+         mutation.mutate({ fecha_hora_inicio: isoStart, fecha_hora_fin: isoEnd, proposito: data.proposito, notas: data.notas || null });
       } else {
-         const createPayload: ReservaEquipoCreate = {
-            equipo_id: data.equipo_id,
-            proposito: data.proposito,
-            notas: data.notas || null,
-            fecha_hora_inicio: isoStart,
-            fecha_hora_fin: isoEnd,
-         };
-         mutation.mutate(createPayload);
+         mutation.mutate({ equipo_id: data.equipo_id, proposito: data.proposito, notas: data.notas || null, fecha_hora_inicio: isoStart, fecha_hora_fin: isoEnd });
       }
    };
 
@@ -171,7 +152,7 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
       <Form {...form}>
          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
             {availabilityError && (
-               <Alert variant="destructive">
+               <Alert variant="destructive" className="bg-destructive/10">
                   <AlertCircle className="h-4 w-4" />
                   <AlertTitle>Horario no disponible</AlertTitle>
                   <AlertDescription>{availabilityError}</AlertDescription>
@@ -183,38 +164,23 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
                   <FormLabel>Equipo a Reservar <span className="text-destructive">*</span></FormLabel>
                   {initialData ? (
                      <Select disabled value={field.value}>
-                        <FormControl>
-                           <SelectTrigger><SelectValue placeholder="Cargando..." /></SelectTrigger>
-                        </FormControl>
+                        <FormControl><SelectTrigger className="bg-muted"><SelectValue placeholder="Cargando..." /></SelectTrigger></FormControl>
                         <SelectContent>
-                           {equipos.map((e) => (
-                              <SelectItem key={e.id} value={e.id}>
-                                 {e.nombre} ({e.numero_serie})
-                              </SelectItem>
-                           ))}
+                           {equipos.map((e) => <SelectItem key={e.id} value={e.id}>{e.nombre} ({e.numero_serie})</SelectItem>)}
                         </SelectContent>
                      </Select>
                   ) : (
                      <FormControl>
                         <AsyncCombobox
                            value={field.value}
-                           onChange={(val) => {
-                              field.onChange(val);
-                              setAvailabilityError(null);
-                           }}
+                           onChange={(val) => { field.onChange(val); setAvailabilityError(null); }}
                            placeholder="Buscar equipo por nombre o serie..."
                            emptyMessage="No se encontraron equipos."
                            fetcher={async (query) => {
                               const resultados = await equiposService.search(query);
-                              return resultados.map((eq) => ({
-                                 value: eq.id,
-                                 label: `${eq.nombre} (${eq.numero_serie})`
-                              }));
+                              return resultados.map((eq) => ({ value: eq.id, label: `${eq.nombre} (${eq.numero_serie})` }));
                            }}
-                           defaultOptions={equipos.slice(0, 100).map((e) => ({
-                              value: e.id,
-                              label: `${e.nombre} (${e.numero_serie})`
-                           }))}
+                           defaultOptions={equipos.slice(0, 100).map((e) => ({ value: e.id, label: `${e.nombre} (${e.numero_serie})` }))}
                         />
                      </FormControl>
                   )}
@@ -229,7 +195,7 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
                      <Popover>
                         <PopoverTrigger asChild>
                            <FormControl>
-                              <Button variant="outline" className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                              <Button variant="outline" className={cn("pl-3 text-left font-normal bg-card", !field.value && "text-muted-foreground")}>
                                  {field.value ? format(field.value, "PPP", { locale: es }) : "Seleccione fecha"}
                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                               </Button>
@@ -247,13 +213,9 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
                   <FormItem>
                      <FormLabel>Hora de Inicio <span className="text-destructive">*</span></FormLabel>
                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                           <SelectTrigger><SelectValue placeholder="HH:MM" /></SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                           {TIME_OPTIONS.map((t) => (
-                              <SelectItem key={t} value={t}>{t}</SelectItem>
-                           ))}
+                        <FormControl><SelectTrigger className="bg-card"><SelectValue placeholder="HH:MM" /></SelectTrigger></FormControl>
+                        <SelectContent className="max-h-50">
+                           {TIME_OPTIONS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                         </SelectContent>
                      </Select>
                      <FormMessage />
@@ -261,14 +223,14 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
                )} />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 border-l-2 border-primary/20 pl-4 bg-muted/20 p-4 rounded-r-lg">
                <FormField control={form.control} name="fecha_fin" render={({ field }) => (
                   <FormItem className="flex flex-col">
                      <FormLabel>Fecha de Fin <span className="text-destructive">*</span></FormLabel>
                      <Popover>
                         <PopoverTrigger asChild>
                            <FormControl>
-                              <Button variant="outline" className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                              <Button variant="outline" className={cn("pl-3 text-left font-normal bg-card", !field.value && "text-muted-foreground")}>
                                  {field.value ? format(field.value, "PPP", { locale: es }) : "Seleccione fecha"}
                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                               </Button>
@@ -286,13 +248,9 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
                   <FormItem>
                      <FormLabel>Hora de Fin <span className="text-destructive">*</span></FormLabel>
                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                           <SelectTrigger><SelectValue placeholder="HH:MM" /></SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                           {TIME_OPTIONS.map((t) => (
-                              <SelectItem key={t} value={t}>{t}</SelectItem>
-                           ))}
+                        <FormControl><SelectTrigger className="bg-card"><SelectValue placeholder="HH:MM" /></SelectTrigger></FormControl>
+                        <SelectContent className="max-h-50">
+                           {TIME_OPTIONS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                         </SelectContent>
                      </Select>
                      <FormMessage />
@@ -303,9 +261,7 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
             <FormField control={form.control} name="proposito" render={({ field }) => (
                <FormItem>
                   <FormLabel>Propósito de la Reserva <span className="text-destructive">*</span></FormLabel>
-                  <FormControl>
-                     <Textarea placeholder="Ej: Evento de marketing..." {...field} value={field.value ?? ""} className="resize-none" />
-                  </FormControl>
+                  <FormControl><Textarea placeholder="Ej: Evento de marketing externo..." {...field} value={field.value ?? ""} className="resize-none bg-card" /></FormControl>
                   <FormMessage />
                </FormItem>
             )} />
@@ -313,15 +269,18 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
             <FormField control={form.control} name="notas" render={({ field }) => (
                <FormItem>
                   <FormLabel>Notas Adicionales (Opcional)</FormLabel>
-                  <FormControl>
-                     <Textarea placeholder="Requerimientos especiales..." {...field} value={field.value ?? ""} className="resize-none" />
-                  </FormControl>
+                  <FormControl><Textarea placeholder="Requerimientos especiales, accesorios..." {...field} value={field.value ?? ""} className="resize-none bg-card" /></FormControl>
                   <FormMessage />
                </FormItem>
             )} />
 
-            <div className="flex justify-end pt-4">
-               <Button type="submit" disabled={isSubmitting}>
+            <div className="flex justify-between items-center pt-4 border-t mt-4">
+               {!initialData ? (
+                  <Button type="button" variant="ghost" onClick={() => form.reset()} disabled={isSubmitting} className="text-muted-foreground hover:text-foreground">
+                     <Eraser className="mr-2 h-4 w-4" /> Limpiar
+                  </Button>
+               ) : <div />}
+               <Button type="submit" disabled={isSubmitting} className="min-w-40">
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {isChecking ? "Verificando..." : initialData ? "Actualizar Reserva" : "Solicitar Reserva"}
                </Button>

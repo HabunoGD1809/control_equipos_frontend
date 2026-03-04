@@ -1,18 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Pencil, Shield, Loader2 } from "lucide-react";
+import { Plus, Pencil, Shield, Loader2, RefreshCw } from "lucide-react";
+import { ColumnDef } from "@tanstack/react-table";
 
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
-import {
-   Dialog,
-   DialogContent,
-   DialogHeader,
-   DialogTitle,
-   DialogDescription,
-} from "@/components/ui/Dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/Dialog";
 import { useToast } from "@/components/ui/use-toast";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { RoleForm } from "@/components/features/roles/RoleForm";
 import { rolesService } from "@/app/services/rolesService";
 import { useAuthStore } from "@/store/authStore";
@@ -29,18 +25,12 @@ export function RolesClient() {
 
    const fetchRoles = useCallback(async () => {
       if (!isInitialized || !isAuthenticated) return;
-
       setLoading(true);
       try {
          const roles = await rolesService.getAll();
          setData(roles);
       } catch (error) {
-         console.error(error);
-         toast({
-            variant: "destructive",
-            title: "Error",
-            description: "Error al cargar roles.",
-         });
+         toast({ variant: "destructive", title: "Error", description: "Error al cargar roles." });
       } finally {
          setLoading(false);
       }
@@ -54,54 +44,36 @@ export function RolesClient() {
       }
    }, [isInitialized, isAuthenticated, fetchRoles]);
 
-   const handleEdit = (rol: Rol) => {
-      setSelectedRole(rol);
-      setIsModalOpen(true);
-   };
-
-   const handleCreate = () => {
-      setSelectedRole(undefined);
-      setIsModalOpen(true);
-   };
-
-   const handleSuccess = () => {
-      setIsModalOpen(false);
-      fetchRoles();
-   };
-
-   const columns = [
+   const columns: ColumnDef<Rol>[] = [
       {
          accessorKey: "nombre",
          header: "Rol",
-         cell: ({ row }: any) => (
+         cell: ({ row }) => (
             <div className="flex items-center gap-2">
-               <Shield className="h-4 w-4 text-muted-foreground" />
-               <span className="font-medium capitalize">{row.original.nombre}</span>
+               <Shield className="h-4 w-4 text-primary/70" />
+               <span className="font-semibold capitalize text-foreground">{row.original.nombre}</span>
             </div>
          ),
       },
       {
          accessorKey: "descripcion",
          header: "Descripción",
+         cell: ({ row }) => <span className="text-muted-foreground">{row.original.descripcion || "--"}</span>
       },
       {
          accessorKey: "permisos",
          header: "Permisos",
-         cell: ({ row }: any) => (
-            <span className="text-muted-foreground text-sm">
-               {row.original.permisos?.length || 0} permisos asignados
+         cell: ({ row }) => (
+            <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-secondary text-secondary-foreground">
+               {row.original.permisos?.length || 0} asignados
             </span>
          ),
       },
       {
          id: "actions",
-         cell: ({ row }: any) => (
+         cell: ({ row }) => (
             <div className="flex justify-end">
-               <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleEdit(row.original)}
-               >
+               <Button variant="ghost" size="sm" onClick={() => { setSelectedRole(row.original); setIsModalOpen(true); }} title="Editar Rol">
                   <Pencil className="h-4 w-4" />
                </Button>
             </div>
@@ -109,40 +81,38 @@ export function RolesClient() {
       },
    ];
 
-   if (!isInitialized || loading) {
-      return (
-         <div className="flex justify-center p-8">
-            <Loader2 className="animate-spin" />
-         </div>
-      );
+   if (!isInitialized || (loading && data.length === 0)) {
+      return <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
    }
 
    return (
-      <div className="space-y-4 animate-in fade-in duration-300">
-         <div className="flex justify-end">
-            <Button onClick={handleCreate} className="shadow-sm">
-               <Plus className="mr-2 h-4 w-4" /> Nuevo Rol
-            </Button>
-         </div>
-
-         <DataTable
-            columns={columns}
-            data={data}
-            tableContainerClassName="shadow-sm"
+      <div className="space-y-6 animate-in fade-in duration-300">
+         <PageHeader
+            title="Roles y Permisos"
+            description="Defina los perfiles de acceso y asigne capacidades específicas a cada rol."
+            actions={
+               <>
+                  <Button variant="outline" onClick={fetchRoles} disabled={loading} title="Actualizar lista">
+                     <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                  </Button>
+                  <Button onClick={() => { setSelectedRole(undefined); setIsModalOpen(true); }} className="shadow-sm">
+                     <Plus className="mr-2 h-4 w-4" /> Nuevo Rol
+                  </Button>
+               </>
+            }
          />
 
-         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-               <DialogHeader>
-                  <DialogTitle>{selectedRole ? "Editar Rol" : "Crear Rol"}</DialogTitle>
-                  <DialogDescription>
-                     Configure los detalles y permisos del rol a continuación.
-                  </DialogDescription>
-               </DialogHeader>
+         <DataTable columns={columns} data={data} tableContainerClassName="shadow-sm border rounded-md" />
 
+         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+            <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+               <DialogHeader>
+                  <DialogTitle>{selectedRole ? "Editar Rol" : "Crear Nuevo Rol"}</DialogTitle>
+                  <DialogDescription>Configure los detalles y permisos granulares del rol a continuación.</DialogDescription>
+               </DialogHeader>
                <RoleForm
                   initialData={selectedRole}
-                  onSuccess={handleSuccess}
+                  onSuccess={() => { setIsModalOpen(false); fetchRoles(); }}
                   onCancel={() => setIsModalOpen(false)}
                />
             </DialogContent>

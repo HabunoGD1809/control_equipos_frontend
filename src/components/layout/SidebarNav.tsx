@@ -2,13 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 import { useHasPermission } from "@/hooks/useHasPermission";
 import { cn } from "@/lib/utils";
-
-// --- Tipos y Componentes de Navegación ---
 
 export type NavItemProps = {
    href?: string;
@@ -20,60 +18,78 @@ export type NavItemProps = {
 
 interface SidebarNavProps {
    items: NavItemProps[];
+   isCollapsed: boolean;
 }
 
-// Componente principal que decide si renderizar un item simple o uno desplegable
-export function SidebarNav({ items }: SidebarNavProps) {
+export function SidebarNav({ items, isCollapsed }: SidebarNavProps) {
    return (
-      <nav className="flex flex-col gap-1">
+      <nav className="flex flex-col gap-1.5">
          {items.map((item, index) =>
             item.subRoutes ? (
-               <CollapsibleNavItem key={`collapsible-${index}`} item={item} />
+               <CollapsibleNavItem key={`collapsible-${index}`} item={item} isCollapsed={isCollapsed} />
             ) : (
-               <NavItem key={item.href} item={item} />
+               <NavItem key={item.href} item={item} isCollapsed={isCollapsed} />
             )
          )}
       </nav>
    );
 }
 
-// Componente para Items Desplegables
-function CollapsibleNavItem({ item }: { item: NavItemProps }) {
+function CollapsibleNavItem({ item, isCollapsed }: { item: NavItemProps; isCollapsed: boolean }) {
    const pathname = usePathname();
    const hasPermissionForAnySubRoute = useHasPermission(item.subRoutes?.flatMap(sub => sub.permissions) || []);
-
    const isAnySubRouteActive = item.subRoutes?.some(sub => sub.href && pathname.startsWith(sub.href)) || false;
    const [isOpen, setIsOpen] = useState(isAnySubRouteActive);
+
+   useEffect(() => {
+      if (isCollapsed) setIsOpen(false);
+   }, [isCollapsed]);
 
    if (!hasPermissionForAnySubRoute) return null;
 
    return (
-      <div>
+      <div className="flex flex-col gap-1">
          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="flex items-center justify-between w-full px-3 py-2 text-sm font-medium rounded-md transition-colors text-foreground/70 hover:bg-accent hover:text-accent-foreground"
+            onClick={() => !isCollapsed && setIsOpen(!isOpen)}
+            title={isCollapsed ? item.label : undefined}
+            className={cn(
+               "flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 group outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+               isOpen && !isCollapsed ? "text-primary" : "text-foreground/70 hover:bg-accent/80 hover:text-accent-foreground",
+               isCollapsed ? "justify-center" : "justify-between"
+            )}
          >
-            <div className="flex items-center">
-               <item.icon className="h-5 w-5 mr-3 shrink-0" />
-               <span>{item.label}</span>
+            <div className="flex items-center transition-transform duration-200 group-hover:translate-x-1">
+               <item.icon className={cn("h-5 w-5 shrink-0", isCollapsed ? "mr-0" : "mr-3", isOpen && !isCollapsed ? "text-primary" : "")} />
+               {!isCollapsed && <span>{item.label}</span>}
             </div>
-            <motion.div animate={{ rotate: isOpen ? 180 : 0 }}>
-               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
-            </motion.div>
+            {!isCollapsed && (
+               <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+               </motion.div>
+            )}
          </button>
-         {isOpen && (
-            <div className="mt-1 ml-4 pl-4 border-l-2 border-dashed border-muted">
-               {item.subRoutes?.map(subItem => (
-                  <NavItem key={subItem.href} item={subItem} />
-               ))}
-            </div>
-         )}
+         <AnimatePresence initial={false}>
+            {isOpen && !isCollapsed && (
+               <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2, ease: "easeInOut" }}
+                  className="overflow-hidden"
+               >
+                  <div className="mt-1 ml-5 pl-3 border-l-2 border-primary/10 flex flex-col gap-1">
+                     {item.subRoutes?.map(subItem => (
+                        <NavItem key={subItem.href} item={subItem} isCollapsed={false} isSubItem />
+                     ))}
+                  </div>
+               </motion.div>
+            )}
+         </AnimatePresence>
       </div>
    );
 }
 
-// Componente Original para Items Simples
-function NavItem({ item }: { item: NavItemProps }) {
+function NavItem({ item, isCollapsed, isSubItem = false }: { item: NavItemProps; isCollapsed: boolean; isSubItem?: boolean }) {
    const pathname = usePathname();
    const hasPermission = useHasPermission(item.permissions);
 
@@ -84,23 +100,34 @@ function NavItem({ item }: { item: NavItemProps }) {
    return (
       <Link
          href={item.href || "#"}
+         title={isCollapsed ? item.label : undefined}
          className={cn(
-            "flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors relative",
+            "flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 relative group outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
             isActive
-               ? "text-primary-foreground"
-               : "text-foreground/70 hover:bg-accent hover:text-accent-foreground"
+               ? "text-primary-foreground shadow-sm"
+               : "text-foreground/70 hover:bg-accent/80 hover:text-accent-foreground",
+            isCollapsed ? "justify-center" : "justify-start"
          )}
       >
          {isActive && (
             <motion.div
-               layoutId="active-nav-pill"
-               className="absolute inset-0 bg-primary rounded-md"
-               style={{ borderRadius: 6 }}
-               transition={{ type: "spring", stiffness: 350, damping: 30 }}
+               layoutId={isSubItem ? "active-sub-nav-pill" : "active-nav-pill"}
+               className="absolute inset-0 bg-primary rounded-lg"
+               transition={{ type: "spring", stiffness: 400, damping: 30 }}
             />
          )}
-         <item.icon className="h-5 w-5 mr-3 z-10 shrink-0" />
-         <span className="z-10">{item.label}</span>
+
+         <div className={cn(
+            "flex items-center z-10 w-full transition-transform duration-200",
+            !isActive && !isCollapsed && "group-hover:translate-x-1"
+         )}>
+            <item.icon className={cn(
+               "h-5 w-5 shrink-0",
+               isCollapsed ? "mr-0" : "mr-3",
+               isSubItem && !isCollapsed ? "h-4 w-4" : ""
+            )} />
+            {!isCollapsed && <span className="truncate">{item.label}</span>}
+         </div>
       </Link>
    );
 }

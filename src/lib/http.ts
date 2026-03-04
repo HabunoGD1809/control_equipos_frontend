@@ -9,45 +9,13 @@ export interface FetchOptions extends Omit<RequestInit, "headers" | "body" | "me
 
 const PROXY_PREFIX = "/api/proxy";
 
-// ─── GESTOR DE ESTADO PARA ROTACIÓN DE TOKENS (PREVENCIÓN DE RACE CONDITIONS) ───
+// ─── GESTOR DE ROTACIÓN DE TOKENS (PREVENCIÓN DE RACE CONDITIONS) ───
 let isRefreshing = false;
 let refreshSubscribers: ((success: boolean) => void)[] = [];
-
-function subscribeTokenRefresh(cb: (success: boolean) => void) {
-   refreshSubscribers.push(cb);
-}
 
 function onRefreshed(success: boolean) {
    refreshSubscribers.forEach((cb) => cb(success));
    refreshSubscribers = [];
-}
-// ────────────────────────────────────────────────────────────────────────────────
-
-function buildQuery(params?: FetchOptions["params"]): string {
-   if (!params) return "";
-   const sp = new URLSearchParams();
-
-   for (const [k, v] of Object.entries(params)) {
-      if (v === undefined || v === null) continue;
-      if (v instanceof Date) {
-         sp.set(k, v.toISOString());
-      } else {
-         sp.set(k, String(v));
-      }
-   }
-
-   const qs = sp.toString();
-   return qs ? `?${qs}` : "";
-}
-
-async function getServerOrigin(): Promise<string> {
-   const { headers } = await import("next/headers");
-   const h = await headers();
-
-   const proto = h.get("x-forwarded-proto") ?? "http";
-   const host = h.get("x-forwarded-host") ?? h.get("host");
-
-   return host ? `${proto}://${host}` : "http://localhost:3000";
 }
 
 function handleUnauthorizedClient() {
@@ -57,34 +25,15 @@ function handleUnauthorizedClient() {
    }
 }
 
-function prepareBodyAndHeaders(
-   body: unknown,
-   customHeaders?: Record<string, string>
-): { body?: BodyInit; headers?: Record<string, string> } {
-   if (body === undefined || body === null) {
-      return { headers: customHeaders };
+function buildQuery(params?: FetchOptions["params"]): string {
+   if (!params) return "";
+   const sp = new URLSearchParams();
+   for (const [k, v] of Object.entries(params)) {
+      if (v === undefined || v === null) continue;
+      sp.set(k, v instanceof Date ? v.toISOString() : String(v));
    }
-
-   const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
-   const isString = typeof body === "string";
-   const isURLSearchParams = typeof URLSearchParams !== "undefined" && body instanceof URLSearchParams;
-   const isBlob = typeof Blob !== "undefined" && body instanceof Blob;
-
-   // Al enviar FormData, fetch calcula automáticamente el boundary. No debemos forzar application/json.
-   if (isFormData || isString || isURLSearchParams || isBlob) {
-      return {
-         body: body as BodyInit,
-         headers: customHeaders,
-      };
-   }
-
-   return {
-      body: JSON.stringify(body),
-      headers: {
-         "Content-Type": "application/json",
-         ...(customHeaders ?? {}),
-      },
-   };
+   const qs = sp.toString();
+   return qs ? `?${qs}` : "";
 }
 
 async function http<T>(path: string, options: FetchOptions & { method: string; body?: BodyInit }): Promise<T> {
@@ -93,39 +42,25 @@ async function http<T>(path: string, options: FetchOptions & { method: string; b
    const cleanPath = path.startsWith("/") ? path : `/${path}`;
    const proxyPath = `${PROXY_PREFIX}${cleanPath}${buildQuery(params)}`;
 
-   const isServer = typeof window === "undefined";
-   const url = isServer ? new URL(proxyPath, await getServerOrigin()).toString() : proxyPath;
-
-   let cookieHeader: string | null = null;
-   if (isServer) {
-      const { headers: nextHeaders } = await import("next/headers");
-      cookieHeader = (await nextHeaders()).get("cookie");
-   }
-
    const fetchOptions: RequestInit = {
       ...rest,
-      headers: {
-         ...(cookieHeader ? { cookie: cookieHeader } : {}),
-         ...(headers ?? {}),
-      },
+      headers: { ...(headers ?? {}) },
       cache: rest.cache ?? "no-store",
    };
 
-   let res = await fetch(url, fetchOptions);
+   let res = await fetch(proxyPath, fetchOptions);
 
    if (res.status === 401 && !_retry) {
       if (isRefreshing) {
          return new Promise<T>((resolve, reject) => {
-            subscribeTokenRefresh(async (success: boolean) => {
+            refreshSubscribers.push(async (success: boolean) => {
                if (success) {
                   try {
-                     const retryRes = await http<T>(path, { ...options, _retry: true });
-                     resolve(retryRes);
+                     resolve(await http<T>(path, { ...options, _retry: true }));
                   } catch (err) {
                      reject(err);
                   }
                } else {
-                  handleUnauthorizedClient();
                   reject(new Error("No autorizado"));
                }
             });
@@ -134,24 +69,13 @@ async function http<T>(path: string, options: FetchOptions & { method: string; b
 
       isRefreshing = true;
       try {
-         const refreshUrl = isServer
-            ? new URL("/api/auth/refresh", await getServerOrigin()).toString()
-            : "/api/auth/refresh";
-
-         const refreshRes = await fetch(refreshUrl, {
-            method: "POST",
-            headers: cookieHeader ? { cookie: cookieHeader } : {},
-            cache: "no-store",
-         });
+         const refreshRes = await fetch("/api/auth/refresh", { method: "POST", cache: "no-store" });
 
          if (refreshRes.ok) {
             isRefreshing = false;
             onRefreshed(true);
-            res = await fetch(url, fetchOptions);
+            res = await fetch(proxyPath, fetchOptions);
          } else {
-            isRefreshing = false;
-            onRefreshed(false);
-            handleUnauthorizedClient();
             throw new Error("Sesión expirada");
          }
       } catch (error) {
@@ -167,21 +91,13 @@ async function http<T>(path: string, options: FetchOptions & { method: string; b
 
       let message = `HTTP ${res.status}`;
       try {
-         const ct = res.headers.get("content-type") || "";
-         if (ct.includes("application/json")) {
+         if (res.headers.get("content-type")?.includes("application/json")) {
             const body = await res.json();
-            if (Array.isArray(body?.detail)) {
-               message = body.detail.map((e: any) => e.msg).join(" | ");
-            } else {
-               message = body?.detail || body?.message || message;
-            }
+            message = Array.isArray(body?.detail) ? body.detail.map((e: any) => e.msg).join(" | ") : (body?.detail || body?.message || message);
          } else {
-            const text = await res.text();
-            message = text || message;
+            message = await res.text() || message;
          }
-      } catch {
-         // Fallback silencioso
-      }
+      } catch { /* silencioso */ }
 
       const err = new Error(message) as Error & { status?: number };
       err.status = res.status;
@@ -189,29 +105,27 @@ async function http<T>(path: string, options: FetchOptions & { method: string; b
    }
 
    if (res.status === 204) return null as T;
-
    if (responseType === "blob") return (await res.blob()) as unknown as T;
    if (responseType === "arraybuffer") return (await res.arrayBuffer()) as unknown as T;
-   if (responseType === "text") return (await res.text()) as unknown as T;
-
-   const ct = res.headers.get("content-type") || "";
-   if (!ct.includes("application/json")) {
+   if (responseType === "text" || !res.headers.get("content-type")?.includes("application/json")) {
       return (await res.text()) as unknown as T;
    }
 
    return (await res.json()) as T;
 }
 
+function preparePayload(body: unknown, options?: FetchOptions) {
+   if (!body) return { headers: options?.headers };
+   const isNative = typeof window !== "undefined" && (body instanceof FormData || body instanceof URLSearchParams || body instanceof Blob);
+   return isNative || typeof body === "string"
+      ? { body: body as BodyInit, headers: options?.headers }
+      : { body: JSON.stringify(body), headers: { "Content-Type": "application/json", ...options?.headers } };
+}
+
 function createMethod(method: "POST" | "PUT" | "PATCH") {
    return <T>(path: string, body?: unknown, options?: FetchOptions) => {
-      const prepared = prepareBodyAndHeaders(body, options?.headers);
-
-      return http<T>(path, {
-         method,
-         ...options,
-         body: prepared.body,
-         headers: prepared.headers,
-      });
+      const { body: parsedBody, headers } = preparePayload(body, options);
+      return http<T>(path, { method, ...options, body: parsedBody, headers });
    };
 }
 

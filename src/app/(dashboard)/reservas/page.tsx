@@ -32,13 +32,7 @@ export default async function ReservasPage() {
    const safeEquipos = Array.isArray(equipos) ? equipos : [];
 
    return (
-      <div className="space-y-8">
-         <div>
-            <h1 className="text-3xl font-bold">Calendario de Reservas</h1>
-            <p className="text-muted-foreground">
-               Visualice, cree y gestione las reservas de equipos.
-            </p>
-         </div>
+      <div className="flex-1 space-y-6">
          <ReservasClient initialEvents={safeReservas} equipos={safeEquipos} />
       </div>
    );

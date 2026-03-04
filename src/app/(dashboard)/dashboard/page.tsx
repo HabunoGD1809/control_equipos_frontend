@@ -6,7 +6,9 @@ import {
    DollarSign,
    Activity,
    CalendarClock,
-   ShieldAlert
+   ShieldAlert,
+   TrendingUp,
+   AlertCircle
 } from "lucide-react";
 
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/Card";
@@ -21,7 +23,8 @@ import {
    DashboardData,
    Mantenimiento,
    AuditLog,
-   EquipoRead} from '@/types/api';
+   EquipoRead
+} from '@/types/api';
 
 interface TipoItemInventarioConStock {
    id: string;
@@ -32,7 +35,6 @@ interface TipoItemInventarioConStock {
    stock_total_actual: number;
 }
 
-// Función auxiliar para formatear moneda
 const formatCurrency = (value: number) => {
    return new Intl.NumberFormat('es-DO', {
       style: 'currency',
@@ -77,13 +79,11 @@ async function getDashboardPageData() {
       const equiposRaw = equiposValuationRes.ok ? await equiposValuationRes.json() : [];
       const equiposData = unwrapItems<EquipoRead>(equiposRaw);
 
-      // Cálculo de KPI Financiero Seguro
       const totalValorActivos = equiposData.reduce((acc, equipo) => {
          const valor = parseFloat(String(equipo.valor_adquisicion || "0"));
          return acc + (isNaN(valor) ? 0 : valor);
       }, 0);
 
-      // Adaptador para el componente ItemsBajoStockList (Evita que rompa por el cambio de DTO)
       const bajoStockRaw = bajoStockRes.ok ? await bajoStockRes.json() : [];
       const itemsBajoStockData = unwrapItems<TipoItemInventarioConStock>(bajoStockRaw);
 
@@ -103,7 +103,7 @@ async function getDashboardPageData() {
       return {
          summary: await dashboardRes.json() as DashboardData,
          proximosMantenimientos: mantenimientosRes.ok ? unwrapItems<Mantenimiento>(await mantenimientosRes.json()) : [],
-         itemsBajoStock: itemsBajoStockAdapter, // Pasamos la data adaptada
+         itemsBajoStock: itemsBajoStockAdapter,
          recentActivity: auditoriaRes.ok ? unwrapItems<AuditLog>(await auditoriaRes.json()) : [],
          financials: {
             totalValorActivos
@@ -121,11 +121,13 @@ export default async function DashboardPage() {
 
    if (!data || !data.summary) {
       return (
-         <div className="flex h-full items-center justify-center p-8">
-            <div className="text-center space-y-4">
-               <ShieldAlert className="h-12 w-12 text-destructive mx-auto" />
-               <h3 className="text-lg font-semibold">Error de Carga</h3>
-               <p className="text-muted-foreground">No se pudieron obtener los datos del dashboard.</p>
+         <div className="flex h-full items-center justify-center p-8 bg-background/50 rounded-xl border border-dashed">
+            <div className="text-center space-y-4 max-w-sm">
+               <div className="bg-destructive/10 p-4 rounded-full inline-block">
+                  <ShieldAlert className="h-10 w-10 text-destructive mx-auto" />
+               </div>
+               <h3 className="text-xl font-bold tracking-tight">Error de Conexión</h3>
+               <p className="text-muted-foreground">No se pudieron obtener los datos del dashboard. Verifica tu conexión o contacta a soporte.</p>
             </div>
          </div>
       );
@@ -134,112 +136,127 @@ export default async function DashboardPage() {
    const { summary, proximosMantenimientos, itemsBajoStock, recentActivity, financials } = data;
 
    return (
-      <div className="space-y-8 pb-10">
-         {/* Header */}
-         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-               <h1 className="text-3xl font-bold tracking-tight">Centro de Control</h1>
-               <p className="text-muted-foreground">
-                  Visión general operativa y financiera del inventario.
+      <div className="space-y-8 pb-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+         {/* Header / Greeting */}
+         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 bg-card p-6 rounded-2xl border shadow-sm">
+            <div className="space-y-1.5">
+               <div className="flex items-center gap-2 text-primary font-medium">
+                  <TrendingUp className="h-5 w-5" />
+                  <span>Resumen Operativo</span>
+               </div>
+               <h1 className="text-3xl font-bold tracking-tight text-foreground">Centro de Control</h1>
+               <p className="text-muted-foreground max-w-xl">
+                  Visión general del estado de activos, inventario e indicadores financieros en tiempo real.
                </p>
             </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-3 py-1 rounded-full border">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground bg-muted/50 px-4 py-2 rounded-xl border">
                <CalendarClock className="h-4 w-4" />
-               <span>{new Date().toLocaleDateString('es-DO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+               <span className="capitalize">{new Date().toLocaleDateString('es-DO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
             </div>
          </div>
 
-         {/* KPIs Principales */}
+         {/* KPIs Principales - Estilo moderno con gradientes sutiles */}
          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <StatCard
                title="Valor de Activos"
                value={formatCurrency(financials.totalValorActivos)}
-               icon={<DollarSign className="h-5 w-5 text-green-600" />}
+               icon={<DollarSign className="h-5 w-5 text-emerald-600" />}
                description="Valoración total estimada"
-               className="border-l-4 border-l-green-500"
+               className="bg-linear-to-br from-emerald-500/10 via-background to-background border-emerald-500/20 hover:border-emerald-500/40 transition-colors"
             />
             <StatCard
                title="Total Equipos"
                value={summary.total_equipos}
                icon={<HardDrive className="h-5 w-5 text-blue-600" />}
-               description="Activos registrados"
-               className="border-l-4 border-l-blue-500"
+               description="Activos registrados en sistema"
+               className="bg-linear-to-br from-blue-500/10 via-background to-background border-blue-500/20 hover:border-blue-500/40 transition-colors"
             />
             <StatCard
                title="Mantenimientos"
                value={summary.mantenimientos_proximos_count}
-               icon={<Wrench className="h-5 w-5 text-orange-600" />}
-               description="Pendientes este mes"
-               className="border-l-4 border-l-orange-500"
+               icon={<Wrench className="h-5 w-5 text-amber-600" />}
+               description="Programados este mes"
+               className="bg-linear-to-br from-amber-500/10 via-background to-background border-amber-500/20 hover:border-amber-500/40 transition-colors"
             />
             <StatCard
                title="Alertas Stock"
                value={summary.items_bajo_stock_count}
-               icon={<PackageX className="h-5 w-5 text-red-600" />}
-               description="Ítems críticos"
-               className="border-l-4 border-l-red-500"
+               icon={<PackageX className="h-5 w-5 text-destructive" />}
+               description="Ítems por debajo del mínimo"
+               className="bg-linear-to-br from-destructive/10 via-background to-background border-destructive/20 hover:border-destructive/40 transition-colors"
             />
          </div>
 
          {/* Acciones Rápidas */}
-         <div className="space-y-4">
-            <h2 className="text-lg font-semibold tracking-tight">Accesos Rápidos</h2>
+         <section className="space-y-4">
+            <h2 className="text-lg font-bold tracking-tight flex items-center gap-2">
+               Accesos Rápidos
+            </h2>
             <QuickActions />
-         </div>
+         </section>
 
-         {/* Grillas de Contenido */}
-         <div className="grid gap-6 lg:grid-cols-7">
+         {/* Grillas de Contenido - Bento Grid Layout */}
+         <div className="grid gap-6 lg:grid-cols-12">
 
-            {/* Columna Izquierda (Gráficos y Listas) - Span 4 */}
-            <div className="lg:col-span-4 space-y-6">
-               <Card className="col-span-4">
-                  <CardHeader>
-                     <CardTitle>Estado de la Flota</CardTitle>
-                     <CardDescription>Distribución de equipos por estado operativo</CardDescription>
+            {/* Columna Principal (Gráficos y Alertas) - Ocupa 8 columnas */}
+            <div className="lg:col-span-8 space-y-6 flex flex-col">
+
+               {/* Gráfico Principal */}
+               <Card className="flex-1 shadow-sm border-muted/60">
+                  <CardHeader className="pb-2">
+                     <CardTitle className="text-lg">Estado de la Flota</CardTitle>
+                     <CardDescription>Distribución porcentual de equipos por condición operativa</CardDescription>
                   </CardHeader>
-                  <CardContent className="pl-2">
+                  <CardContent className="pl-0 min-h-75 flex items-center justify-center">
                      <EquiposPorEstadoChart data={summary.equipos_por_estado} />
                   </CardContent>
                </Card>
 
+               {/* Grid secundario de alertas */}
                <div className="grid gap-6 md:grid-cols-2">
-                  <Card>
-                     <CardHeader>
-                        <CardTitle className="text-base">Mantenimiento Próximo</CardTitle>
+                  <Card className="shadow-sm border-muted/60 flex flex-col">
+                     <CardHeader className="pb-3 border-b bg-muted/20">
+                        <CardTitle className="text-base flex items-center gap-2">
+                           <Wrench className="h-4 w-4 text-amber-500" />
+                           Mantenimiento Próximo
+                        </CardTitle>
                      </CardHeader>
-                     <CardContent>
+                     <CardContent className="pt-4 flex-1">
                         <ProximosMantenimientosList mantenimientos={proximosMantenimientos} />
                      </CardContent>
                   </Card>
-                  <Card>
-                     <CardHeader>
-                        <CardTitle className="text-base">Reposición Urgente</CardTitle>
+
+                  <Card className="shadow-sm border-muted/60 flex flex-col">
+                     <CardHeader className="pb-3 border-b bg-muted/20">
+                        <CardTitle className="text-base flex items-center gap-2">
+                           <AlertCircle className="h-4 w-4 text-destructive" />
+                           Reposición Urgente
+                        </CardTitle>
                      </CardHeader>
-                     <CardContent>
-                        {/* Se suprime el error de tipado con any temporalmente debido a la adaptación del DTO */}
+                     <CardContent className="pt-4 flex-1">
                         <ItemsBajoStockList items={itemsBajoStock as any} />
                      </CardContent>
                   </Card>
                </div>
             </div>
 
-            {/* Columna Derecha (Feed de Actividad) - Span 3 */}
-            <div className="lg:col-span-3 space-y-6">
-               <Card className="h-full">
-                  <CardHeader>
-                     <div className="flex items-center justify-between">
-                        <CardTitle className="flex items-center gap-2">
-                           <Activity className="h-5 w-5 text-primary" />
-                           Actividad Reciente
-                        </CardTitle>
-                     </div>
-                     <CardDescription>Últimos movimientos registrados en el sistema</CardDescription>
+            {/* Columna Lateral (Feed de Actividad) - Ocupa 4 columnas */}
+            <div className="lg:col-span-4">
+               <Card className="h-full shadow-sm border-muted/60 flex flex-col">
+                  <CardHeader className="pb-3 border-b bg-muted/20">
+                     <CardTitle className="text-base flex items-center gap-2">
+                        <Activity className="h-4 w-4 text-primary" />
+                        Registro de Actividad
+                     </CardTitle>
+                     <CardDescription className="text-xs">Últimos movimientos del sistema</CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="pt-4 flex-1 overflow-auto">
                      <RecentActivityList logs={recentActivity} />
                   </CardContent>
                </Card>
             </div>
+
          </div>
       </div>
    );

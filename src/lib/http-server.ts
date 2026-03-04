@@ -1,17 +1,12 @@
 import "server-only";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { AUTH_COOKIE_NAME, REFRESH_COOKIE_NAME } from "@/lib/constants";
 import { refreshAccessToken } from "@/lib/token-refresh";
+import { getSession, deleteSession } from "@/lib/session";
 
 const BASE_URL: string = (() => {
    const v = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
-   if (!v) {
-      throw new Error(
-         "API_BASE_URL (or NEXT_PUBLIC_API_BASE_URL) is not defined",
-      );
-   }
-   return v;
+   if (!v) throw new Error("API_BASE_URL no está definida");
+   return v.replace(/\/$/, "");
 })();
 
 type Primitive = string | number | boolean | Date;
@@ -23,42 +18,30 @@ interface FetchOptions extends RequestInit {
 
 type HttpError = Error & { status?: number; detail?: any };
 
-function clearAuthCookiesSafely(cookieStore: any) {
-   try {
-      cookieStore.delete(AUTH_COOKIE_NAME);
-      cookieStore.delete(REFRESH_COOKIE_NAME);
-   } catch (e) {
-      // Ignorar en RSC
-   }
-}
-
 async function httpServer<T>(
    path: string,
    options: FetchOptions = {},
 ): Promise<T> {
    const { params, headers, _retry, ...rest } = options;
 
-   const cleanBase = BASE_URL.replace(/\/$/, "");
    const cleanPath = path.startsWith("/") ? path : `/${path}`;
-   const url = new URL(`${cleanBase}${cleanPath}`);
+   const url = new URL(`${BASE_URL}${cleanPath}`);
 
    if (params) {
       for (const [key, value] of Object.entries(params)) {
          if (value === undefined || value === null) continue;
-         if (value instanceof Date) {
-            url.searchParams.set(key, value.toISOString());
-         } else {
-            url.searchParams.set(key, String(value));
-         }
+         url.searchParams.set(
+            key,
+            value instanceof Date ? value.toISOString() : String(value),
+         );
       }
    }
 
-   const cookieStore = await cookies();
-   const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
+   const { accessToken } = await getSession();
 
    const defaultHeaders: HeadersInit = {
       Accept: "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...((headers as Record<string, string>) || {}),
    };
 
@@ -70,18 +53,16 @@ async function httpServer<T>(
 
    if (response.status === 401 && !_retry) {
       const newAccessToken = await refreshAccessToken();
-
-      if (newAccessToken) {
+      if (newAccessToken)
          return httpServer<T>(path, { ...options, _retry: true });
-      }
 
-      clearAuthCookiesSafely(cookieStore);
+      await deleteSession();
       redirect("/login");
    }
 
    if (!response.ok) {
       if (response.status === 401) {
-         clearAuthCookiesSafely(cookieStore);
+         await deleteSession();
          redirect("/login");
       }
 
@@ -89,22 +70,17 @@ async function httpServer<T>(
       let detail = null;
 
       try {
-         const ct = response.headers.get("content-type") || "";
-         if (ct.includes("application/json")) {
+         if (response.headers.get("content-type")?.includes("application/json")) {
             const body = await response.json();
             detail = body?.detail || body?.message;
-
-            if (Array.isArray(detail)) {
-               message = detail.map((e: any) => e.msg).join(" | ");
-            } else {
-               message = detail || message;
-            }
+            message = Array.isArray(detail)
+               ? detail.map((e: any) => e.msg).join(" | ")
+               : detail || message;
          } else {
-            const text = await response.text();
-            message = text || message;
+            message = (await response.text()) || message;
          }
       } catch {
-         // Silenciado
+         /* Silenciado */
       }
 
       const err = new Error(message) as HttpError;
@@ -114,31 +90,22 @@ async function httpServer<T>(
    }
 
    if (response.status === 204) return null as T;
-
-   const ct = response.headers.get("content-type") || "";
-   if (!ct.includes("application/json")) {
+   if (!response.headers.get("content-type")?.includes("application/json"))
       return (await response.text()) as unknown as T;
-   }
 
    return (await response.json()) as T;
 }
 
 const formatPayload = (body: unknown, options?: FetchOptions): FetchOptions => {
-   const isFormData = body instanceof FormData;
-   const isUrlEncoded = body instanceof URLSearchParams;
-   const isString = typeof body === "string";
-
+   if (!body) return options || {};
+   const isNative = body instanceof FormData || body instanceof URLSearchParams;
    const parsedBody =
-      isFormData || isUrlEncoded || isString
+      isNative || typeof body === "string"
          ? (body as BodyInit)
          : JSON.stringify(body);
 
-   let defaultContentType: string | undefined = "application/json";
-   if (isFormData) defaultContentType = undefined;
-   if (isUrlEncoded) defaultContentType = "application/x-www-form-urlencoded";
-
    const headers = {
-      ...(defaultContentType ? { "Content-Type": defaultContentType } : {}),
+      ...(!isNative ? { "Content-Type": "application/json" } : {}),
       ...(options?.headers ?? {}),
    };
 

@@ -43,13 +43,16 @@ async function proxyRequest(
    let body: BodyInit | undefined = undefined;
 
    if (method !== "GET" && method !== "DELETE") {
-      const contentType = request.headers.get("content-type");
+      const contentType = request.headers.get("content-type") ?? "";
 
-      if (request.body) {
-         body = request.body;
-
-         if (contentType) {
-            headers.set("Content-Type", contentType);
+      if (contentType.includes("multipart/form-data")) {
+         body = request.body as BodyInit;
+         headers.set("Content-Type", contentType);
+      } else {
+         const text = await request.text();
+         if (text) {
+            body = text;
+            if (contentType) headers.set("Content-Type", contentType);
          }
       }
    }
@@ -59,9 +62,6 @@ async function proxyRequest(
          method,
          headers,
          body,
-         // ✅ Requerido cuando body es un ReadableStream: deshabilita duplex restriction
-         // @ts-expect-error — duplex es requerido por la spec pero aún no está en los tipos de TS
-         duplex: "half",
          cache: "no-store",
       });
 

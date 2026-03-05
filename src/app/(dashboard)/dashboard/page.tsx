@@ -8,7 +8,9 @@ import {
    CalendarClock,
    ShieldAlert,
    TrendingUp,
-   AlertCircle
+   AlertCircle,
+   FileText, // <-- Nuevo icono
+   CalendarRange // <-- Nuevo icono
 } from "lucide-react";
 
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/Card";
@@ -22,7 +24,6 @@ import { QuickActions } from '@/components/features/dashboard/QuickActions';
 import {
    DashboardData,
    Mantenimiento,
-   AuditLog,
    EquipoRead
 } from '@/types/api';
 
@@ -60,17 +61,16 @@ async function getDashboardPageData() {
    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
    try {
+      // OPTIMIZACIÓN: Eliminamos el fetch a /auditoria/ porque /dashboard/ ya trae los movimientos
       const [
          dashboardRes,
          mantenimientosRes,
          bajoStockRes,
-         auditoriaRes,
          equiposValuationRes
       ] = await Promise.all([
          fetch(`${baseUrl}/dashboard/`, { headers, cache: 'no-store' }),
          fetch(`${baseUrl}/mantenimientos/?estado=Programado&limit=5`, { headers, cache: 'no-store' }),
          fetch(`${baseUrl}/inventario/tipos/bajo-stock/?limit=5`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/auditoria/?limit=10`, { headers, cache: 'no-store' }),
          fetch(`${baseUrl}/equipos/?limit=500`, { headers, cache: 'no-store' })
       ]);
 
@@ -104,7 +104,6 @@ async function getDashboardPageData() {
          summary: await dashboardRes.json() as DashboardData,
          proximosMantenimientos: mantenimientosRes.ok ? unwrapItems<Mantenimiento>(await mantenimientosRes.json()) : [],
          itemsBajoStock: itemsBajoStockAdapter,
-         recentActivity: auditoriaRes.ok ? unwrapItems<AuditLog>(await auditoriaRes.json()) : [],
          financials: {
             totalValorActivos
          }
@@ -133,7 +132,7 @@ export default async function DashboardPage() {
       );
    }
 
-   const { summary, proximosMantenimientos, itemsBajoStock, recentActivity, financials } = data;
+   const { summary, proximosMantenimientos, itemsBajoStock, financials } = data;
 
    return (
       <div className="space-y-8 pb-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -156,35 +155,43 @@ export default async function DashboardPage() {
             </div>
          </div>
 
-         {/* KPIs Principales - Estilo moderno con gradientes sutiles */}
-         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+         {/* KPIs Principales - Expandido a 6 columnas en pantallas grandes */}
+         <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
             <StatCard
                title="Valor de Activos"
                value={formatCurrency(financials.totalValorActivos)}
                icon={<DollarSign className="h-5 w-5 text-emerald-600" />}
-               description="Valoración total estimada"
-               className="bg-linear-to-br from-emerald-500/10 via-background to-background border-emerald-500/20 hover:border-emerald-500/40 transition-colors"
+               className="bg-linear-to-br from-emerald-500/10 via-background to-background border-emerald-500/20"
             />
             <StatCard
                title="Total Equipos"
                value={summary.total_equipos}
                icon={<HardDrive className="h-5 w-5 text-blue-600" />}
-               description="Activos registrados en sistema"
-               className="bg-linear-to-br from-blue-500/10 via-background to-background border-blue-500/20 hover:border-blue-500/40 transition-colors"
+               className="bg-linear-to-br from-blue-500/10 via-background to-background border-blue-500/20"
             />
             <StatCard
                title="Mantenimientos"
                value={summary.mantenimientos_proximos_count}
                icon={<Wrench className="h-5 w-5 text-amber-600" />}
-               description="Programados este mes"
-               className="bg-linear-to-br from-amber-500/10 via-background to-background border-amber-500/20 hover:border-amber-500/40 transition-colors"
+               className="bg-linear-to-br from-amber-500/10 via-background to-background border-amber-500/20"
+            />
+            <StatCard
+               title="Reservas Pend."
+               value={summary.reservas_pendientes_count}
+               icon={<CalendarRange className="h-5 w-5 text-purple-600" />}
+               className="bg-linear-to-br from-purple-500/10 via-background to-background border-purple-500/20"
+            />
+            <StatCard
+               title="Docs. Pendientes"
+               value={summary.documentos_pendientes_count}
+               icon={<FileText className="h-5 w-5 text-indigo-600" />}
+               className="bg-linear-to-br from-indigo-500/10 via-background to-background border-indigo-500/20"
             />
             <StatCard
                title="Alertas Stock"
                value={summary.items_bajo_stock_count}
                icon={<PackageX className="h-5 w-5 text-destructive" />}
-               description="Ítems por debajo del mínimo"
-               className="bg-linear-to-br from-destructive/10 via-background to-background border-destructive/20 hover:border-destructive/40 transition-colors"
+               className="bg-linear-to-br from-destructive/10 via-background to-background border-destructive/20"
             />
          </div>
 
@@ -202,7 +209,6 @@ export default async function DashboardPage() {
             {/* Columna Principal (Gráficos y Alertas) - Ocupa 8 columnas */}
             <div className="lg:col-span-8 space-y-6 flex flex-col">
 
-               {/* Gráfico Principal */}
                <Card className="flex-1 shadow-sm border-muted/60">
                   <CardHeader className="pb-2">
                      <CardTitle className="text-lg">Estado de la Flota</CardTitle>
@@ -213,7 +219,6 @@ export default async function DashboardPage() {
                   </CardContent>
                </Card>
 
-               {/* Grid secundario de alertas */}
                <div className="grid gap-6 md:grid-cols-2">
                   <Card className="shadow-sm border-muted/60 flex flex-col">
                      <CardHeader className="pb-3 border-b bg-muted/20">
@@ -247,12 +252,13 @@ export default async function DashboardPage() {
                   <CardHeader className="pb-3 border-b bg-muted/20">
                      <CardTitle className="text-base flex items-center gap-2">
                         <Activity className="h-4 w-4 text-primary" />
-                        Registro de Actividad
+                        Registro de Movimientos
                      </CardTitle>
-                     <CardDescription className="text-xs">Últimos movimientos del sistema</CardDescription>
+                     <CardDescription className="text-xs">Últimos movimientos físicos de equipos</CardDescription>
                   </CardHeader>
                   <CardContent className="pt-4 flex-1 overflow-auto">
-                     <RecentActivityList logs={recentActivity} />
+                     {/* Pasamos la nueva propiedad del backend */}
+                     <RecentActivityList actividades={summary.movimientos_recientes} />
                   </CardContent>
                </Card>
             </div>

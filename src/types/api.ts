@@ -176,6 +176,9 @@ export interface DashboardData {
   mantenimientos_proximos_count: number;
   licencias_por_expirar_count: number;
   items_bajo_stock_count: number;
+  reservas_pendientes_count: number;
+  documentos_pendientes_count: number;
+  movimientos_recientes: MovimientoReciente[];
 }
 
 // ─── ROLES Y PERMISOS ────────────────────────────────────────────────────────
@@ -456,6 +459,14 @@ export interface Movimiento {
   equipo: EquipoSimple;
   usuario_registrador?: UsuarioSimple | null;
   usuario_autorizador?: UsuarioSimple | null;
+}
+
+export interface MovimientoReciente {
+  id: string;
+  equipo_nombre: string;
+  tipo_movimiento: string;
+  fecha_hora: string;
+  usuario_nombre?: string | null;
 }
 
 // ─── LICENCIAS ───────────────────────────────────────────────────────────────
@@ -905,8 +916,8 @@ export interface AsignacionLicenciaUpdate {
 }
 
 export type ReporteParams = {
-  tipo_reporte: "equipos" | "mantenimientos" | "inventario" | "movimientos" | "auditoria";
-  formato: "pdf" | "excel";
+  tipo_reporte: "equipos" | "mantenimientos" | "kardex" | "movimientos" | "auditoria";
+  formato: "pdf" | "excel" | "csv";
   fecha_inicio: string;
   fecha_fin: string;
 };

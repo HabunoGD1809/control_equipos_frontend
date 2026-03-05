@@ -4,80 +4,67 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
    History,
-   PlusCircle,
-   Trash2,
-   Edit,
-   ShieldAlert,
-   User,
-   Box,
-   FileText
+   ArrowRightLeft,
+   LogOut,
+   LogIn,
+   RefreshCw,
+   Box
 } from "lucide-react";
-import { AuditLog } from "@/types/api";
+import { MovimientoReciente } from "@/types/api";
 
 interface RecentActivityListProps {
-   logs: AuditLog[];
+   actividades: MovimientoReciente[];
 }
 
-export function RecentActivityList({ logs }: RecentActivityListProps) {
-   if (!logs || logs.length === 0) {
+export function RecentActivityList({ actividades }: RecentActivityListProps) {
+   if (!actividades || actividades.length === 0) {
       return (
          <div className="flex flex-col items-center justify-center h-75 text-muted-foreground">
             <History className="h-10 w-10 mb-2 opacity-20" />
-            <p>No hay actividad reciente registrada.</p>
+            <p>No hay movimientos recientes registrados.</p>
          </div>
       );
    }
 
-   const getIcon = (operation: string) => {
-      switch (operation) {
-         case "INSERT": return <PlusCircle className="h-4 w-4 text-green-500" />;
-         case "DELETE": return <Trash2 className="h-4 w-4 text-red-500" />;
-         case "UPDATE": return <Edit className="h-4 w-4 text-blue-500" />;
-         default: return <ShieldAlert className="h-4 w-4 text-gray-500" />;
-      }
-   };
-
-   const formatTableName = (tableName: string) => {
-      return tableName.replace(/_/g, " ").replace("control_equipos.", "");
+   const getIcon = (tipo: string) => {
+      if (tipo.includes("Salida")) return <LogOut className="h-4 w-4 text-orange-500" />;
+      if (tipo.includes("Entrada")) return <LogIn className="h-4 w-4 text-green-500" />;
+      if (tipo.includes("Asignacion")) return <ArrowRightLeft className="h-4 w-4 text-blue-500" />;
+      if (tipo.includes("Transferencia")) return <RefreshCw className="h-4 w-4 text-purple-500" />;
+      return <Box className="h-4 w-4 text-gray-500" />;
    };
 
    return (
       <div className="space-y-6">
-         {logs.map((log, index) => (
-            <div key={log.id} className="flex gap-4 relative">
+         {actividades.map((movimiento, index) => (
+            <div key={movimiento.id} className="flex gap-4 relative">
                {/* Línea conectora */}
-               {index !== logs.length - 1 && (
-                  <div className="absolute left-[19px] top-8 bottom-[-24px] w-px bg-border" />
+               {index !== actividades.length - 1 && (
+                  <div className="absolute left-4.75 top-8 -bottom-6 w-px bg-border" />
                )}
 
-               <div className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted border">
-                  {getIcon(log.operation)}
+               <div className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted border shadow-sm">
+                  {getIcon(movimiento.tipo_movimiento)}
                </div>
 
                <div className="flex-1 space-y-1 py-1">
                   <div className="flex items-center justify-between">
-                     <p className="text-sm font-medium leading-none flex items-center gap-2">
-                        <span className="capitalize">{log.username || "Sistema"}</span>
+                     <p className="text-sm font-medium leading-none flex flex-col gap-1">
+                        <span className="font-semibold">{movimiento.equipo_nombre}</span>
                         <span className="text-muted-foreground font-normal text-xs">
-                           {log.operation === "INSERT" ? "creó un registro en" :
-                              log.operation === "DELETE" ? "eliminó un registro de" :
-                                 "actualizó"}
-                        </span>
-                        <span className="font-semibold text-xs bg-muted px-2 py-0.5 rounded-full capitalize">
-                           {formatTableName(log.table_name)}
+                           {movimiento.tipo_movimiento}
                         </span>
                      </p>
-                     <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        {format(new Date(log.audit_timestamp), "PP p", { locale: es })}
+                     <span className="text-xs text-muted-foreground whitespace-nowrap text-right">
+                        {format(new Date(movimiento.fecha_hora), "PP", { locale: es })}
+                        <br />
+                        {format(new Date(movimiento.fecha_hora), "p", { locale: es })}
                      </span>
                   </div>
 
-                  {/* Detalles rápidos del cambio (si es update) */}
-                  {log.operation === "UPDATE" && log.new_data && (
-                     <div className="text-xs text-muted-foreground mt-1 bg-muted/30 p-2 rounded border border-border/50">
-                        Se modificaron {Object.keys(log.new_data).length - 1} campos.
-                     </div>
-                  )}
+                  <div className="text-xs text-muted-foreground mt-1 bg-muted/30 p-2 rounded border border-border/50">
+                     Registrado por: <span className="font-medium capitalize">{movimiento.usuario_nombre || "Sistema"}</span>
+                  </div>
                </div>
             </div>
          ))}

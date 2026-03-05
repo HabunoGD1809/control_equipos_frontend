@@ -51,8 +51,12 @@ export const ReportesClient = () => {
 
          toast({
             title: "Reporte en proceso",
-            description: "La tarea se ha enviado al servidor. Recibirás una notificación o correo cuando esté listo.",
-            icon: <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+            description: (
+               <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                  <span>La tarea se ha enviado. Recibirás una notificación cuando esté listo.</span>
+               </div>
+            ),
          });
 
       } catch (error: unknown) {
@@ -107,7 +111,7 @@ export const ReportesClient = () => {
                                     <SelectContent>
                                        <SelectItem value="equipos">Inventario de Equipos</SelectItem>
                                        <SelectItem value="mantenimientos">Mantenimientos (Realizados/Prog)</SelectItem>
-                                       <SelectItem value="inventario">Kardex de Inventario</SelectItem>
+                                       <SelectItem value="kardex">Kardex de Inventario</SelectItem>
                                        <SelectItem value="movimientos">Movimientos de Activos</SelectItem>
                                        <SelectItem value="auditoria">Logs de Auditoría</SelectItem>
                                     </SelectContent>
@@ -128,6 +132,7 @@ export const ReportesClient = () => {
                                     <SelectContent>
                                        <SelectItem value="pdf">Documento PDF (Impresión)</SelectItem>
                                        <SelectItem value="excel">Excel .xlsx (Análisis de datos)</SelectItem>
+                                       <SelectItem value="csv">CSV (Texto separado por comas)</SelectItem>
                                     </SelectContent>
                                  </Select>
                                  <FormMessage />

@@ -36,6 +36,12 @@ export const documentosService = {
       return api.get<Documentacion>(`/documentacion/${id}`);
    },
 
+   async download(id: string): Promise<Blob> {
+      return api.get<Blob>(`/documentacion/${id}/download`, {
+         responseType: "blob",
+      });
+   },
+
    async upload(payload: {
       titulo: string;
       tipo_documento_id: string;

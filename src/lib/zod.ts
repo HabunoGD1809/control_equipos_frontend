@@ -800,11 +800,11 @@ export const reporteSchema = z
     tipo_reporte: z.enum([
       "equipos",
       "mantenimientos",
-      "inventario",
+      "kardex",
       "movimientos",
       "auditoria",
     ]),
-    formato: z.enum(["pdf", "excel"]),
+    formato: z.enum(["pdf", "excel", "csv"]),
     fecha_inicio: requiredDate("Fecha de inicio requerida"),
     fecha_fin: requiredDate("Fecha de fin requerida"),
   })

@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { z } from "zod";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
-import { format, setHours, setMinutes, isAfter } from "date-fns";
+import { format, isAfter } from "date-fns";
 import { es } from "date-fns/locale";
 import { CalendarIcon, Loader2, AlertCircle, Eraser } from "lucide-react";
 
@@ -24,7 +24,7 @@ import { Textarea } from "@/components/ui/Textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/Alert";
 import { AsyncCombobox } from "@/components/ui/AsyncCombobox";
 
-import { reservasService } from "@/app/services/reservasService";
+import { reservasService, type ReservaFormPayload } from "@/app/services/reservasService";
 import { equiposService } from "@/app/services/equiposService";
 
 const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
@@ -113,21 +113,19 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
    const onSubmit = async (data: FormValues) => {
       setAvailabilityError(null);
 
-      const [sh, sm] = data.hora_inicio.split(":").map(Number);
-      const [eh, em] = data.hora_fin.split(":").map(Number);
+      const payload = reservasService.transformFormPayload(data as ReservaFormPayload);
+      const startIsoDate = new Date(payload.fecha_hora_inicio);
+      const endIsoDate = new Date(payload.fecha_hora_fin);
 
-      const fecha_hora_inicio = setMinutes(setHours(data.fecha_inicio, sh), sm);
-      const fecha_hora_fin = setMinutes(setHours(data.fecha_fin, eh), em);
-
-      if (!isAfter(fecha_hora_fin, fecha_hora_inicio)) {
+      if (!isAfter(endIsoDate, startIsoDate)) {
          form.setError("fecha_fin", { type: "manual", message: "La fecha/hora de fin debe ser posterior al inicio." });
          return;
       }
 
       const hasConflict = await checkOverlap({
-         equipoId: data.equipo_id,
-         startDate: fecha_hora_inicio,
-         endDate: fecha_hora_fin,
+         equipoId: payload.equipo_id,
+         startDate: startIsoDate,
+         endDate: endIsoDate,
          excludeReservaId: initialData?.id,
       });
 
@@ -136,13 +134,15 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
          return;
       }
 
-      const isoStart = format(fecha_hora_inicio, "yyyy-MM-dd'T'HH:mm:ssXXX");
-      const isoEnd = format(fecha_hora_fin, "yyyy-MM-dd'T'HH:mm:ssXXX");
-
       if (initialData) {
-         mutation.mutate({ fecha_hora_inicio: isoStart, fecha_hora_fin: isoEnd, proposito: data.proposito, notas: data.notas || null });
+         mutation.mutate({
+            fecha_hora_inicio: payload.fecha_hora_inicio,
+            fecha_hora_fin: payload.fecha_hora_fin,
+            proposito: payload.proposito,
+            notas: payload.notas
+         });
       } else {
-         mutation.mutate({ equipo_id: data.equipo_id, proposito: data.proposito, notas: data.notas || null, fecha_hora_inicio: isoStart, fecha_hora_fin: isoEnd });
+         mutation.mutate(payload);
       }
    };
 

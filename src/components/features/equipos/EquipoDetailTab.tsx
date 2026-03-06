@@ -27,9 +27,11 @@ export function EquipoDetailTab({ equipo }: EquipoDetailTabProps) {
       return format(new Date(dateString), "PPP", { locale: es });
    };
 
-   const estadosMovibles = ["Disponible", "En Uso"];
-   const estadoNombre = equipo.estado?.nombre || "";
-   const permiteMovimientos = estadosMovibles.includes(estadoNombre);
+   const estadoNombre = equipo.estado?.nombre || "Desconocido";
+   const estadoMetadatos = equipo.estado as Record<string, any> | undefined | null;
+
+   const permiteMovimientos = estadoMetadatos?.permite_movimientos ?? ["Disponible", "En Uso"].includes(estadoNombre);
+   const requiereAutorizacion = estadoMetadatos?.requiere_autorizacion ?? ["Averiado", "En Cuarentena", "Reservado", "Extraviado", "Dado de Baja"].includes(estadoNombre);
    const movimientosBloqueados = !permiteMovimientos;
 
    return (
@@ -42,7 +44,7 @@ export function EquipoDetailTab({ equipo }: EquipoDetailTabProps) {
                <AlertTitle className="font-bold tracking-wide uppercase text-xs mb-1">Movimientos Bloqueados por el Sistema</AlertTitle>
                <AlertDescription className="text-sm">
                   Este equipo se encuentra en estado <strong>&quot;{estadoNombre}&quot;</strong>.
-                  Por reglas de negocio, no es posible registrar traslados ni asignaciones hasta que cambie a un estado operativo (ej: <em>Disponible</em> o <em>En Uso</em>).
+                  Por reglas de negocio dictadas por el sistema, no es posible registrar traslados ni asignaciones hasta que cambie a un estado que permita movimientos.
                </AlertDescription>
             </Alert>
          )}
@@ -65,11 +67,12 @@ export function EquipoDetailTab({ equipo }: EquipoDetailTabProps) {
                         }}
                         className="text-sm font-bold tracking-wide shadow-sm"
                      >
-                        {estadoNombre || "Desconocido"}
+                        {estadoNombre}
                      </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground mt-2 font-medium">
-                     {permiteMovimientos ? "✓ Permite traslados" : "✕ Requiere revisión"}
+                     {permiteMovimientos ? "✓ Permite traslados" : "✕ Movimientos bloqueados"}
+                     {requiereAutorizacion && " • Requiere Auth."}
                   </p>
                </CardContent>
             </Card>

@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { Loader2, Eraser } from "lucide-react";
-import { z } from "zod";
 
 import { usuarioCreateSchema, usuarioUpdateSchema } from "@/lib/zod";
 import { usuariosService } from "@/app/services/usuariosService";
@@ -19,8 +18,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/Switch";
 import type { Usuario, Rol } from "@/types/api";
 
-type CreateValues = z.infer<typeof usuarioCreateSchema>;
-type UpdateValues = z.infer<typeof usuarioUpdateSchema>;
+interface FormValues {
+   nombre_usuario: string;
+   email?: string | null;
+   password?: string;
+   rol_id: string;
+   bloqueado?: boolean;
+   requiere_cambio_contrasena?: boolean;
+}
 
 interface UsuarioFormProps {
    initialData?: Usuario;
@@ -39,9 +44,10 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
    const [roles, setRoles] = useState<Rol[]>([]);
    const [loadingRoles, setLoadingRoles] = useState(true);
 
-   // Usamos un schema unificado a nivel de interfaz para evitar conflictos de tipado
-   const form = useForm<CreateValues & UpdateValues>({
-      resolver: standardSchemaResolver(isEditing ? usuarioUpdateSchema : usuarioCreateSchema) as any,
+   const formSchema = isEditing ? usuarioUpdateSchema : usuarioCreateSchema;
+
+   const form = useForm<FormValues>({
+      resolver: standardSchemaResolver(formSchema as any),
       defaultValues: {
          nombre_usuario: initialData?.nombre_usuario ?? "",
          email: initialData?.email ?? "",
@@ -70,7 +76,7 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
       }
    };
 
-   const onSubmit = async (data: CreateValues & UpdateValues) => {
+   const onSubmit = async (data: FormValues) => {
       setIsSubmitting(true);
       try {
          if (isEditing) {
@@ -87,10 +93,10 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
             toast({ title: "Éxito", description: "Usuario actualizado correctamente." });
          } else {
             await usuariosService.create({
-               nombre_usuario: data.nombre_usuario!.trim(),
+               nombre_usuario: data.nombre_usuario.trim(),
                email: cleanString(data.email),
                password: data.password!,
-               rol_id: data.rol_id!,
+               rol_id: data.rol_id,
             });
             toast({ title: "Éxito", description: "Usuario creado correctamente." });
          }

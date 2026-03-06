@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { useToast } from "@/components/ui/use-toast";
-import { inventarioMovimientoSchema } from "@/lib/zod";
+import { createInventarioMovimientoSchema } from "@/lib/zod";
 import {
    TipoItemInventarioSimple,
    TipoMovimientoInvEnum,
@@ -30,21 +30,23 @@ interface RegistrarMovimientoFormProps {
    onSuccess: () => void;
 }
 
-type FormValues = z.infer<typeof inventarioMovimientoSchema>;
+type FormValues = z.infer<ReturnType<typeof createInventarioMovimientoSchema>>;
 
 export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSuccess }: RegistrarMovimientoFormProps) {
    const { toast } = useToast();
    const queryClient = useQueryClient();
 
+   const dynamicSchema = useMemo(() => createInventarioMovimientoSchema(stockData), [stockData]);
+
    const form = useForm<FormValues>({
-      resolver: standardSchemaResolver(inventarioMovimientoSchema),
+      resolver: standardSchemaResolver(dynamicSchema as any),
       defaultValues: {
          tipo_item_id: undefined as any,
          tipo_movimiento: TipoMovimientoInvEnum.EntradaCompra,
          cantidad: 1,
          lote_origen: "N/A",
          lote_destino: "N/A",
-         costo_unitario: 0,
+         costo_unitario: undefined as any,
          notas: "",
          ubicacion_origen: "",
          ubicacion_destino: "",
@@ -124,25 +126,6 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
    });
 
    const onSubmit = (values: FormValues) => {
-      if (reqOrigen) {
-         const stockSeleccionado = stockDisponibleDelItem.find(
-            (s) => s.ubicacion === values.ubicacion_origen && s.lote === (values.lote_origen || "N/A")
-         );
-
-         if (!stockSeleccionado) {
-            form.setError("ubicacion_origen", { message: "No hay stock registrado en esta ubicación/lote." });
-            return;
-         }
-
-         if (values.cantidad > stockSeleccionado.cantidad_actual) {
-            form.setError("cantidad", {
-               type: "manual",
-               message: `Stock insuficiente. El máximo disponible es ${stockSeleccionado.cantidad_actual}.`
-            });
-            return;
-         }
-      }
-
       const payload: Partial<InventarioMovimientoCreate> = { ...values };
 
       if (!reqOrigen) {
@@ -180,7 +163,7 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                            field.onChange(val);
                            form.setValue("ubicacion_origen", "");
                            form.setValue("lote_origen", "N/A");
-                           form.clearErrors("cantidad"); // Limpiar error de cantidad al cambiar item
+                           form.clearErrors("cantidad");
                         }}
                         value={field.value ?? undefined}
                      >
@@ -265,10 +248,10 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                                     min="0"
                                     step="0.01"
                                     className="pl-7"
-                                    value={field.value ?? 0}
+                                    value={field.value ?? ""}
                                     onChange={(e) => {
-                                       const n = e.target.valueAsNumber;
-                                       field.onChange(Number.isFinite(n) ? n : 0);
+                                       const val = e.target.value;
+                                       field.onChange(val === "" ? "" : Number(val));
                                     }}
                                  />
                               </div>

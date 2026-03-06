@@ -65,7 +65,6 @@ async function proxyRequest(
          cache: "no-store",
       });
 
-      const buffer = await backendResponse.arrayBuffer();
       const resHeaders = new Headers();
 
       const contentType = backendResponse.headers.get("content-type");
@@ -76,6 +75,10 @@ async function proxyRequest(
 
       const cacheControl = backendResponse.headers.get("cache-control");
       if (cacheControl) resHeaders.set("Cache-Control", cacheControl);
+
+      const isNoContent = backendResponse.status === 204;
+
+      const buffer = isNoContent ? null : await backendResponse.arrayBuffer();
 
       return new NextResponse(buffer, {
          status: backendResponse.status,

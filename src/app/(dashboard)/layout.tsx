@@ -6,6 +6,8 @@ import { ReactQueryProvider } from "@/contexts/ReactQueryProvider";
 import { serverApi } from "@/lib/http-server";
 import type { Usuario } from "@/types/api";
 
+import { ForceChangePasswordModal } from "@/components/features/usuarios/ForceChangePasswordModal";
+
 function isNextRedirect(err: unknown) {
    return (
       typeof err === "object" &&
@@ -35,6 +37,10 @@ export default async function DashboardLayout({
    return (
       <ReactQueryProvider>
          <SessionProvider user={user}>
+
+            {/* ESCUDO DE SEGURIDAD: Fuerza el cambio si la BD lo exige */}
+            {user?.requiere_cambio_contrasena && <ForceChangePasswordModal />}
+
             {/* Contenedor principal: Ocupa toda la pantalla, sin scroll global. 
                 Usamos bg-muted/20 o bg-background para dar un contraste limpio a las tarjetas */}
             <div className="flex h-screen w-full overflow-hidden bg-muted/20 dark:bg-background">

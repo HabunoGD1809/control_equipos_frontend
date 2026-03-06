@@ -1,3 +1,4 @@
+// src/lib/zod.ts
 import * as z from "zod";
 import { isBefore, isAfter, startOfDay, isValid } from "date-fns";
 import {
@@ -14,9 +15,8 @@ import {
   EstadoDocumentoEnum,
   TipoMovimientoEquipo,
   EstadoReservaEnum,
+  InventarioStock,
 } from "@/types/api";
-
-// --- HELPERS & CONSTANTS ---
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -40,17 +40,61 @@ export const MIME_TYPE_MAP: Record<string, string[]> = {
 
 const requiredString = (message = "Este campo es requerido.") =>
   z.string({ error: () => message }).min(1, { error: message });
+//                                          ^^^^^ message → error  [v4]
 
 const requiredUuid = (message = "Debe seleccionar una opción.") =>
-  z.guid({ error: () => message });
+  z.guid({ error: "Formato UUID inválido." }).min(1, { error: message });
+//                                          ^^^^^ message → error  [v4]
 
 const requiredDate = (message = "La fecha es requerida.") =>
-  z.coerce.date({ error: () => message });
+  z.preprocess((arg) => {
+    if (typeof arg === "string" && arg.trim() === "") return undefined;
+    return arg;
+  }, z.coerce.date({ error: () => message }));
+//  required_error eliminado en v4 — error: () => message cubre ambos casos  [v4]
+
+const optionalDate = () =>
+  z.preprocess((arg) => {
+    if (typeof arg === "string" && arg.trim() === "") return null;
+    return arg;
+  }, z.coerce.date().optional().nullable());
 
 const requiredEnum = <T extends string>(
   values: T[],
   message = "Debe seleccionar una opción válida.",
 ) => z.enum(values as [T, ...T[]], { error: () => message });
+
+// REGEX MONETARIOS ESTRICTOS (PostgreSQL Numeric 12,2 y 12,4)
+const monetaryRegex2 = /^(?!^[-+.]*$)[+-]?0*(?:\d{0,10}|(?=[\d.]{1,13}0*$)\d{0,10}\.\d{0,2}0*)$/;
+const monetaryRegex4 = /^(?!^[-+.]*$)[+-]?0*(?:\d{0,8}|(?=[\d.]{1,13}0*$)\d{0,8}\.\d{0,4}0*)$/;
+
+const optionalMonetary2 = () => z.preprocess(
+  (val) => (val === "" || val === null || val === undefined ? null : String(val)),
+  z.string()
+    .regex(monetaryRegex2, { error: "Formato monetario inválido (máx 10 enteros y 2 decimales)." })
+    .refine(val => Number(val) >= 0, { error: "El valor no puede ser negativo." })
+    .nullable()
+    .optional()
+);
+// ^^^^^ ambos message → error  [v4]
+
+const requiredMonetary2 = () => z.preprocess(
+  (val) => (val === "" || val === null || val === undefined ? undefined : String(val)),
+  z.string({ error: () => "El costo es requerido." })
+    .regex(monetaryRegex2, { error: "Formato monetario inválido (máx 10 enteros y 2 decimales)." })
+    .refine(val => Number(val) >= 0, { error: "El valor no puede ser negativo." })
+);
+// ^^^^^ required_error → error: () => "..."  y  message → error  [v4]
+
+const optionalMonetary4 = () => z.preprocess(
+  (val) => (val === "" || val === null || val === undefined ? null : String(val)),
+  z.string()
+    .regex(monetaryRegex4, { error: "Formato monetario inválido (máx 8 enteros y 4 decimales)." })
+    .refine(val => Number(val) >= 0, { error: "El valor no puede ser negativo." })
+    .nullable()
+    .optional()
+);
+// ^^^^^ ambos message → error  [v4]
 
 // ─── SCHEMAS DINÁMICOS (DOCUMENTOS) ─────────────────────────────────────────
 
@@ -66,21 +110,21 @@ export const createDocumentoSchema = (tiposDisponibles: TipoDocumento[]) =>
       mantenimiento_id: z.guid().optional().nullable(),
       licencia_id: z.guid().optional().nullable(),
       file: z
-        .file({ error: "El archivo es requerido." })
-        .refine((f) => f.size <= MAX_FILE_SIZE, {
-          message: "El tamaño máximo es 10 MB.",
+        .any()
+        .refine((f) => f instanceof File || (typeof window === "undefined" && f), {
+          error: "El archivo es requerido.",
+        })
+        .refine((f) => !f || f.size <= MAX_FILE_SIZE, {
+          error: "El tamaño máximo es 10 MB.",
         }),
     })
-    .check((ctx) => {
-      const data = ctx.value;
-
+    .superRefine((data, ctx) => {
       if (!data.equipo_id && !data.mantenimiento_id && !data.licencia_id) {
-        ctx.issues.push({
+        ctx.addIssue({
           code: "custom",
           message:
             "El documento debe estar vinculado a un equipo, mantenimiento o licencia.",
           path: ["tipo_documento_id"],
-          input: data.tipo_documento_id,
         });
       }
 
@@ -89,11 +133,10 @@ export const createDocumentoSchema = (tiposDisponibles: TipoDocumento[]) =>
       );
 
       if (!tipoSeleccionado) {
-        ctx.issues.push({
+        ctx.addIssue({
           code: "custom",
           message: "Tipo de documento inválido.",
           path: ["tipo_documento_id"],
-          input: data.tipo_documento_id,
         });
         return;
       }
@@ -110,11 +153,10 @@ export const createDocumentoSchema = (tiposDisponibles: TipoDocumento[]) =>
         );
 
         if (allowedMimes.length > 0 && !allowedMimes.includes(file.type)) {
-          ctx.issues.push({
+          ctx.addIssue({
             code: "custom",
             message: `Formato inválido. Permitidos: ${tipoSeleccionado.formato_permitido.join(", ")}`,
             path: ["file"],
-            input: file.type,
           });
         }
       }
@@ -138,17 +180,15 @@ export const documentacionVerifySchema = z
     ]),
     notas_verificacion: z.string().optional().nullable(),
   })
-  .check((ctx) => {
-    const data = ctx.value;
+  .superRefine((data, ctx) => {
     if (
       data.estado === EstadoDocumentoEnum.Rechazado &&
-      !data.notas_verificacion
+      (!data.notas_verificacion || data.notas_verificacion.trim().length === 0)
     ) {
-      ctx.issues.push({
+      ctx.addIssue({
         code: "custom",
         message: "Debe indicar la razón del rechazo.",
         path: ["notas_verificacion"],
-        input: data.notas_verificacion,
       });
     }
   });
@@ -164,7 +204,7 @@ export const equipoSchema = z
       /^[A-Z0-9]+-[A-Z0-9]+-[A-Z0-9]+$/,
       {
         error:
-          "Formato estricto: Bloques alfanuméricos separados por guiones (Ej: AB-1234-X)",
+          "Formato estricto: Bloques alfanuméricos en mayúscula separados por guiones (Ej: AB-1234-X)",
       },
     ),
     codigo_interno: z
@@ -189,14 +229,10 @@ export const equipoSchema = z
       .max(100, { error: "Máximo 100 caracteres." })
       .optional()
       .nullable(),
-    fecha_adquisicion: z.coerce.date().optional().nullable(),
-    fecha_puesta_marcha: z.coerce.date().optional().nullable(),
-    fecha_garantia_expiracion: z.coerce.date().optional().nullable(),
-    valor_adquisicion: z.coerce
-      .number()
-      .min(0, { error: "El valor no puede ser negativo." })
-      .optional()
-      .nullable(),
+    fecha_adquisicion: optionalDate(),
+    fecha_puesta_marcha: optionalDate(),
+    fecha_garantia_expiracion: optionalDate(),
+    valor_adquisicion: optionalMonetary2(),
     centro_costo: z
       .string()
       .max(100, { error: "Máximo 100 caracteres." })
@@ -204,16 +240,14 @@ export const equipoSchema = z
       .nullable(),
     notas: z.string().optional().nullable(),
   })
-  .check((ctx) => {
-    const data = ctx.value;
+  .superRefine((data, ctx) => {
     const now = new Date();
 
     if (data.fecha_adquisicion && isAfter(data.fecha_adquisicion, now)) {
-      ctx.issues.push({
+      ctx.addIssue({
         code: "custom",
         message: "La fecha de adquisición no puede ser futura.",
         path: ["fecha_adquisicion"],
-        input: data.fecha_adquisicion,
       });
     }
 
@@ -222,11 +256,10 @@ export const equipoSchema = z
       data.fecha_puesta_marcha &&
       isBefore(data.fecha_puesta_marcha, data.fecha_adquisicion)
     ) {
-      ctx.issues.push({
+      ctx.addIssue({
         code: "custom",
         message: "La puesta en marcha no puede ser anterior a la adquisición.",
         path: ["fecha_puesta_marcha"],
-        input: data.fecha_puesta_marcha,
       });
     }
 
@@ -235,11 +268,10 @@ export const equipoSchema = z
       data.fecha_garantia_expiracion &&
       !isAfter(data.fecha_garantia_expiracion, data.fecha_adquisicion)
     ) {
-      ctx.issues.push({
+      ctx.addIssue({
         code: "custom",
         message: "La garantía debe expirar después de la adquisición.",
         path: ["fecha_garantia_expiracion"],
-        input: data.fecha_garantia_expiracion,
       });
     }
   });
@@ -281,7 +313,7 @@ export const mantenimientoSchema = z.object({
       const today = startOfDay(new Date());
       return isAfter(date, today) || date.getTime() >= today.getTime();
     },
-    { message: "La fecha programada no puede estar en el pasado." },
+    { error: "La fecha programada no puede estar en el pasado." },
   ),
   tecnico_responsable: requiredString(
     "El nombre del técnico es requerido.",
@@ -294,16 +326,16 @@ export const mantenimientoSchema = z.object({
     .min(0)
     .max(2, { error: "Prioridad inválida (0-2)." }),
   observaciones: z.string().optional().nullable(),
-  costo_estimado: z.coerce.number().min(0).optional().nullable(),
+  costo_estimado: optionalMonetary2(),
   proveedor_servicio_id: z.guid().optional().nullable(),
 });
 
 export const mantenimientoUpdateSchema = z.object({
-  fecha_programada: z.coerce.date().optional().nullable(),
-  fecha_inicio: z.coerce.date().optional().nullable(),
-  fecha_finalizacion: z.coerce.date().optional().nullable(),
-  costo_estimado: z.coerce.number().optional().nullable(),
-  costo_real: z.coerce.number().optional().nullable(),
+  fecha_programada: optionalDate(),
+  fecha_inicio: optionalDate(),
+  fecha_finalizacion: optionalDate(),
+  costo_estimado: optionalMonetary2(),
+  costo_real: optionalMonetary2(),
   tecnico_responsable: z.string().optional().nullable(),
   proveedor_servicio_id: z.guid().optional().nullable(),
   prioridad: z.coerce.number().int().min(0).max(2).optional(),
@@ -318,28 +350,23 @@ export const createCierreMantenimientoSchema = (
   z
     .object({
       estado: requiredEnum(Object.values(EstadoMantenimientoEnum)),
-      costo_real: z.coerce
-        .number({ error: () => "El costo es requerido." })
-        .min(0, { error: "El costo real no puede ser negativo." }),
+      costo_real: requiredMonetary2(),
       fecha_inicio: requiredDate("Fecha de inicio real requerida."),
       fecha_finalizacion: requiredDate("Fecha de finalización requerida."),
       observaciones: z.string().optional().nullable(),
       tecnico_responsable: requiredString("Técnico responsable requerido."),
     })
-    .check((ctx) => {
-      const data = ctx.value;
-
+    .superRefine((data, ctx) => {
       if (
         data.estado === EstadoMantenimientoEnum.Completado &&
         tipoMantenimiento.requiere_documentacion &&
         !tieneDocumentosAdjuntos
       ) {
-        ctx.issues.push({
+        ctx.addIssue({
           code: "custom",
           message:
             "Este tipo de mantenimiento requiere adjuntar documentación antes de completarse.",
           path: ["estado"],
-          input: data.estado,
         });
       }
 
@@ -348,11 +375,10 @@ export const createCierreMantenimientoSchema = (
         data.fecha_finalizacion &&
         isAfter(data.fecha_inicio, data.fecha_finalizacion)
       ) {
-        ctx.issues.push({
+        ctx.addIssue({
           code: "custom",
           message: "La finalización no puede ser antes del inicio.",
           path: ["fecha_finalizacion"],
-          input: data.fecha_finalizacion,
         });
       }
     });
@@ -380,7 +406,7 @@ export const tipoItemSchema = z.object({
   proveedor_preferido_id: z.guid().optional().nullable(),
 });
 
-export const inventarioMovimientoSchema = z
+export const createInventarioMovimientoSchema = (stockData?: InventarioStock[]) => z
   .object({
     tipo_item_id: requiredUuid("Debe seleccionar un ítem."),
     tipo_movimiento: requiredEnum(
@@ -391,8 +417,8 @@ export const inventarioMovimientoSchema = z
       .number()
       .int()
       .min(1, { error: "La cantidad debe ser mayor a 0." }),
-    fecha_hora: z.coerce.date().optional().nullable(),
-    costo_unitario: z.coerce.number().min(0).optional().nullable(),
+    fecha_hora: optionalDate(),
+    costo_unitario: optionalMonetary4(),
     lote_origen: z.string().max(50).optional().default("N/A"),
     lote_destino: z.string().max(50).optional().default("N/A"),
     ubicacion_origen: z.string().optional().nullable(),
@@ -404,9 +430,7 @@ export const inventarioMovimientoSchema = z
     referencia_transferencia: z.guid().optional().nullable(),
     notas: z.string().optional().nullable(),
   })
-  .check((ctx) => {
-    const data = ctx.value;
-
+  .superRefine((data, ctx) => {
     const salidas = [
       TipoMovimientoInvEnum.SalidaUso,
       TipoMovimientoInvEnum.SalidaDescarte,
@@ -415,11 +439,10 @@ export const inventarioMovimientoSchema = z
     ] as string[];
 
     if (salidas.includes(data.tipo_movimiento) && !data.ubicacion_origen) {
-      ctx.issues.push({
+      ctx.addIssue({
         code: "custom",
         message: "Origen requerido.",
         path: ["ubicacion_origen"],
-        input: data.ubicacion_origen,
       });
     }
 
@@ -430,11 +453,10 @@ export const inventarioMovimientoSchema = z
     ] as string[];
 
     if (entradas.includes(data.tipo_movimiento) && !data.ubicacion_destino) {
-      ctx.issues.push({
+      ctx.addIssue({
         code: "custom",
         message: "Destino requerido.",
         path: ["ubicacion_destino"],
-        input: data.ubicacion_destino,
       });
     }
 
@@ -442,18 +464,35 @@ export const inventarioMovimientoSchema = z
       data.tipo_movimiento.includes("Ajuste") &&
       (!data.motivo_ajuste || data.motivo_ajuste.length < 5)
     ) {
-      ctx.issues.push({
+      ctx.addIssue({
         code: "custom",
         message: "Motivo requerido (mín 5 caracteres).",
         path: ["motivo_ajuste"],
-        input: data.motivo_ajuste,
       });
+    }
+
+    // VALIDACIÓN ESTRICTA DE STOCK ANTES DE MUTACIÓN
+    const salidasParaStock = [...salidas, TipoMovimientoInvEnum.AjusteNegativo];
+
+    if (stockData && salidasParaStock.includes(data.tipo_movimiento) && data.ubicacion_origen) {
+      const stockActual = stockData.find(
+        s => s.tipo_item_id === data.tipo_item_id && s.ubicacion === data.ubicacion_origen && s.lote === (data.lote_origen || "N/A")
+      );
+      const disponible = stockActual ? stockActual.cantidad_actual : 0;
+
+      if (data.cantidad > disponible) {
+        ctx.addIssue({
+          code: "custom",
+          message: `Stock insuficiente. Máximo disponible: ${disponible}.`,
+          path: ["cantidad"],
+        });
+      }
     }
   });
 
 export const editStockSchema = z.object({
   lote: z.string().optional().nullable(),
-  fecha_caducidad: z.coerce.date().optional().nullable(),
+  fecha_caducidad: optionalDate(),
 });
 
 // ─── LICENCIAS ──────────────────────────────────────────────────────────────
@@ -475,9 +514,9 @@ export const licenciaSoftwareSchema = z
     software_catalogo_id: requiredUuid("Debe seleccionar un software."),
     clave_producto: z.string().optional().nullable(),
     fecha_adquisicion: requiredDate("La fecha de adquisición es requerida."),
-    fecha_expiracion: z.coerce.date().optional().nullable(),
+    fecha_expiracion: optionalDate(),
     proveedor_id: z.guid().optional().nullable(),
-    costo_adquisicion: z.coerce.number().min(0).optional().nullable(),
+    costo_adquisicion: optionalMonetary2(),
     cantidad_total: z.coerce
       .number()
       .int()
@@ -491,7 +530,7 @@ export const licenciaSoftwareSchema = z
       !data.fecha_adquisicion ||
       isBefore(data.fecha_adquisicion, data.fecha_expiracion),
     {
-      message: "La expiración debe ser posterior a la adquisición.",
+      error: "La expiración debe ser posterior a la adquisición.",
       path: ["fecha_expiracion"],
     },
   );
@@ -501,21 +540,22 @@ export const asignarLicenciaSchema = z
     asignar_a: z.enum(["equipo", "usuario"], {
       error: () => "Seleccione un destino.",
     }),
+    // ^^^^^ errorMap: () => ({ message }) → error: () => "..."  [v4]
     equipo_id: z.guid().optional().nullable(),
     usuario_id: z.guid().optional().nullable(),
     notas: z.string().optional().nullable(),
     instalado: z.boolean().optional(),
   })
   .refine((data) => data.asignar_a !== "equipo" || !!data.equipo_id, {
-    message: "Seleccione un equipo.",
+    error: "Seleccione un equipo.",
     path: ["equipo_id"],
   })
   .refine((data) => data.asignar_a !== "usuario" || !!data.usuario_id, {
-    message: "Seleccione un usuario.",
+    error: "Seleccione un usuario.",
     path: ["usuario_id"],
   })
   .refine((data) => !(data.equipo_id && data.usuario_id), {
-    message: "No puede asignar a un equipo y a un usuario al mismo tiempo.",
+    error: "No puede asignar a un equipo y a un usuario al mismo tiempo.",
     path: ["asignar_a"],
   });
 
@@ -585,7 +625,7 @@ export const proveedorSchema = z.object({
   contacto: z.string().optional().nullable(),
   direccion: z.string().optional().nullable(),
   sitio_web: z.union([
-    z.url({ error: "URL inválida" }),
+    z.string().url({ error: "URL inválida" }),
     z.literal(""),
     z.null(),
     z.undefined(),
@@ -647,7 +687,7 @@ export const reservaSchema = z
       return isAfter(end, start);
     },
     {
-      message: "La fecha/hora fin debe ser posterior al inicio.",
+      error: "La fecha/hora fin debe ser posterior al inicio.",
       path: ["fecha_fin"],
     },
   );
@@ -662,51 +702,45 @@ export const movimientoEquipoSchema = z
     destino: z.string().optional().nullable(),
     proposito: z.string().optional().nullable(),
     observaciones: z.string().optional().nullable(),
-    fecha_prevista_retorno: z.coerce.date().optional().nullable(),
+    fecha_prevista_retorno: optionalDate(),
     origen: z.string().optional().nullable(),
     recibido_por: z.string().optional().nullable(),
   })
-  .check((ctx) => {
-    const data = ctx.value;
-
+  .superRefine((data, ctx) => {
     if (
       data.tipo_movimiento === TipoMovimientoEquipoEnum.SalidaTemporal &&
       !data.fecha_prevista_retorno
     ) {
-      ctx.issues.push({
+      ctx.addIssue({
         code: "custom",
         message: "Fecha retorno requerida.",
         path: ["fecha_prevista_retorno"],
-        input: data.fecha_prevista_retorno,
       });
     }
 
     if (data.tipo_movimiento === TipoMovimientoEquipoEnum.AsignacionInterna) {
       if (!data.destino || data.destino.length < 3) {
-        ctx.issues.push({
+        ctx.addIssue({
           code: "custom",
           message: "Ubicación/Destino de la asignación requerido.",
           path: ["destino"],
-          input: data.destino,
         });
       }
       if (!data.origen || data.origen.length < 3) {
-        ctx.issues.push({
+        ctx.addIssue({
           code: "custom",
           message: "Ubicación de origen requerida para asignaciones.",
           path: ["origen"],
-          input: data.origen,
         });
       }
     }
 
     if (data.tipo_movimiento === TipoMovimientoEquipoEnum.Entrada) {
       if (!data.origen || data.origen.length < 3) {
-        ctx.issues.push({
+        ctx.addIssue({
           code: "custom",
           message: "Ubicación de origen requerida para registrar una entrada.",
           path: ["origen"],
-          input: data.origen,
         });
       }
     }
@@ -720,11 +754,10 @@ export const movimientoEquipoSchema = z
       salidasConDestinoRequerido.includes(data.tipo_movimiento) &&
       (!data.destino || data.destino.length < 3)
     ) {
-      ctx.issues.push({
+      ctx.addIssue({
         code: "custom",
         message: "Destino físico requerido.",
         path: ["destino"],
-        input: data.destino,
       });
     }
   });
@@ -734,19 +767,18 @@ export const autorizarMovimientoSchema = z
     accion: z.enum(["Aprobar", "Rechazar"], {
       error: () => "Debe tomar una decisión.",
     }),
+    // ^^^^^ errorMap: () => ({ message }) → error: () => "..."  [v4]
     observaciones: z.string().optional(),
   })
-  .check((ctx) => {
-    const data = ctx.value;
+  .superRefine((data, ctx) => {
     if (
       data.accion === "Rechazar" &&
       (!data.observaciones || data.observaciones.length < 5)
     ) {
-      ctx.issues.push({
+      ctx.addIssue({
         code: "custom",
         message: "Debe justificar el rechazo (mín. 5 caracteres).",
         path: ["observaciones"],
-        input: data.observaciones,
       });
     }
   });
@@ -769,7 +801,7 @@ export const changePasswordSchema = z
     confirm_password: z.string(),
   })
   .refine((data) => data.new_password === data.confirm_password, {
-    message: "Las contraseñas no coinciden.",
+    error: "Las contraseñas no coinciden.",
     path: ["confirm_password"],
   });
 
@@ -789,7 +821,7 @@ export const resetPasswordConfirmSchema = z
     confirm_password: z.string().min(8, { error: "Confirme la contraseña." }),
   })
   .refine((data) => data.new_password === data.confirm_password, {
-    message: "Las contraseñas no coinciden.",
+    error: "Las contraseñas no coinciden.",
     path: ["confirm_password"],
   });
 
@@ -809,7 +841,7 @@ export const reporteSchema = z
     fecha_fin: requiredDate("Fecha de fin requerida"),
   })
   .refine((data) => !isBefore(data.fecha_fin, data.fecha_inicio), {
-    message: "Fecha fin inválida. No puede ser anterior al inicio.",
+    error: "Fecha fin inválida. No puede ser anterior al inicio.",
     path: ["fecha_fin"],
   });
 
@@ -821,24 +853,22 @@ export const aprobarReservaSchema = z
     ),
     notas_administrador: z.string().optional().nullable(),
   })
-  .check((ctx) => {
-    const data = ctx.value;
+  .superRefine((data, ctx) => {
     if (
       data.estado === EstadoReservaEnum.Rechazada &&
       (!data.notas_administrador || data.notas_administrador.length < 5)
     ) {
-      ctx.issues.push({
+      ctx.addIssue({
         code: "custom",
         message: "Justifique el rechazo (mínimo 5 caracteres).",
         path: ["notas_administrador"],
-        input: data.notas_administrador,
       });
     }
   });
 
 export const reservaCheckInOutSchema = z.object({
-  check_in_time: z.coerce.date().optional().nullable(),
-  check_out_time: z.coerce.date().optional().nullable(),
+  check_in_time: optionalDate(),
+  check_out_time: optionalDate(),
   notas_devolucion: z.string().optional().nullable(),
 });
 
@@ -850,6 +880,7 @@ export const auditFilterSchema = z.object({
 
 export const notificacionUpdateSchema = z.object({
   leido: z.boolean({ error: () => "Estado de lectura requerido" }),
+  // ^^^^^ required_error → error: () => "..."  [v4]
 });
 
 // Re-exports de compatibilidad

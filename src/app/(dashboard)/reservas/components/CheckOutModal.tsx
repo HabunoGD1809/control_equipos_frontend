@@ -6,6 +6,7 @@ import { Loader2, LogOut } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/use-toast";
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 
 import { reservasService } from "@/app/services/reservasService";
 import { ReservaEquipo, ReservaEquipoCheckInOut } from "@/types/api";
@@ -36,8 +37,9 @@ export function CheckOutModal({ reserva, isOpen, onClose, onSuccess }: CheckOutM
          onClose();
          onSuccess?.();
       },
-      onError: (error: any) => {
-         toast({ variant: "destructive", title: "Error en Check-Out", description: error.message || "No se pudo registrar la entrega." });
+      onError: (error: unknown) => {
+         const { message } = getFriendlyErrorMessage(error);
+         toast({ variant: "destructive", title: "Error en Check-Out", description: message });
       },
    });
 

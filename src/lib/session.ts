@@ -3,8 +3,8 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AUTH_COOKIE_NAME, REFRESH_COOKIE_NAME } from "@/lib/constants";
 
-const ACCESS_COOKIE_MAX_AGE = 60 * 60 * 24; // 24h
-const REFRESH_COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7d
+const ACCESS_COOKIE_MAX_AGE = 60 * 60 * 24;
+const REFRESH_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 
 export async function getSession() {
    const cookieStore = await cookies();

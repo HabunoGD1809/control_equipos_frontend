@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
 import { Textarea } from "@/components/ui/Textarea";
 import { useToast } from "@/components/ui/use-toast";
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 
 import { reservaCheckInOutSchema } from "@/lib/zod";
 import { reservasService } from "@/app/services/reservasService";
@@ -52,8 +53,9 @@ export function CheckInModal({ reserva, isOpen, onClose, onSuccess }: CheckInMod
          onClose();
          onSuccess?.();
       },
-      onError: (error: any) => {
-         toast({ variant: "destructive", title: "Error en Check-In", description: error.message || "No se pudo registrar la devolución." });
+      onError: (error: unknown) => {
+         const { message } = getFriendlyErrorMessage(error);
+         toast({ variant: "destructive", title: "Error en Check-In", description: message });
       },
    });
 

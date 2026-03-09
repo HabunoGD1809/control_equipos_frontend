@@ -1,5 +1,5 @@
 import { api } from "@/lib/http";
-import type { Token, Usuario, ResetTokenResponse } from "@/types/api";
+import type { Token, Usuario, PasswordResetResponse, RefreshTokenPayload } from "@/types/api";
 import type { z } from "zod";
 import {
    LoginSchema,
@@ -22,13 +22,14 @@ export const authService = {
    },
 
    async logout(refreshToken: string): Promise<void> {
-      await api.post("/auth/logout/", { refresh_token: refreshToken });
+      const payload: RefreshTokenPayload = { refresh_token: refreshToken };
+      await api.post("/auth/logout/", payload);
    },
 
    async requestPasswordReset(
       data: z.infer<typeof resetPasswordRequestSchema>,
-   ): Promise<ResetTokenResponse> {
-      return api.post<ResetTokenResponse>(
+   ): Promise<PasswordResetResponse> {
+      return api.post<PasswordResetResponse>(
          "/auth/password-recovery/request-reset/",
          data,
       );

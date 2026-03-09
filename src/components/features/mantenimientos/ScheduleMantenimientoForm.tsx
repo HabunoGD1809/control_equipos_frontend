@@ -19,6 +19,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { TipoMantenimiento, ProveedorSimple } from "@/types/api";
 import { mantenimientosService } from "@/app/services/mantenimientosService";
 import { mantenimientoSchema } from "@/lib/zod";
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 
 interface ScheduleMantenimientoFormProps {
    equipoId: string;
@@ -60,7 +61,7 @@ export function ScheduleMantenimientoForm({
             prioridad: values.prioridad,
             observaciones: values.observaciones || null,
             proveedor_servicio_id: values.proveedor_servicio_id === "none" ? null : values.proveedor_servicio_id,
-            fecha_programada: values.fecha_programada.toISOString(),
+            fecha_programada: values.fecha_programada ? values.fecha_programada.toISOString() : undefined,
             costo_estimado: values.costo_estimado ?? null,
          });
 
@@ -71,12 +72,12 @@ export function ScheduleMantenimientoForm({
          form.reset();
          onSuccess();
       } catch (err) {
-         const e = err as Error & { status?: number };
-         toast({
-            variant: "destructive",
-            title: "Error",
-            description: e.message || "No se pudo programar el mantenimiento.",
-         });
+         const { message, field } = getFriendlyErrorMessage(err);
+         if (field) {
+            form.setError(field as keyof MantenimientoFormValues, { type: "manual", message });
+         } else {
+            toast({ variant: "destructive", title: "Error", description: message });
+         }
       }
    };
 
@@ -239,7 +240,7 @@ export function ScheduleMantenimientoForm({
                                  value={field.value ?? ""}
                                  onChange={(e) => {
                                     const v = e.target.value;
-                                    field.onChange(v === "" ? null : Number(v));
+                                    field.onChange(v === "" ? null : v);
                                  }}
                               />
                            </div>

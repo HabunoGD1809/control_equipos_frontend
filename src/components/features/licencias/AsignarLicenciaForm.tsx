@@ -26,14 +26,15 @@ interface AsignarLicenciaFormProps {
    onSuccess: () => void;
 }
 
-type FormValues = z.infer<typeof asignarLicenciaSchema>;
+type FormInput = z.input<typeof asignarLicenciaSchema>;
+type FormOutput = z.output<typeof asignarLicenciaSchema>;
 
 export function AsignarLicenciaForm({ licenciaId, equipos, usuarios, onSuccess }: AsignarLicenciaFormProps) {
    const { toast } = useToast();
    const queryClient = useQueryClient();
    const [activeTab, setActiveTab] = useState<"equipo" | "usuario">("equipo");
 
-   const form = useForm<FormValues>({
+   const form = useForm<FormInput>({
       resolver: standardSchemaResolver(asignarLicenciaSchema),
       defaultValues: {
          asignar_a: "equipo",
@@ -80,13 +81,12 @@ export function AsignarLicenciaForm({ licenciaId, equipos, usuarios, onSuccess }
       }
    });
 
-   const onSubmit = (values: FormValues) => {
+   const onSubmit = (values: any) => {
+      const payload = values as FormOutput;
+
       mutation.mutate({
          licencia_id: licenciaId,
-         equipo_id: (values.asignar_a === "equipo" && values.equipo_id) ? values.equipo_id : null,
-         usuario_id: (values.asignar_a === "usuario" && values.usuario_id) ? values.usuario_id : null,
-         notas: values.notas || null,
-         instalado: values.instalado,
+         ...payload
       });
    };
 

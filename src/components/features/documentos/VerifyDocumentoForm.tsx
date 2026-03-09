@@ -11,6 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { useToast } from "@/components/ui/use-toast";
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import { Documentacion, EstadoDocumentoEnum, DocumentacionVerify } from "@/types/api";
 import { documentosService } from "@/app/services/documentosService";
 import { documentacionVerifySchema } from "@/lib/zod";
@@ -44,8 +45,6 @@ export function VerifyDocumentoForm({ documento, onSuccess }: VerifyDocumentoFor
       onSuccess: () => {
          toast({ title: "Éxito", description: "El estado del documento ha sido actualizado." });
 
-         // 🚀 CORRECCIÓN DE CACHÉ Y TYPESCRIPT: 
-         // Accedemos a los IDs a través de los objetos anidados generados por la API
          queryClient.invalidateQueries({ queryKey: ["documentos"] });
          if (documento.equipo?.id) queryClient.invalidateQueries({ queryKey: ["equipo", documento.equipo.id] });
          if (documento.mantenimiento?.id) queryClient.invalidateQueries({ queryKey: ["mantenimiento", documento.mantenimiento.id] });
@@ -53,12 +52,12 @@ export function VerifyDocumentoForm({ documento, onSuccess }: VerifyDocumentoFor
 
          onSuccess();
       },
-      onError: (err: unknown) => {
-         const e = err as Error & { status?: number };
+      onError: (error: unknown) => {
+         const { message } = getFriendlyErrorMessage(error);
          toast({
             variant: "destructive",
             title: "Error",
-            description: e.message || "No se pudo actualizar el estado del documento.",
+            description: message,
          });
       }
    });

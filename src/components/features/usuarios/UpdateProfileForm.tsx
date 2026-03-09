@@ -36,8 +36,6 @@ export function UpdateProfileForm({ currentUser }: UpdateProfileFormProps) {
 
    const onSubmit = (data: FormValues) => {
       startTransition(async () => {
-         // Sanitizamos el payload antes de enviarlo al Server Action
-         // TypeScript Fix: Asegurarse de que data.nombre_usuario exista antes de hacer trim()
          const cleanPayload = {
             nombre_usuario: data.nombre_usuario ? data.nombre_usuario.trim() : "",
             email: cleanString(data.email),

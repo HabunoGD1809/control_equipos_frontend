@@ -90,17 +90,26 @@ async function http<T>(path: string, options: FetchOptions & { method: string; b
       if (res.status === 401) handleUnauthorizedClient();
 
       let message = `HTTP ${res.status}`;
+      let errorData: any = null;
+
       try {
          if (res.headers.get("content-type")?.includes("application/json")) {
             const body = await res.json();
-            message = Array.isArray(body?.detail) ? body.detail.map((e: any) => e.msg).join(" | ") : (body?.detail || body?.message || message);
+            errorData = body;
+
+            // Pydantic 422 parser: extraemos el campo (loc) y el mensaje (msg)
+            message = Array.isArray(body?.detail)
+               ? body.detail.map((e: any) => `${e.loc?.slice(-1) || 'Campo'}: ${e.msg}`).join(" | ")
+               : (body?.detail || body?.message || message);
          } else {
             message = await res.text() || message;
          }
       } catch { /* silencioso */ }
 
-      const err = new Error(message) as Error & { status?: number };
+      // Inyectamos status y data nativamente
+      const err = new Error(message) as Error & { status?: number; data?: any };
       err.status = res.status;
+      err.data = errorData;
       throw err;
    }
 

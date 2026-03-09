@@ -135,11 +135,10 @@ export function UploadDocumentoForm({
    });
 
    const onSubmit = (values: UploadDocumentoValues) => {
-      // Bloqueamos nativamente si intentan subir un doc suelto en la vista global sin seleccionar equipo
-      if (isStandalone && !values.equipo_id) {
+      if (isStandalone && !values.equipo_id && !values.mantenimiento_id && !values.licencia_id) {
          form.setError("equipo_id", {
             type: "manual",
-            message: "Debe seleccionar un equipo para vincular este documento."
+            message: "Debe seleccionar un vínculo para este documento."
          });
          return;
       }

@@ -1,3 +1,5 @@
+// src/types/api.ts
+
 type ValuesOf<T extends Record<string, string>> = T[keyof T];
 
 // ─── ENUMS → as const satisfies ─────────────────────────────────────────────
@@ -320,7 +322,11 @@ export interface Token {
   token_type: string;
 }
 
-export interface ResetTokenResponse {
+export interface RefreshTokenPayload {
+  refresh_token: string;
+}
+
+export interface PasswordResetResponse {
   username: string;
   reset_token: string;
   expires_at: string;
@@ -359,6 +365,7 @@ export interface PadreInfo {
   cantidad: number;
   notas?: string | null;
   created_at: string;
+  updated_at?: string;
 }
 
 // ─── MANTENIMIENTO ──────────────────────────────────────────────────────────
@@ -587,7 +594,8 @@ export interface InventarioStock {
 }
 
 export interface InventarioStockTotal {
-  total: number;
+  tipo_item_id: string;
+  cantidad_total: number;
 }
 
 export interface InventarioMovimiento {
@@ -877,6 +885,11 @@ export interface InventarioMovimientoCreate {
   mantenimiento_id?: string | null;
   referencia_transferencia?: string | null;
   notas?: string | null;
+}
+
+export interface InventarioStockUpdate {
+  lote?: string | null;
+  fecha_caducidad?: string | null;
 }
 
 export interface LicenciaSoftwareCreate {

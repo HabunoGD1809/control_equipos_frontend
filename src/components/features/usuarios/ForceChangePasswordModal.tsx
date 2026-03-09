@@ -8,6 +8,7 @@ import { ShieldAlert, Loader2, KeyRound } from "lucide-react";
 import { changePasswordSchema } from "@/lib/zod";
 import { api } from "@/lib/http";
 import { useToast } from "@/components/ui/use-toast";
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/Dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
 import { Input } from "@/components/ui/Input";
@@ -27,23 +28,22 @@ export function ForceChangePasswordModal() {
    const onSubmit = async (data: FormValues) => {
       try {
          setIsSubmitting(true);
-         await api.post("/auth/change-password", {
+         await api.post("/auth/change-password/", {
             current_password: data.current_password,
             new_password: data.new_password
          });
          toast({ title: "Contraseña Actualizada", description: "Tu sesión ha sido asegurada. Redirigiendo..." });
 
-         // Recargamos duro para volver a pasar por el Layout Server Component y limpiar el flag
          setTimeout(() => window.location.reload(), 1500);
-      } catch (error: any) {
-         toast({ variant: "destructive", title: "Error de Seguridad", description: error.message || "La contraseña actual no es válida." });
+      } catch (error: unknown) {
+         const { message } = getFriendlyErrorMessage(error);
+         toast({ variant: "destructive", title: "Error de Seguridad", description: message });
          setIsSubmitting(false);
       }
    };
 
    return (
       <Dialog open={true}>
-         {/* Oculta la "X", bloquea el Escape, bloquea el Outside Click */}
          <DialogContent
             className="sm:max-w-106.25 [&>button.absolute]:hidden outline-none pointer-events-auto"
             onInteractOutside={(e) => e.preventDefault()}

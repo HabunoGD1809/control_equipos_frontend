@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/components/ui/use-toast";
 import { editComponenteSchema } from "@/lib/zod";
 import { api } from "@/lib/http";
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import { ComponenteInfo } from "@/types/api";
 
 interface EditComponenteFormProps {
@@ -44,12 +45,12 @@ export function EditComponenteForm({ componente, onSuccess }: EditComponenteForm
          toast({ title: "Éxito", description: "Componente actualizado correctamente." });
          router.refresh();
          onSuccess();
-      } catch (err) {
-         const e = err as Error & { status?: number };
+      } catch (error: unknown) {
+         const { message } = getFriendlyErrorMessage(error);
          toast({
             variant: "destructive",
             title: "Error",
-            description: e.message || "No se pudo actualizar el componente.",
+            description: message,
          });
       } finally {
          setIsLoading(false);

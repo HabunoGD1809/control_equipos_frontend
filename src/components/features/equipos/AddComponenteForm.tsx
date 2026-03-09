@@ -30,6 +30,7 @@ import { AsyncCombobox } from "@/components/ui/AsyncCombobox";
 import { addComponenteSchema } from "@/lib/zod";
 import { equiposService } from "@/app/services/equiposService";
 import { TipoRelacionComponenteEnum } from "@/types/api";
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 
 type AddComponenteValues = z.infer<typeof addComponenteSchema>;
 
@@ -63,11 +64,12 @@ export function AddComponenteForm({ padreId, onSuccess }: AddComponenteFormProps
          });
          toast({ title: "Componente vinculado exitosamente." });
          onSuccess();
-      } catch (error: any) {
+      } catch (error: unknown) {
+         const { message } = getFriendlyErrorMessage(error);
          toast({
             variant: "destructive",
-            title: "Error",
-            description: error.response?.data?.detail || error.message || "No se pudo agregar el componente.",
+            title: "Error de vinculación",
+            description: message,
          });
       } finally {
          setIsLoading(false);

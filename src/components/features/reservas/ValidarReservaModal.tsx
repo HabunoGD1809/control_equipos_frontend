@@ -19,6 +19,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Textarea } from "@/components/ui/Textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/RadioGroup";
 import { useToast } from "@/components/ui/use-toast";
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 
 import { aprobarReservaSchema } from "@/lib/zod";
 import { reservasService } from "@/app/services/reservasService";
@@ -65,11 +66,12 @@ export function ValidarReservaModal({ reserva, isOpen, onClose, onSuccess }: Val
          onClose();
          onSuccess?.();
       },
-      onError: (error: any) => {
+      onError: (error: unknown) => {
+         const { message } = getFriendlyErrorMessage(error);
          toast({
             variant: "destructive",
             title: "Error",
-            description: error.message || "No se pudo actualizar el estado.",
+            description: message,
          });
       },
    });

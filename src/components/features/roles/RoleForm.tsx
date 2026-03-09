@@ -10,6 +10,7 @@ import { Loader2, Shield, CheckSquare } from "lucide-react";
 import { rolSchema } from "@/lib/zod";
 import { rolesService } from "@/app/services/rolesService";
 import { useAuthStore } from "@/store/authStore";
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import type { Rol, Permiso } from "@/types/api";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
@@ -47,7 +48,6 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
    const [permisosDisponibles, setPermisosDisponibles] = useState<Permiso[]>([]);
    const [loadingPermisos, setLoadingPermisos] = useState(true);
 
-   // 🚀 REGLA DE NEGOCIO: Proteger el nombre del rol 'admin'
    const isAdminRole = initialData?.nombre.toLowerCase() === "admin";
 
    const form = useForm<RoleFormValues>({
@@ -59,7 +59,6 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
       },
    });
 
-   // Observamos los permisos seleccionados para la lógica de "Seleccionar Todo"
    const selectedPermisos = useWatch({
       control: form.control,
       name: "permiso_ids",
@@ -106,10 +105,9 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
             router.refresh();
          }
       } catch (error: unknown) {
-         const detail =
-            (error as any)?.response?.data?.detail || (error as any)?.message || "";
+         const { message, field } = getFriendlyErrorMessage(error);
 
-         if (detail.includes("uq_roles_nombre")) {
+         if (field === "nombre" || message.includes("uq_roles_nombre") || message.includes("ya existe")) {
             form.setError("nombre", {
                type: "manual",
                message: "Este nombre de rol ya existe.",
@@ -118,7 +116,7 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
             toast({
                variant: "destructive",
                title: "Error al guardar",
-               description: detail || "Ocurrió un error inesperado.",
+               description: message,
             });
          }
       } finally {
@@ -128,22 +126,18 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
 
    const handleCancel = () => (onCancel ? onCancel() : router.back());
 
-   // 🚀 MEJORA UI: Agrupación semántica más limpia e inteligente
    const permisoGroups = useMemo(() => {
       return permisosDisponibles.reduce<Record<string, Permiso[]>>((acc, p) => {
          const parts = p.nombre.split("_");
-         // Si tiene múltiples partes (ej: administrar_inventario_tipos), tomamos la segunda palabra como módulo
          let key = parts.length > 1 ? parts[1] : "general";
 
-         // Limpieza de nombres para la UI
-         if (key === "software") key = "licencias"; // Unir catalogo software con licencias
+         if (key === "software") key = "licencias";
 
          (acc[key] ??= []).push(p);
          return acc;
       }, {});
    }, [permisosDisponibles]);
 
-   // 🚀 MEJORA UX: Función para seleccionar/deseleccionar un módulo completo
    const handleToggleGroup = (groupPerms: Permiso[], selectAll: boolean) => {
       const currentSet = new Set(form.getValues("permiso_ids") || []);
 
@@ -242,10 +236,8 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
                   ) : (
                      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                         {Object.entries(permisoGroups).map(([groupName, permisos]) => {
-                           // Calculamos el estado de selección del grupo
                            const groupSelectedCount = permisos.filter(p => selectedPermisos?.includes(p.id)).length;
                            const isAllSelected = groupSelectedCount === permisos.length;
-                           const isIndeterminate = groupSelectedCount > 0 && !isAllSelected;
 
                            return (
                               <div
@@ -321,7 +313,7 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
                      <p className="text-sm font-medium text-destructive mt-4 text-center bg-destructive/10 py-2 rounded-md">
                         {form.formState.errors.permiso_ids.message}
                      </p>
-                  )}{" "}
+                  )}
                </CardContent>
             </Card>
 

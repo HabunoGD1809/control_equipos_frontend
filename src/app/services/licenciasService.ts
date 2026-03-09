@@ -6,12 +6,9 @@ import type {
    LicenciaSoftwareCreate,
    LicenciaSoftwareUpdate,
    AsignacionLicenciaCreate,
+   SoftwareCatalogoCreate,
+   SoftwareCatalogoUpdate,
 } from "@/types/api";
-
-type SoftwareCatalogoCreate = Omit<
-   SoftwareCatalogo,
-   "id" | "created_at" | "updated_at"
->;
 
 export const licenciasService = {
    // --- Catálogo ---
@@ -25,7 +22,7 @@ export const licenciasService = {
 
    updateSoftware(
       id: string,
-      payload: Partial<SoftwareCatalogoCreate>,
+      payload: SoftwareCatalogoUpdate,
    ): Promise<SoftwareCatalogo> {
       return api.put<SoftwareCatalogo>(`/licencias/catalogo/${id}`, payload);
    },

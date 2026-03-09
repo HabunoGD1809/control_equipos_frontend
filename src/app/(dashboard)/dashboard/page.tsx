@@ -61,7 +61,6 @@ async function getDashboardPageData() {
    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
    try {
-      // OPTIMIZACIÓN: Eliminamos el fetch a /auditoria/ porque /dashboard/ ya trae los movimientos
       const [
          dashboardRes,
          mantenimientosRes,
@@ -155,7 +154,6 @@ export default async function DashboardPage() {
             </div>
          </div>
 
-         {/* KPIs Principales - Expandido a 6 columnas en pantallas grandes */}
          <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
             <StatCard
                title="Valor de Activos"
@@ -206,7 +204,7 @@ export default async function DashboardPage() {
          {/* Grillas de Contenido - Bento Grid Layout */}
          <div className="grid gap-6 lg:grid-cols-12">
 
-            {/* Columna Principal (Gráficos y Alertas) - Ocupa 8 columnas */}
+            {/* Columna Principal (Gráficos y Alertas) */}
             <div className="lg:col-span-8 space-y-6 flex flex-col">
 
                <Card className="flex-1 shadow-sm border-muted/60">
@@ -246,7 +244,7 @@ export default async function DashboardPage() {
                </div>
             </div>
 
-            {/* Columna Lateral (Feed de Actividad) - Ocupa 4 columnas */}
+            {/* Columna Lateral (Feed de Actividad) */}
             <div className="lg:col-span-4">
                <Card className="h-full shadow-sm border-muted/60 flex flex-col">
                   <CardHeader className="pb-3 border-b bg-muted/20">

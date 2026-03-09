@@ -19,6 +19,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/Alert";
 import { useToast } from "@/components/ui/use-toast";
 
 import { mantenimientosService } from "@/app/services/mantenimientosService";
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import { Mantenimiento, Proveedor, EstadoMantenimientoEnum, MantenimientoUpdate, EstadoMantenimiento } from "@/types/api";
 import { cn } from "@/lib/utils";
 import { mantenimientoUpdateSchema } from "@/lib/zod";
@@ -52,8 +53,8 @@ export function EditarMantenimientoForm({
          estado: mantenimiento.estado,
          tecnico_responsable: mantenimiento.tecnico_responsable ?? "",
          proveedor_servicio_id: mantenimiento.proveedor_servicio_id || null,
-         costo_estimado: mantenimiento.costo_estimado ? Number(mantenimiento.costo_estimado) : undefined,
-         costo_real: mantenimiento.costo_real ? Number(mantenimiento.costo_real) : undefined,
+         costo_estimado: mantenimiento.costo_estimado ? String(mantenimiento.costo_estimado) : undefined,
+         costo_real: mantenimiento.costo_real ? String(mantenimiento.costo_real) : undefined,
          fecha_programada: mantenimiento.fecha_programada ? new Date(mantenimiento.fecha_programada) : undefined,
          fecha_inicio: mantenimiento.fecha_inicio ? new Date(mantenimiento.fecha_inicio) : undefined,
          fecha_finalizacion: mantenimiento.fecha_finalizacion ? new Date(mantenimiento.fecha_finalizacion) : undefined,
@@ -91,17 +92,19 @@ export function EditarMantenimientoForm({
                : "Cambios guardados correctamente."
          });
 
-         // 1. Refresca la lista general de mantenimientos
          queryClient.invalidateQueries({ queryKey: ["mantenimientos"] });
-         // 2. Refresca el equipo actual (por si se muestra el historial o la fecha del próximo)
          queryClient.invalidateQueries({ queryKey: ["equipos", mantenimiento.equipo_id] });
-         // 3. Refresca el dashboard (para el widget de mantenimientos próximos)
          queryClient.invalidateQueries({ queryKey: ["dashboard"] });
 
          onSuccess();
       },
       onError: (err: any) => {
-         toast({ variant: "destructive", title: "Error al guardar", description: err.message || "Ocurrió un error inesperado." });
+         const { message, field } = getFriendlyErrorMessage(err);
+         if (field) {
+            form.setError(field as keyof FormValues, { type: "manual", message });
+         } else {
+            toast({ variant: "destructive", title: "Error al guardar", description: message });
+         }
       },
    });
 
@@ -195,7 +198,7 @@ export function EditarMantenimientoForm({
                                  value={field.value ?? ""}
                                  onChange={(e) => {
                                     const val = e.target.value;
-                                    field.onChange(val === "" ? null : Number(val));
+                                    field.onChange(val === "" ? null : val);
                                  }}
                               />
                            </div>
@@ -223,7 +226,7 @@ export function EditarMantenimientoForm({
                                  value={field.value ?? ""}
                                  onChange={(e) => {
                                     const val = e.target.value;
-                                    field.onChange(val === "" ? null : Number(val));
+                                    field.onChange(val === "" ? null : val);
                                  }}
                               />
                            </div>

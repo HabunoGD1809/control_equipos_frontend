@@ -6,14 +6,17 @@ import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { z } from "zod";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
+import { es } from "date-fns/locale";
 import { CalendarIcon, Loader2, Eraser } from "lucide-react";
 
 import { movimientoEquipoSchema } from "@/lib/zod";
 import { movimientosService } from "@/app/services/movimientosService";
 import { equiposService } from "@/app/services/equiposService";
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import {
   MovimientoCreate,
   TipoMovimientoEquipoEnum,
+  TipoMovimientoEquipo,
   EquipoRead,
   UsuarioSimple,
 } from "@/types/api";
@@ -54,7 +57,7 @@ export function MovimientoForm({ equipo, equipos, usuarios, onSuccess, onCancel 
     resolver: standardSchemaResolver(movimientoEquipoSchema),
     defaultValues: {
       equipo_id: equipo?.id ?? "",
-      tipo_movimiento: undefined as unknown as TipoMovimientoEquipoEnum,
+      tipo_movimiento: undefined as unknown as TipoMovimientoEquipo,
       origen: equipo?.ubicacion_actual ?? "",
       destino: "",
       proposito: "",
@@ -112,12 +115,12 @@ export function MovimientoForm({ equipo, equipos, usuarios, onSuccess, onCancel 
       onSuccess?.();
     },
     onError: (error: unknown) => {
-      const err = error as { detail?: string; message?: string };
-      toast({
-        variant: "destructive",
-        title: "Error al registrar movimiento",
-        description: err.detail || err.message || "Error desconocido en la transacción.",
-      });
+      const { message, field } = getFriendlyErrorMessage(error);
+      if (field) {
+        form.setError(field as keyof MovimientoFormValues, { type: "manual", message });
+      } else {
+        toast({ variant: "destructive", title: "Error al registrar movimiento", description: message });
+      }
     },
   });
 
@@ -140,7 +143,7 @@ export function MovimientoForm({ equipo, equipos, usuarios, onSuccess, onCancel 
   const handleClear = () => {
     form.reset({
       equipo_id: equipo?.id ?? "",
-      tipo_movimiento: undefined as unknown as TipoMovimientoEquipoEnum,
+      tipo_movimiento: undefined as unknown as TipoMovimientoEquipo,
       origen: equipo?.ubicacion_actual ?? "",
       destino: "",
       proposito: "",

@@ -14,6 +14,7 @@ import { useCheckAvailability } from "@/hooks/useCheckAvailability";
 import type { EquipoSimple, ReservaEquipo, ReservaEquipoCreate, ReservaEquipoUpdate } from "@/types/api";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 
 import { Button } from "@/components/ui/Button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
@@ -98,15 +99,13 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
          onSuccess(data);
       },
       onError: (error: unknown) => {
-         const err = error as { status?: number; response?: { status?: number }; message?: string };
-         const status = err?.status || err?.response?.status;
-         const msg = err?.message?.toLowerCase() || "";
+         const { message } = getFriendlyErrorMessage(error);
 
-         if (status === 409 || msg.includes("overlap") || msg.includes("solapamiento") || msg.includes("excl")) {
+         if (message.includes("overlap") || message.includes("solapamiento") || message.includes("excl")) {
             setAvailabilityError("El sistema ha detectado un conflicto de horario (El equipo ya fue reservado en este instante).");
-            return;
+         } else {
+            toast({ variant: "destructive", title: "Error", description: message });
          }
-         toast({ variant: "destructive", title: "Error", description: err.message || "No se pudo procesar la solicitud." });
       },
    });
 

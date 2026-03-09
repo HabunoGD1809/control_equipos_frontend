@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DatePickerField } from "@/components/ui/DatePickerField";
 import { useToast } from "@/components/ui/use-toast";
 import { licenciaSoftwareSchema } from "@/lib/zod";
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import { LicenciaSoftware, SoftwareCatalogo, Proveedor } from "@/types/api";
 import { licenciasService } from "@/app/services/licenciasService";
 
@@ -40,8 +41,7 @@ export function LicenciaSoftwareForm({ initialData, catalogo, proveedores, onSuc
          fecha_adquisicion: initialData?.fecha_adquisicion ? new Date(initialData.fecha_adquisicion) : undefined,
          fecha_expiracion: initialData?.fecha_expiracion ? new Date(initialData.fecha_expiracion) : undefined,
          proveedor_id: initialData?.proveedor_id ?? null,
-         costo_adquisicion:
-            initialData?.costo_adquisicion == null ? undefined : Number(initialData.costo_adquisicion),
+         costo_adquisicion: initialData?.costo_adquisicion == null ? undefined : String(initialData.costo_adquisicion),
          numero_orden_compra: initialData?.numero_orden_compra || "",
          cantidad_total: initialData?.cantidad_total || 1,
          notas: initialData?.notas || "",
@@ -53,11 +53,7 @@ export function LicenciaSoftwareForm({ initialData, catalogo, proveedores, onSuc
       try {
          const payload = {
             ...data,
-            // ✅ convertir "none" de vuelta a null
-            proveedor_id:
-               !data.proveedor_id || data.proveedor_id === "none"
-                  ? null
-                  : data.proveedor_id,
+            proveedor_id: !data.proveedor_id || data.proveedor_id === "none" ? null : data.proveedor_id,
             costo_adquisicion: data.costo_adquisicion ?? null,
             fecha_adquisicion: format(data.fecha_adquisicion, "yyyy-MM-dd"),
             fecha_expiracion: data.fecha_expiracion ? format(data.fecha_expiracion, "yyyy-MM-dd") : null,
@@ -73,13 +69,13 @@ export function LicenciaSoftwareForm({ initialData, catalogo, proveedores, onSuc
 
          router.refresh();
          onSuccess();
-      } catch (err) {
-         const e = err as Error & { status?: number };
-         toast({
-            variant: "destructive",
-            title: "Error",
-            description: e.message || "No se pudo guardar la licencia.",
-         });
+      } catch (err: unknown) {
+         const { message, field } = getFriendlyErrorMessage(err);
+         if (field) {
+            form.setError(field as keyof FormValues, { type: "manual", message });
+         } else {
+            toast({ variant: "destructive", title: "Error", description: message });
+         }
       } finally {
          setIsLoading(false);
       }
@@ -88,18 +84,13 @@ export function LicenciaSoftwareForm({ initialData, catalogo, proveedores, onSuc
    return (
       <Form {...form}>
          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-2 max-h-[70vh] overflow-y-auto pr-4">
-
-            {/* Software */}
             <FormField
                control={form.control}
                name="software_catalogo_id"
                render={({ field }) => (
                   <FormItem>
                      <FormLabel>Software (del Catálogo)</FormLabel>
-                     <Select
-                        value={field.value ?? undefined}
-                        onValueChange={field.onChange}
-                     >
+                     <Select value={field.value ?? undefined} onValueChange={field.onChange}>
                         <FormControl>
                            <SelectTrigger><SelectValue placeholder="Seleccione un software..." /></SelectTrigger>
                         </FormControl>
@@ -116,7 +107,6 @@ export function LicenciaSoftwareForm({ initialData, catalogo, proveedores, onSuc
                )}
             />
 
-            {/* Clave */}
             <FormField
                control={form.control}
                name="clave_producto"
@@ -131,35 +121,23 @@ export function LicenciaSoftwareForm({ initialData, catalogo, proveedores, onSuc
                )}
             />
 
-            {/* Fechas */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                <FormField
                   control={form.control}
                   name="fecha_adquisicion"
                   render={({ field }) => (
-                     <DatePickerField
-                        label="Fecha de Adquisición"
-                        value={field.value}
-                        onChange={field.onChange}
-                     />
+                     <DatePickerField label="Fecha de Adquisición" value={field.value} onChange={field.onChange} />
                   )}
                />
-
                <FormField
                   control={form.control}
                   name="fecha_expiracion"
                   render={({ field }) => (
-                     <DatePickerField
-                        label="Fecha de Expiración"
-                        value={field.value ?? null}
-                        onChange={field.onChange}
-                        description="Opcional"
-                     />
+                     <DatePickerField label="Fecha de Expiración" value={field.value ?? null} onChange={field.onChange} description="Opcional" />
                   )}
                />
             </div>
 
-            {/* Cantidad y Costo */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                <FormField
                   control={form.control}
@@ -168,15 +146,10 @@ export function LicenciaSoftwareForm({ initialData, catalogo, proveedores, onSuc
                      <FormItem>
                         <FormLabel>Cantidad de Puestos</FormLabel>
                         <FormControl>
-                           <Input
-                              type="number"
-                              min={1}
-                              value={field.value ?? 1}
-                              onChange={(e) => {
-                                 const n = e.target.valueAsNumber;
-                                 field.onChange(Number.isFinite(n) ? n : 1);
-                              }}
-                           />
+                           <Input type="number" min={1} value={field.value ?? 1} onChange={(e) => {
+                              const n = e.target.valueAsNumber;
+                              field.onChange(Number.isFinite(n) ? n : 1);
+                           }} />
                         </FormControl>
                         <FormMessage />
                      </FormItem>
@@ -190,15 +163,10 @@ export function LicenciaSoftwareForm({ initialData, catalogo, proveedores, onSuc
                      <FormItem>
                         <FormLabel>Costo de Adquisición</FormLabel>
                         <FormControl>
-                           <Input
-                              type="number"
-                              step="0.01"
-                              value={field.value ?? ""}
-                              onChange={(e) => {
-                                 const n = e.target.valueAsNumber;
-                                 field.onChange(Number.isFinite(n) ? n : undefined);
-                              }}
-                           />
+                           <Input type="number" step="0.01" value={field.value ?? ""} onChange={(e) => {
+                              const val = e.target.value;
+                              field.onChange(val === "" ? null : val);
+                           }} />
                         </FormControl>
                         <FormMessage />
                      </FormItem>
@@ -206,26 +174,20 @@ export function LicenciaSoftwareForm({ initialData, catalogo, proveedores, onSuc
                />
             </div>
 
-            {/* Proveedor — ✅ "none" en lugar de "" */}
             <FormField
                control={form.control}
                name="proveedor_id"
                render={({ field }) => (
                   <FormItem>
                      <FormLabel>Proveedor</FormLabel>
-                     <Select
-                        value={field.value ?? "none"}
-                        onValueChange={(v) => field.onChange(v === "none" ? null : v)}
-                     >
+                     <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
                         <FormControl>
                            <SelectTrigger><SelectValue placeholder="Seleccione un proveedor..." /></SelectTrigger>
                         </FormControl>
                         <SelectContent>
                            <SelectItem value="none">-- Sin proveedor --</SelectItem>
                            {proveedores.map((p) => (
-                              <SelectItem key={p.id} value={p.id}>
-                                 {p.nombre}
-                              </SelectItem>
+                              <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
                            ))}
                         </SelectContent>
                      </Select>

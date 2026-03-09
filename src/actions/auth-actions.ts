@@ -10,10 +10,10 @@ import {
 } from "@/lib/zod";
 import { serverApi } from "@/lib/http-server";
 import { createSession, deleteSession, getSession } from "@/lib/session";
-import type { ResetTokenResponse, Usuario, Token } from "@/types/api";
+import type { PasswordResetResponse, Usuario, Token, RefreshTokenPayload } from "@/types/api";
 
 type ResetActionResult =
-   | { success: true; data: ResetTokenResponse }
+   | { success: true; data: PasswordResetResponse }
    | { success?: never; error: string };
 
 export async function loginAction(values: z.infer<typeof loginSchema>) {
@@ -26,17 +26,18 @@ export async function loginAction(values: z.infer<typeof loginSchema>) {
    params.append("password", password);
 
    try {
-      const tokens = await serverApi.post<Token>("/auth/login/access-token", params);
+      const tokens = await serverApi.post<Token>("/auth/login/access-token", params, {
+         headers: { "Content-Type": "application/x-www-form-urlencoded" },
+         skipAuthRedirect: true,
+      });
 
-      // Centralizado
       await createSession(tokens.access_token, tokens.refresh_token);
-
       const user = await serverApi.get<Usuario>("/usuarios/me");
       return { success: true, user };
    } catch (error: any) {
       console.error("[AUTH_ACTION_LOGIN] Error:", error);
       if (error.status === 400 || error.status === 401) {
-         return { error: "Credenciales incorrectas o usuario bloqueado" };
+         return { error: error.detail || "Credenciales incorrectas o usuario bloqueado." };
       }
       return { error: "Error de conexión con el servidor" };
    }
@@ -47,7 +48,8 @@ export async function logoutAction() {
 
    if (refreshToken) {
       try {
-         await serverApi.post("/auth/logout", { refresh_token: refreshToken });
+         const payload: RefreshTokenPayload = { refresh_token: refreshToken };
+         await serverApi.post("/auth/logout", payload);
       } catch (error) {
          console.error("[AUTH_ACTION_LOGOUT] No se pudo revocar el token en el servidor:", error);
       }
@@ -64,7 +66,7 @@ export async function requestPasswordResetAction(
    if (!parsed.success) return { error: "Datos inválidos" };
 
    try {
-      const data = await serverApi.post<ResetTokenResponse>(
+      const data = await serverApi.post<PasswordResetResponse>(
          "/auth/password-recovery/request-reset",
          parsed.data
       );

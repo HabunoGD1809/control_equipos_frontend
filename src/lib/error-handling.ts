@@ -1,8 +1,6 @@
-import { AxiosError } from "axios";
-
 export interface ApiErrorResponse {
    message: string;
-   field?: string; // Campo del formulario al que asociar el error
+   field?: string;
 }
 
 // Mapa de Constraints de Base de Datos (PostgreSQL/Alembic) a Mensajes Amigables
@@ -22,8 +20,9 @@ const DB_CONSTRAINT_MAP: Record<string, string> = {
    // Proveedores
    "uq_proveedores_nombre": "Ya existe un proveedor con este nombre.",
 
-   // Catalogos
+   // Catalogos y Software
    "uq_estados_equipo_nombre": "Ya existe un estado con este nombre.",
+   "uq_software_nombre_version": "Ya existe un software registrado con este mismo nombre y versión.",
 };
 
 // Mapa de errores de Triggers (Mensajes custom lanzados por PL/pgSQL)
@@ -33,25 +32,22 @@ const TRIGGER_ERROR_KEYWORDS: Record<string, string> = {
    "fechas lógica": "Las fechas ingresadas son inconsistentes (ej. inicio posterior a fin).",
 };
 
-/**
- * Analiza un error de Axios y extrae un mensaje amigable para el usuario.
- * Detecta códigos 409/422 y busca coincidencias con constraints conocidos.
- */
 export function getFriendlyErrorMessage(error: unknown): ApiErrorResponse {
-   if (error instanceof AxiosError) {
-      const data = error.response?.data;
-      const detail = data?.detail || data?.message || "";
+   if (error instanceof Error) {
+      const customErr = error as Error & { status?: number; data?: any };
+      const detailStr = typeof customErr.data?.detail === "string"
+         ? customErr.data.detail
+         : customErr.data?.message || customErr.message || "";
 
       // 1. Buscar coincidencia exacta con Constraint (Unique Violations)
       for (const [constraint, message] of Object.entries(DB_CONSTRAINT_MAP)) {
-         if (detail.includes(constraint)) {
-            // Intentamos deducir el campo basado en el constraint
-            const field = constraint.split("_").pop(); // ej: 'serie' de 'uq_equipos_numero_serie'
-            // Mapeo manual de campos si el nombre del constraint no coincide con el form
+         if (detailStr.includes(constraint)) {
+            const field = constraint.split("_").pop();
             const fieldMap: Record<string, string> = {
                "serie": "numero_serie",
                "interno": "codigo_interno",
                "usuario": "nombre_usuario",
+               "version": "version", // uq_software_nombre_version
             };
 
             return { message, field: fieldMap[field || ""] || field };
@@ -60,16 +56,17 @@ export function getFriendlyErrorMessage(error: unknown): ApiErrorResponse {
 
       // 2. Buscar palabras clave de Triggers (Business Logic Violations)
       for (const [keyword, message] of Object.entries(TRIGGER_ERROR_KEYWORDS)) {
-         if (detail.includes(keyword)) {
+         if (detailStr.includes(keyword)) {
             return { message };
          }
       }
 
-      // 3. Fallback a mensaje del backend o genérico
-      if (detail) return { message: detail };
-      if (error.response?.status === 401) return { message: "Sesión expirada. Por favor inicie sesión nuevamente." };
-      if (error.response?.status === 403) return { message: "No tiene permisos para realizar esta acción." };
-      if (error.response?.status === 500) return { message: "Error interno del servidor." };
+      // 3. Fallbacks
+      if (customErr.status === 401) return { message: "Sesión expirada. Por favor inicie sesión nuevamente." };
+      if (customErr.status === 403) return { message: "No tiene permisos para realizar esta acción." };
+      if (customErr.status === 500) return { message: "Error interno del servidor. Contacte soporte." };
+
+      if (customErr.message) return { message: customErr.message };
    }
 
    return { message: "Ocurrió un error inesperado. Intente nuevamente." };

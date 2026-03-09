@@ -12,6 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/Input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
 import { useToast } from "@/components/ui/use-toast";
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import { softwareCatalogoSchema } from "@/lib/zod";
 import { SoftwareCatalogo, TipoLicenciaSoftwareEnum, MetricaLicenciamientoEnum } from "@/types/api";
 import { licenciasService } from "@/app/services/licenciasService";
@@ -54,13 +55,13 @@ export function SoftwareCatalogoForm({ initialData, onSuccess }: SoftwareCatalog
 
          router.refresh();
          onSuccess();
-      } catch (err) {
-         const e = err as Error & { status?: number };
-         toast({
-            variant: "destructive",
-            title: "Error",
-            description: e.message || "No se pudo guardar el software.",
-         });
+      } catch (err: unknown) {
+         const { message, field } = getFriendlyErrorMessage(err);
+         if (field) {
+            form.setError(field as keyof FormValues, { type: "manual", message });
+         } else {
+            toast({ variant: "destructive", title: "Error", description: message });
+         }
       } finally {
          setIsLoading(false);
       }
@@ -70,91 +71,61 @@ export function SoftwareCatalogoForm({ initialData, onSuccess }: SoftwareCatalog
       <Form {...form}>
          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
             <div className="grid grid-cols-2 gap-4">
-               <FormField
-                  control={form.control}
-                  name="nombre"
-                  render={({ field }) => (
-                     <FormItem>
-                        <FormLabel>Nombre del Software</FormLabel>
-                        <FormControl><Input {...field} value={field.value ?? ""} /></FormControl>
-                        <FormMessage />
-                     </FormItem>
-                  )}
-               />
-
-               <FormField
-                  control={form.control}
-                  name="version"
-                  render={({ field }) => (
-                     <FormItem>
-                        <FormLabel>Versión</FormLabel>
-                        <FormControl><Input {...field} value={field.value ?? ""} /></FormControl>
-                        <FormMessage />
-                     </FormItem>
-                  )}
-               />
-            </div>
-
-            <FormField
-               control={form.control}
-               name="fabricante"
-               render={({ field }) => (
+               <FormField control={form.control} name="nombre" render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Fabricante</FormLabel>
+                     <FormLabel>Nombre del Software</FormLabel>
                      <FormControl><Input {...field} value={field.value ?? ""} /></FormControl>
                      <FormMessage />
                   </FormItem>
-               )}
-            />
+               )} />
+
+               <FormField control={form.control} name="version" render={({ field }) => (
+                  <FormItem>
+                     <FormLabel>Versión</FormLabel>
+                     <FormControl><Input {...field} value={field.value ?? ""} /></FormControl>
+                     <FormMessage />
+                  </FormItem>
+               )} />
+            </div>
+
+            <FormField control={form.control} name="fabricante" render={({ field }) => (
+               <FormItem>
+                  <FormLabel>Fabricante</FormLabel>
+                  <FormControl><Input {...field} value={field.value ?? ""} /></FormControl>
+                  <FormMessage />
+               </FormItem>
+            )} />
 
             <div className="grid grid-cols-2 gap-4">
-               <FormField
-                  control={form.control}
-                  name="tipo_licencia"
-                  render={({ field }) => (
-                     <FormItem>
-                        <FormLabel>Tipo de Licencia</FormLabel>
-                        <Select
-                           value={field.value ?? undefined}
-                           onValueChange={field.onChange}
-                        >
-                           <FormControl>
-                              <SelectTrigger><SelectValue placeholder="Seleccione un tipo..." /></SelectTrigger>
-                           </FormControl>
-                           <SelectContent>
-                              {Object.values(TipoLicenciaSoftwareEnum).map((v) => (
-                                 <SelectItem key={v} value={v}>{v}</SelectItem>
-                              ))}
-                           </SelectContent>
-                        </Select>
-                        <FormMessage />
-                     </FormItem>
-                  )}
-               />
+               <FormField control={form.control} name="tipo_licencia" render={({ field }) => (
+                  <FormItem>
+                     <FormLabel>Tipo de Licencia</FormLabel>
+                     <Select value={field.value ?? undefined} onValueChange={field.onChange}>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un tipo..." /></SelectTrigger></FormControl>
+                        <SelectContent>
+                           {Object.values(TipoLicenciaSoftwareEnum).map((v) => (
+                              <SelectItem key={v} value={v}>{v}</SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
+                     <FormMessage />
+                  </FormItem>
+               )} />
 
-               <FormField
-                  control={form.control}
-                  name="metrica_licenciamiento"
-                  render={({ field }) => (
-                     <FormItem>
-                        <FormLabel>Métrica</FormLabel>
-                        <Select
-                           value={field.value ?? undefined}
-                           onValueChange={field.onChange}
-                        >
-                           <FormControl>
-                              <SelectTrigger><SelectValue placeholder="Seleccione una métrica..." /></SelectTrigger>
-                           </FormControl>
-                           <SelectContent>
-                              {Object.values(MetricaLicenciamientoEnum).map((v) => (
-                                 <SelectItem key={v} value={v}>{v}</SelectItem>
-                              ))}
-                           </SelectContent>
-                        </Select>
-                        <FormMessage />
-                     </FormItem>
-                  )}
-               />
+               <FormField control={form.control} name="metrica_licenciamiento" render={({ field }) => (
+                  <FormItem>
+                     <FormLabel>Métrica</FormLabel>
+                     <Select value={field.value ?? undefined} onValueChange={field.onChange}>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Seleccione una métrica..." /></SelectTrigger></FormControl>
+                        <SelectContent>
+                           {Object.values(MetricaLicenciamientoEnum).map((v) => (
+                              <SelectItem key={v} value={v}>{v}</SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
+                     <FormMessage />
+                  </FormItem>
+               )} />
             </div>
 
             <div className="flex justify-end pt-4">

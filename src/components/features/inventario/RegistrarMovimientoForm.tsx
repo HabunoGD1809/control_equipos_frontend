@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { createInventarioMovimientoSchema } from "@/lib/zod";
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import {
    TipoItemInventarioSimple,
    TipoMovimientoInvEnum,
@@ -111,22 +112,26 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
          form.reset();
          onSuccess();
       },
-      onError: (err: unknown) => {
-         const e = err as Error & { status?: number };
-         const msg = e.message || "Error al registrar movimiento.";
+      onError: (error: unknown) => {
+         const { message, field } = getFriendlyErrorMessage(error);
 
-         toast({
-            variant: "destructive",
-            title: "Error de Validación",
-            description: msg.includes("Stock insuficiente")
-               ? "No hay suficiente stock en la ubicación de origen seleccionada."
-               : msg,
-         });
+         if (field) {
+            form.setError(field as keyof FormValues, { type: "manual", message });
+         } else {
+            toast({
+               variant: "destructive",
+               title: "Error de Validación",
+               description: message,
+            });
+         }
       }
    });
 
    const onSubmit = (values: FormValues) => {
-      const payload: Partial<InventarioMovimientoCreate> = { ...values };
+      const payload: Partial<InventarioMovimientoCreate> = {
+         ...values,
+         fecha_hora: values.fecha_hora ? values.fecha_hora.toISOString() : undefined,
+      };
 
       if (!reqOrigen) {
          delete payload.ubicacion_origen;
@@ -251,7 +256,7 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                                     value={field.value ?? ""}
                                     onChange={(e) => {
                                        const val = e.target.value;
-                                       field.onChange(val === "" ? "" : Number(val));
+                                       field.onChange(val === "" ? null : val);
                                     }}
                                  />
                               </div>

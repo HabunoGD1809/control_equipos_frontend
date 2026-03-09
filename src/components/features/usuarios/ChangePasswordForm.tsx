@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/Form";
 import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/use-toast";
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 
 import { ChangePasswordSchema } from "@/lib/zod";
 import { authService } from "@/app/services/authService";
@@ -47,16 +48,12 @@ export function ChangePasswordForm() {
          });
 
          form.reset();
-      } catch (error) {
-         const detail =
-            (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-            (error instanceof Error ? error.message : null) ||
-            "No se pudo cambiar la contraseña.";
-
+      } catch (error: unknown) {
+         const { message } = getFriendlyErrorMessage(error);
          toast({
             variant: "destructive",
-            title: "Error",
-            description: detail,
+            title: "Error de seguridad",
+            description: message,
          });
       } finally {
          setIsLoading(false);

@@ -7,13 +7,9 @@ import type {
    TipoItemInventarioCreate,
    TipoItemInventarioUpdate,
    TipoItemInventarioSimple,
+   InventarioStockUpdate,
+   InventarioStockTotal,
 } from "@/types/api";
-
-export interface StockDetailsUpdate {
-   lote?: string;
-   fecha_caducidad?: string | null;
-   notas?: string;
-}
 
 export interface ItemBajoStock extends Omit<InventarioStock, "tipo_item"> {
    tipo_item: TipoItemInventarioSimple & { stock_minimo: number };
@@ -58,12 +54,8 @@ export const inventarioService = {
       return api.get<InventarioStock[]>("/inventario/stock/", { params });
    },
 
-   getStockTotal(tipoItemId: string): Promise<{ total: number }> {
-      // El backend devuelve { tipo_item_id: "...", cantidad_total: number }.
-      // Por compatibilidad con tu UI lo mapeamos a { total: number }
-      return api
-         .get<any>(`/inventario/stock/item/${tipoItemId}/total`)
-         .then((res) => ({ total: res.cantidad_total || 0 }));
+   getStockTotal(tipoItemId: string): Promise<InventarioStockTotal> {
+      return api.get<InventarioStockTotal>(`/inventario/stock/item/${tipoItemId}/total`);
    },
 
    getItemsBajoStock(): Promise<ItemBajoStock[]> {
@@ -72,7 +64,7 @@ export const inventarioService = {
 
    updateStockDetails(
       stockId: string,
-      payload: StockDetailsUpdate,
+      payload: InventarioStockUpdate,
    ): Promise<InventarioStock> {
       return api.put<InventarioStock>(
          `/inventario/stock/${stockId}/details`,

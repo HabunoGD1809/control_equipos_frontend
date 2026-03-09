@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/Input";
 import { Switch } from "@/components/ui/Switch";
 import { useToast } from "@/components/ui/use-toast";
 import { api } from "@/lib/http";
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 
 type FormValues = {
    nombre: string;
@@ -87,12 +88,12 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuc
          router.refresh();
          onSuccess();
       } catch (err: any) {
-         const detail = err?.response?.data?.detail || err?.message || "";
+         const { message, field } = getFriendlyErrorMessage(err);
 
-         if (detail.includes("uq_")) {
-            form.setError("nombre", { type: "manual", message: "Este nombre ya existe en el catálogo." });
+         if (field || message.includes("ya existe")) {
+            form.setError("nombre", { type: "manual", message });
          } else {
-            toast({ variant: "destructive", title: "Error", description: detail || "No se pudo guardar el ítem." });
+            toast({ variant: "destructive", title: "Error", description: message });
          }
       } finally {
          setIsLoading(false);

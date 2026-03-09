@@ -2,8 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useToast } from "@/components/ui/use-toast";
-
-type HttpError = Error & { status?: number };
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 
 interface UseDeleteConfirmationProps {
    onDelete: (id: string) => Promise<any>;
@@ -49,30 +48,25 @@ export const useDeleteConfirmation = ({
          closeAlert();
          if (onSuccess) onSuccess();
       } catch (error) {
-         const err = error as HttpError;
+         let { message } = getFriendlyErrorMessage(error);
 
-         // --- CORRECCIÓN: Interceptor de errores de BD (ON DELETE RESTRICT) ---
-         let displayMessage = err.message || errorMessage;
-         const msgLower = displayMessage.toLowerCase();
-
+         const msgLower = message.toLowerCase();
          const isConstraintError =
-            err.status === 409 ||
             msgLower.includes("foreign key") ||
             msgLower.includes("violates") ||
-            msgLower.includes("integrity");
+            msgLower.includes("integrity") ||
+            msgLower.includes("restrict");
 
          if (isConstraintError) {
-            displayMessage = "No se puede eliminar este registro porque está actualmente en uso o tiene información vinculada en el sistema.";
+            message = "No se puede eliminar este registro porque está siendo utilizado (o referenciado) en otra parte del sistema.";
          }
-         // ---------------------------------------------------------------------
 
          toast({
             variant: "destructive",
-            title: isConstraintError ? "Acción Denegada" : "Error",
-            description: displayMessage,
+            title: isConstraintError ? "Acción Denegada" : "Error al eliminar",
+            description: message || errorMessage,
          });
 
-         // Cerramos el modal de confirmación en caso de error restrictivo para no dejar la UI bloqueada
          closeAlert();
       } finally {
          setIsDeleting(false);

@@ -5,6 +5,7 @@ import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { autorizarMovimientoSchema } from "@/lib/zod";
 import { movimientosService } from "@/app/services/movimientosService";
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import { Movimiento } from "@/types/api";
 import {
    Dialog,
@@ -43,7 +44,7 @@ export function AutorizarMovimientoModal({ movimiento, isOpen, onClose }: Autori
    const form = useForm<AutorizarFormValues>({
       resolver: standardSchemaResolver(autorizarMovimientoSchema),
       defaultValues: {
-         accion: undefined,
+         accion: undefined as any,
          observaciones: "",
       },
    });
@@ -67,8 +68,9 @@ export function AutorizarMovimientoModal({ movimiento, isOpen, onClose }: Autori
          onClose();
          form.reset();
       },
-      onError: (err: any) => {
-         toast({ variant: "destructive", title: "Error", description: err.message });
+      onError: (error: unknown) => {
+         const { message } = getFriendlyErrorMessage(error);
+         toast({ variant: "destructive", title: "Error", description: message });
       },
    });
 
@@ -143,7 +145,9 @@ export function AutorizarMovimientoModal({ movimiento, isOpen, onClose }: Autori
                   />
 
                   <DialogFooter>
-                     <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+                     <Button type="button" variant="outline" onClick={onClose} disabled={mutation.isPending}>
+                        Cancelar
+                     </Button>
                      <Button type="submit" disabled={mutation.isPending}>
                         {mutation.isPending ? "Procesando..." : "Confirmar"}
                      </Button>

@@ -18,13 +18,13 @@ import { Button } from "@/components/ui/Button";
 import { Calendar } from "@/components/ui/Calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/Popover";
 import { useToast } from "@/components/ui/use-toast";
-import { inventarioService, StockDetailsUpdate } from "@/app/services/inventarioService";
-import { InventarioStock } from "@/types/api";
+
+import { inventarioService } from "@/app/services/inventarioService";
+import { InventarioStock, InventarioStockUpdate } from "@/types/api";
 import { cn } from "@/lib/utils";
+import { inventarioStockUpdateSchema } from "@/lib/zod";
 
-import { editStockSchema } from "@/lib/zod";
-
-type EditStockFormValues = z.infer<typeof editStockSchema>;
+type EditStockFormValues = z.infer<typeof inventarioStockUpdateSchema>;
 
 interface EditStockDetailsModalProps {
    stock: InventarioStock | null;
@@ -37,7 +37,7 @@ export function EditStockDetailsModal({ stock, isOpen, onClose }: EditStockDetai
    const queryClient = useQueryClient();
 
    const form = useForm<EditStockFormValues>({
-      resolver: standardSchemaResolver(editStockSchema) as any,
+      resolver: standardSchemaResolver(inventarioStockUpdateSchema) as any,
       defaultValues: {
          lote: "",
          fecha_caducidad: null,
@@ -54,7 +54,7 @@ export function EditStockDetailsModal({ stock, isOpen, onClose }: EditStockDetai
    }, [stock, form]);
 
    const mutation = useMutation({
-      mutationFn: (payload: StockDetailsUpdate) =>
+      mutationFn: (payload: InventarioStockUpdate) =>
          inventarioService.updateStockDetails(stock!.id, payload),
       onSuccess: () => {
          toast({ title: "Actualizado", description: "Los detalles del lote han sido corregidos." });

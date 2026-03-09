@@ -8,6 +8,7 @@ import { Loader2, Eraser } from "lucide-react";
 import { usuarioCreateSchema, usuarioUpdateSchema } from "@/lib/zod";
 import { usuariosService } from "@/app/services/usuariosService";
 import { rolesService } from "@/app/services/rolesService";
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import { useAuthStore } from "@/store/authStore";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -66,13 +67,11 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
    }, [isInitialized, isAuthenticated, toast]);
 
    const handleApiError = (error: any) => {
-      const detail = error?.response?.data?.detail || error?.message || "";
-      if (detail.includes("uq_usuarios_email")) {
-         form.setError("email", { message: "Este email ya está en uso." });
-      } else if (detail.includes("uq_usuarios_nombre_usuario")) {
-         form.setError("nombre_usuario", { message: "Este nombre de usuario ya existe." });
+      const { message, field } = getFriendlyErrorMessage(error);
+      if (field) {
+         form.setError(field as keyof FormValues, { type: "manual", message });
       } else {
-         toast({ variant: "destructive", title: "Error", description: detail || "Error inesperado." });
+         toast({ variant: "destructive", title: "Error", description: message });
       }
    };
 

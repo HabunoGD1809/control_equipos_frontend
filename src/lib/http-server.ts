@@ -1,7 +1,7 @@
 import "server-only";
 import { redirect } from "next/navigation";
 import { refreshAccessToken } from "@/lib/token-refresh";
-import { getSession, deleteSession } from "@/lib/session";
+import { getSession } from "@/lib/session";
 
 const BASE_URL: string = (() => {
    const v = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -14,15 +14,17 @@ type Primitive = string | number | boolean | Date;
 interface FetchOptions extends RequestInit {
    params?: Record<string, Primitive | undefined | null>;
    _retry?: boolean;
+   skipAuthRedirect?: boolean;
 }
 
 type HttpError = Error & { status?: number; detail?: any };
 
-async function httpServer<T>(
-   path: string,
-   options: FetchOptions = {},
-): Promise<T> {
-   const { params, headers, _retry, ...rest } = options;
+function redirectToLogout(): never {
+   redirect("/api/auth/logout?callbackUrl=/login");
+}
+
+async function httpServer<T>(path: string, options: FetchOptions = {}): Promise<T> {
+   const { params, headers, _retry, skipAuthRedirect, ...rest } = options;
 
    const cleanPath = path.startsWith("/") ? path : `/${path}`;
    const url = new URL(`${BASE_URL}${cleanPath}`);
@@ -52,18 +54,37 @@ async function httpServer<T>(
    });
 
    if (response.status === 401 && !_retry) {
-      const newAccessToken = await refreshAccessToken();
-      if (newAccessToken)
-         return httpServer<T>(path, { ...options, _retry: true });
+      if (skipAuthRedirect) {
+         let message = "Credenciales inválidas.";
+         let detail = null;
+         try {
+            if (response.headers.get("content-type")?.includes("application/json")) {
+               const body = await response.json();
+               detail = body?.detail || body?.message;
+               message = Array.isArray(detail)
+                  ? detail.map((e: any) => e.msg).join(" | ")
+                  : detail || message;
+            }
+         } catch { /* Silenciado */ }
 
-      await deleteSession();
-      redirect("/login");
+         const err = new Error(message) as HttpError;
+         err.status = 401;
+         err.detail = detail;
+         throw err;
+      }
+
+      const newAccessToken = await refreshAccessToken();
+      if (newAccessToken) {
+         return httpServer<T>(path, { ...options, _retry: true });
+      }
+      redirectToLogout();
    }
 
    if (!response.ok) {
       if (response.status === 401) {
-         await deleteSession();
-         redirect("/login");
+         if (!skipAuthRedirect) {
+            redirectToLogout();
+         }
       }
 
       let message = `HTTP ${response.status}`;
@@ -79,9 +100,7 @@ async function httpServer<T>(
          } else {
             message = (await response.text()) || message;
          }
-      } catch {
-         /* Silenciado */
-      }
+      } catch { /* Silenciado */ }
 
       const err = new Error(message) as HttpError;
       err.status = response.status;

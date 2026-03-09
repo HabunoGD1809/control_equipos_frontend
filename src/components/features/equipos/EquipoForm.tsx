@@ -19,6 +19,7 @@ import { useToast } from "@/components/ui/use-toast";
 
 import { equipoSchema } from "@/lib/zod";
 import { equiposService } from "@/app/services/equiposService";
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import type { EquipoCreate, EquipoRead, EstadoEquipo, ProveedorSimple } from "@/types/api";
 
 interface EquipoFormProps {
@@ -54,7 +55,7 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
          fecha_adquisicion: initialData?.fecha_adquisicion ? new Date(initialData.fecha_adquisicion) : null,
          fecha_puesta_marcha: initialData?.fecha_puesta_marcha ? new Date(initialData.fecha_puesta_marcha) : null,
          fecha_garantia_expiracion: initialData?.fecha_garantia_expiracion ? new Date(initialData.fecha_garantia_expiracion) : null,
-         valor_adquisicion: initialData?.valor_adquisicion ? Number(initialData.valor_adquisicion) : null,
+         valor_adquisicion: initialData?.valor_adquisicion ? String(initialData.valor_adquisicion) : null,
          centro_costo: initialData?.centro_costo ?? "",
          notas: initialData?.notas ?? "",
       },
@@ -89,25 +90,22 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
          if (isEditing && initialData) {
             await equiposService.update(initialData.id, payload);
             toast({ title: "Equipo actualizado", description: `El equipo ${data.nombre} ha sido guardado correctamente.` });
-            router.refresh();
-            if (onSuccess) onSuccess();
-            return;
+         } else {
+            await equiposService.create(payload);
+            toast({ title: "Equipo creado", description: "El nuevo equipo se ha registrado exitosamente." });
          }
 
-         await equiposService.create(payload);
-         toast({ title: "Equipo creado", description: "El nuevo equipo se ha registrado exitosamente." });
          router.refresh();
          if (onSuccess) onSuccess();
       } catch (error: unknown) {
-         const err = error as { detail?: string; message?: string; response?: { data?: { detail?: string } } };
-         const detail = err?.response?.data?.detail || err?.detail || err?.message || "";
+         const { message, field } = getFriendlyErrorMessage(error);
 
-         if (detail.includes("uq_equipos_numero_serie")) {
-            form.setError("numero_serie", { type: "manual", message: "Este número de serie ya existe en el sistema." });
-         } else if (detail.includes("uq_equipos_codigo_interno")) {
-            form.setError("codigo_interno", { type: "manual", message: "Este código interno ya está asignado." });
+         if (field) {
+            // Si el error corresponde a un campo específico (ej. numero_serie), se lo asignamos al form de Zod
+            form.setError(field as keyof EquipoFormValues, { type: "manual", message });
          } else {
-            toast({ variant: "destructive", title: "Error al guardar", description: detail || "Ocurrió un error inesperado." });
+            // Si es un error general, usamos el Toast
+            toast({ variant: "destructive", title: "Error al guardar", description: message });
          }
       } finally {
          setIsLoading(false);
@@ -220,7 +218,7 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
                               <span className="absolute left-3 top-2.5 text-muted-foreground font-medium">$</span>
                               <Input type="number" step="0.01" className="pl-7" value={field.value ?? ""} onChange={(e) => {
                                  const v = e.target.value;
-                                 field.onChange(v === "" ? null : Number(v));
+                                 field.onChange(v === "" ? null : v);
                               }} />
                            </div>
                         </FormControl>

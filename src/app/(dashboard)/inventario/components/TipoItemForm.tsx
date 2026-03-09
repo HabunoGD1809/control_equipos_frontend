@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/components/ui/use-toast";
 import { tipoItemSchema } from "@/lib/zod";
 import { api } from "@/lib/http";
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import type { TipoItemInventario, Proveedor } from "@/types/api";
 
 interface TipoItemFormProps {
@@ -24,16 +25,6 @@ interface TipoItemFormProps {
 }
 
 type FormValues = z.infer<typeof tipoItemSchema>;
-
-function getApiErrorMessage(err: unknown, fallback = "No se pudo guardar el ítem.") {
-   if (typeof err === "object" && err) {
-      const anyErr = err as any;
-      const detail = anyErr?.data?.detail || anyErr?.detail;
-      if (typeof detail === "string" && detail.trim()) return detail;
-      if (typeof anyErr?.message === "string" && anyErr.message.trim()) return anyErr.message;
-   }
-   return fallback;
-}
 
 export function TipoItemForm({ initialData, proveedores, onSuccess }: TipoItemFormProps) {
    const router = useRouter();
@@ -85,13 +76,13 @@ export function TipoItemForm({ initialData, proveedores, onSuccess }: TipoItemFo
 
          router.refresh();
          onSuccess();
-      } catch (error) {
-         console.error(error);
-         toast({
-            variant: "destructive",
-            title: "Error",
-            description: getApiErrorMessage(error),
-         });
+      } catch (error: unknown) {
+         const { message, field } = getFriendlyErrorMessage(error);
+         if (field) {
+            form.setError(field as keyof FormValues, { type: "manual", message });
+         } else {
+            toast({ variant: "destructive", title: "Error", description: message });
+         }
       } finally {
          setIsLoading(false);
       }

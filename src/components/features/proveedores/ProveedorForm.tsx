@@ -14,6 +14,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { proveedorSchema } from "@/lib/zod";
 import { Proveedor } from "@/types/api";
 import { proveedoresService } from "@/app/services/proveedoresService";
+import { getFriendlyErrorMessage } from "@/lib/error-handling";
 
 interface ProveedorFormProps {
    initialData?: Proveedor;
@@ -59,12 +60,12 @@ export function ProveedorForm({ initialData, onSuccess }: ProveedorFormProps) {
          }
          onSuccess();
       } catch (err) {
-         const e = err as Error & { status?: number };
-         toast({
-            variant: "destructive",
-            title: "Error",
-            description: e.message || "Error al procesar la solicitud.",
-         });
+         const { message, field } = getFriendlyErrorMessage(err);
+         if (field) {
+            form.setError(field as keyof FormValues, { type: "manual", message });
+         } else {
+            toast({ variant: "destructive", title: "Error", description: message });
+         }
       } finally {
          setIsLoading(false);
       }

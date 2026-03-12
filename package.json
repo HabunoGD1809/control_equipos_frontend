@@ -10,6 +10,7 @@
    },
    "dependencies": {
       "@hookform/resolvers": "^5.2.2",
+      "@microsoft/fetch-event-source": "^2.0.1",
       "@radix-ui/react-alert-dialog": "^1.1.14",
       "@radix-ui/react-avatar": "^1.1.10",
       "@radix-ui/react-checkbox": "^1.3.2",
@@ -20,6 +21,7 @@
       "@radix-ui/react-radio-group": "^1.3.7",
       "@radix-ui/react-select": "^2.2.5",
       "@radix-ui/react-separator": "^1.1.7",
+      "@radix-ui/react-slider": "^1.3.6",
       "@radix-ui/react-slot": "^1.2.3",
       "@radix-ui/react-switch": "^1.2.5",
       "@radix-ui/react-tabs": "^1.1.12",
@@ -42,7 +44,9 @@
       "react-big-calendar": "^1.19.4",
       "react-day-picker": "^9.8.0",
       "react-dom": "19.2.4",
+      "react-easy-crop": "^5.5.6",
       "react-hook-form": "^7.60.0",
+      "react-qr-code": "^2.0.18",
       "recharts": "^3.1.0",
       "tailwind-merge": "^3.5.0",
       "tailwindcss-animate": "^1.0.7",
@@ -65,5 +69,5 @@
       "tailwindcss": "^4",
       "typescript": "^5.8.3"
    },
-   "packageManager": "pnpm@10.30.0+sha512.2b5753de015d480eeb88f5b5b61e0051f05b4301808a82ec8b840c9d2adf7748eb352c83f5c1593ca703ff1017295bc3fdd3119abb9686efc96b9fcb18200937"
+   "packageManager": "pnpm@10.32.1+sha512.a706938f0e89ac1456b6563eab4edf1d1faf3368d1191fc5c59790e96dc918e4456ab2e67d613de1043d2e8c81f87303e6b40d4ffeca9df15ef1ad567348f2be"
 }

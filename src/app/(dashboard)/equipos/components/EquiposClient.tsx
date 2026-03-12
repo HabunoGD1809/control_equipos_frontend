@@ -1,9 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { PlusCircle, MoreHorizontal, Eye, Edit, Trash2, Search, X, Inbox, RefreshCw } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Eye, Edit, Trash2, Search, X, Inbox, RefreshCw, UploadCloud } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/Badge";
 import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/Dialog";
 import { EquipoForm } from "@/components/features/equipos/EquipoForm";
+import { useToast } from "@/components/ui/use-toast";
 
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { useDebouncedSearch } from "@/hooks/useDebouncedSearch";
@@ -35,17 +36,19 @@ interface EquiposClientProps {
 
 export function EquiposClient({ initialData, initialParams }: EquiposClientProps) {
    const router = useRouter();
+   const { toast } = useToast();
    const { setFilters } = useUrlFilters();
    const [isRefreshing, setIsRefreshing] = useState(false);
+   const fileInputRef = useRef<HTMLInputElement>(null);
 
    // Estados del Modal
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [selectedEquipo, setSelectedEquipo] = useState<EquipoRead | undefined>(undefined);
    const [estados, setEstados] = useState<EstadoEquipo[]>([]);
    const [proveedores, setProveedores] = useState<ProveedorSimple[]>([]);
+   const [isUploadingCSV, setIsUploadingCSV] = useState(false);
 
    useEffect(() => {
-      // Cargamos silenciosamente los catálogos en el cliente usando los servicios oficiales
       Promise.all([
          catalogosService.getEstadosEquipo(),
          proveedoresService.getOptions()
@@ -81,6 +84,36 @@ export function EquiposClient({ initialData, initialParams }: EquiposClientProps
       setSelectedEquipo(equipo);
       setIsModalOpen(true);
    };
+
+   // --- NUEVA LÓGICA DE CARGA MASIVA CSV ---
+   const handleCsvUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      if (!file.name.endsWith('.csv')) {
+         toast({ variant: "destructive", title: "Archivo inválido", description: "Por favor sube un archivo con extensión .csv" });
+         return;
+      }
+
+      setIsUploadingCSV(true);
+      try {
+         const result = await equiposService.bulkUpload(file);
+         toast({
+            title: "Carga Masiva Completada",
+            description: `Se procesaron ${result.total_procesados} equipos. Insertados: ${result.insertados}. Errores: ${result.errores.length}.`,
+         });
+         if (result.errores.length > 0) {
+            console.warn("Errores en CSV:", result.errores);
+         }
+         router.refresh();
+      } catch (error: any) {
+         toast({ variant: "destructive", title: "Error en la carga", description: error.message || "Fallo al procesar el archivo." });
+      } finally {
+         setIsUploadingCSV(false);
+         if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+   };
+   // ----------------------------------------
 
    const columns: ColumnDef<EquipoRead>[] = [
       {
@@ -186,6 +219,25 @@ export function EquiposClient({ initialData, initialParams }: EquiposClientProps
                <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing} title="Actualizar lista" className="shadow-sm">
                   <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                </Button>
+
+               {/* INPUT INVISIBLE PARA CSV */}
+               <input
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  ref={fileInputRef}
+                  onChange={handleCsvUpload}
+               />
+               <Button
+                  variant="secondary"
+                  className="shadow-sm"
+                  disabled={isUploadingCSV}
+                  onClick={() => fileInputRef.current?.click()}
+               >
+                  {isUploadingCSV ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+                  Importar CSV
+               </Button>
+
                <Button onClick={handleCreate} className="w-full sm:w-auto shadow-sm">
                   <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Equipo
                </Button>
@@ -212,7 +264,6 @@ export function EquiposClient({ initialData, initialParams }: EquiposClientProps
                   tableContainerClassName="shadow-sm border rounded-lg bg-card"
                />
 
-               {/* Paginación estandarizada visualmente con DataTable (SIN BORDES NI FONDOS) */}
                <div className="flex items-center justify-end space-x-2 py-4">
                   <div className="flex-1 text-sm text-muted-foreground">
                      Página {initialParams.page} — Mostrando {initialData.length} fila(s).

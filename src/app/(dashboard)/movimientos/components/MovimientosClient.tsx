@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { PlusCircle, MoreHorizontal, CheckCircle, Ban } from "lucide-react";
+import { PlusCircle, MoreHorizontal, CheckCircle, Ban, PackageCheck } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -74,6 +74,19 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
       }
    };
 
+   // Cadena de Custodia (Handoff)
+   const handleRecibir = async (id: string) => {
+      if (!confirm("Al confirmar, asumes la responsabilidad y custodia de este equipo. ¿Continuar?")) return;
+
+      try {
+         await movimientosService.recibir(id);
+         toast({ title: "Equipo Recibido", description: "La cadena de custodia ha sido actualizada." });
+         refreshData();
+      } catch (error: any) {
+         toast({ variant: "destructive", title: "Error al recibir", description: error.message || "No se pudo completar la entrega." });
+      }
+   };
+
    const columns: ColumnDef<Movimiento>[] = [
       { accessorFn: (row) => row.equipo.nombre, header: "Equipo" },
       { accessorKey: "tipo_movimiento", header: "Tipo" },
@@ -90,12 +103,13 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
          header: "Estado",
          cell: ({ row }) => {
             const estado = row.getValue("estado") as string;
-            let variant: "default" | "secondary" | "destructive" | "outline" = "outline";
+            let variant: "default" | "secondary" | "destructive" | "outline" | "warning" = "outline";
             if (estado === EstadoMovimientoEquipoEnum.Completado) variant = "default";
             if (estado === EstadoMovimientoEquipoEnum.Cancelado || estado === EstadoMovimientoEquipoEnum.Rechazado) variant = "destructive";
             if (estado === EstadoMovimientoEquipoEnum.Pendiente) variant = "secondary";
+            if (estado === EstadoMovimientoEquipoEnum.EnProceso) variant = "default";
 
-            return <Badge variant={variant}>{estado}</Badge>;
+            return <Badge variant={variant as any}>{estado}</Badge>;
          },
       },
       {
@@ -103,6 +117,7 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
          cell: ({ row }) => {
             const mov = row.original;
             const isPendiente = mov.estado === EstadoMovimientoEquipoEnum.Pendiente;
+            const isEnProceso = mov.estado === EstadoMovimientoEquipoEnum.EnProceso; // Detectar estado de Handoff
             const isCancelable = isPendiente || mov.estado === EstadoMovimientoEquipoEnum.Autorizado;
 
             return (
@@ -116,19 +131,32 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
                   <DropdownMenuContent align="end">
                      <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                      <DropdownMenuSeparator />
+
+                     {/* Acción 1: Validar (Admin/Supervisor) */}
                      {isPendiente && (
                         <DropdownMenuItem onClick={() => setMovimientoToAuthorize(mov)}>
                            <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
                            <span>Validar Movimiento</span>
                         </DropdownMenuItem>
                      )}
+
+                     {/* NUEVA Acción 2: Acuse de Recibo (Usuario Final) */}
+                     {isEnProceso && (
+                        <DropdownMenuItem onClick={() => handleRecibir(mov.id)}>
+                           <PackageCheck className="mr-2 h-4 w-4 text-blue-600" />
+                           <span className="font-semibold text-blue-600">Recibir Equipo</span>
+                        </DropdownMenuItem>
+                     )}
+
+                     {/* Acción 3: Cancelar */}
                      {isCancelable && (
                         <DropdownMenuItem onClick={() => handleCancelar(mov.id)}>
                            <Ban className="mr-2 h-4 w-4 text-red-600" />
                            <span>Cancelar Movimiento</span>
                         </DropdownMenuItem>
                      )}
-                     {!isPendiente && !isCancelable && (
+
+                     {!isPendiente && !isEnProceso && !isCancelable && (
                         <DropdownMenuItem disabled>
                            Sin acciones disponibles
                         </DropdownMenuItem>

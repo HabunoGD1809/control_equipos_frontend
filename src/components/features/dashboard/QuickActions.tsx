@@ -2,11 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import {
-   Plus,
+   MonitorDot,
    Wrench,
    ArrowRightLeft,
    FileText,
-   PieChart
+   Database
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/Card";
 import { cn } from "@/lib/utils";
@@ -16,17 +16,17 @@ export function QuickActions() {
 
    const actions = [
       {
-         label: "Nuevo Equipo",
-         icon: <Plus className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />,
-         onClick: () => router.push("/equipos/nuevo"),
-         description: "Registrar activo",
+         label: "Gestión Equipos",
+         icon: <MonitorDot className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />,
+         onClick: () => router.push("/equipos"),
+         description: "Catálogo y registro",
          bgHover: "hover:border-emerald-500/30 hover:bg-emerald-500/5",
          iconBg: "bg-emerald-500/10"
       },
       {
          label: "Asignar Equipo",
          icon: <ArrowRightLeft className="h-5 w-5 text-blue-600 dark:text-blue-500" />,
-         onClick: () => router.push("/movimientos?action=new"),
+         onClick: () => router.push("/movimientos"),
          description: "Entrega/Devolución",
          bgHover: "hover:border-blue-500/30 hover:bg-blue-500/5",
          iconBg: "bg-blue-500/10"
@@ -40,14 +40,6 @@ export function QuickActions() {
          iconBg: "bg-amber-500/10"
       },
       {
-         label: "Reportes",
-         icon: <PieChart className="h-5 w-5 text-indigo-600 dark:text-indigo-500" />,
-         onClick: () => router.push("/reportes"),
-         description: "Métricas y exportación",
-         bgHover: "hover:border-indigo-500/30 hover:bg-indigo-500/5",
-         iconBg: "bg-indigo-500/10"
-      },
-      {
          label: "Subir Doc",
          icon: <FileText className="h-5 w-5 text-purple-600 dark:text-purple-500" />,
          onClick: () => router.push("/documentacion"),
@@ -55,12 +47,19 @@ export function QuickActions() {
          bgHover: "hover:border-purple-500/30 hover:bg-purple-500/5",
          iconBg: "bg-purple-500/10"
       },
+      {
+         label: "Catálogos",
+         icon: <Database className="h-5 w-5 text-indigo-600 dark:text-indigo-500" />,
+         onClick: () => router.push("/administracion/catalogos"),
+         description: "Ubicaciones y estados",
+         bgHover: "hover:border-indigo-500/30 hover:bg-indigo-500/5",
+         iconBg: "bg-indigo-500/10"
+      },
    ];
 
    return (
-      < div className = "grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4" >
-      {
-         actions.map((action, idx) => (
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+         {actions.map((action, idx) => (
             <Card
                key={idx}
                className={cn(
@@ -84,8 +83,7 @@ export function QuickActions() {
                   </div>
                </CardContent>
             </Card>
-         ))
-      }
-      </div >
+         ))}
+      </div>
    );
 }

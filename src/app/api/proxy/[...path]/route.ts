@@ -30,6 +30,8 @@ async function proxyRequest(
 ) {
    const token = (await cookies()).get(AUTH_COOKIE_NAME)?.value;
    const backendUrl = buildBackendUrl(API_BASE!, request);
+   const contentType = request.headers.get("content-type") ?? "";
+   const isMultipart = contentType.includes("multipart/form-data");
 
    const headers = new Headers();
 
@@ -43,11 +45,19 @@ async function proxyRequest(
    let body: BodyInit | undefined = undefined;
 
    if (method !== "GET" && method !== "DELETE") {
-      const contentType = request.headers.get("content-type") ?? "";
+      if (isMultipart) {
+         const incomingFormData = await request.formData();
+         const outgoingFormData = new FormData();
 
-      if (contentType.includes("multipart/form-data")) {
-         body = request.body as BodyInit;
-         headers.set("Content-Type", contentType);
+         for (const [key, value] of incomingFormData.entries()) {
+            if (value instanceof File) {
+               outgoingFormData.append(key, value, value.name);
+            } else {
+               outgoingFormData.append(key, value);
+            }
+         }
+
+         body = outgoingFormData;
       } else {
          const text = await request.text();
          if (text) {
@@ -63,12 +73,14 @@ async function proxyRequest(
          headers,
          body,
          cache: "no-store",
+         // Node 18+ requiere duplex: "half" cuando se envía un ReadableStream como body
+         ...(body ? { duplex: "half" } : {}),
       });
 
       const resHeaders = new Headers();
 
-      const contentType = backendResponse.headers.get("content-type");
-      if (contentType) resHeaders.set("Content-Type", contentType);
+      const resContentType = backendResponse.headers.get("content-type");
+      if (resContentType) resHeaders.set("Content-Type", resContentType);
 
       const contentDisposition = backendResponse.headers.get("content-disposition");
       if (contentDisposition) resHeaders.set("Content-Disposition", contentDisposition);
@@ -77,7 +89,6 @@ async function proxyRequest(
       if (cacheControl) resHeaders.set("Cache-Control", cacheControl);
 
       const isNoContent = backendResponse.status === 204;
-
       const buffer = isNoContent ? null : await backendResponse.arrayBuffer();
 
       return new NextResponse(buffer, {

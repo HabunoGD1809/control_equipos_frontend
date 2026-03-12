@@ -42,4 +42,10 @@ export const usuariosService = {
    updateMe: async (payload: Partial<UsuarioUpdate>): Promise<Usuario> => {
       return await api.put<Usuario>("/usuarios/me/", payload);
    },
+
+   uploadAvatar: async (file: File): Promise<Usuario> => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return await api.post<Usuario>("/usuarios/me/avatar", formData);
+   },
 };

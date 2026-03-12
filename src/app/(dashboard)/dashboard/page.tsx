@@ -9,8 +9,8 @@ import {
    ShieldAlert,
    TrendingUp,
    AlertCircle,
-   FileText, // <-- Nuevo icono
-   CalendarRange // <-- Nuevo icono
+   FileText,
+   CalendarRange
 } from "lucide-react";
 
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/Card";
@@ -119,13 +119,15 @@ export default async function DashboardPage() {
 
    if (!data || !data.summary) {
       return (
-         <div className="flex h-full items-center justify-center p-8 bg-background/50 rounded-xl border border-dashed">
-            <div className="text-center space-y-4 max-w-sm">
-               <div className="bg-destructive/10 p-4 rounded-full inline-block">
-                  <ShieldAlert className="h-10 w-10 text-destructive mx-auto" />
+         <div className="flex h-[calc(100vh-8rem)] items-center justify-center p-8">
+            <div className="text-center space-y-6 max-w-md bg-card p-10 rounded-2xl border shadow-sm">
+               <div className="bg-destructive/10 p-5 rounded-full inline-block mx-auto">
+                  <ShieldAlert className="h-12 w-12 text-destructive" />
                </div>
-               <h3 className="text-xl font-bold tracking-tight">Error de Conexión</h3>
-               <p className="text-muted-foreground">No se pudieron obtener los datos del dashboard. Verifica tu conexión o contacta a soporte.</p>
+               <div className="space-y-2">
+                  <h3 className="text-2xl font-bold tracking-tight">Servicio No Disponible</h3>
+                  <p className="text-muted-foreground text-sm">No se pudieron obtener los datos operativos. Verifica tu conexión a la red o la disponibilidad del servidor de backend.</p>
+               </div>
             </div>
          </div>
       );
@@ -134,27 +136,31 @@ export default async function DashboardPage() {
    const { summary, proximosMantenimientos, itemsBajoStock, financials } = data;
 
    return (
-      <div className="space-y-8 pb-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="space-y-8 pb-10 px-2 sm:px-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
          {/* Header / Greeting */}
-         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 bg-card p-6 rounded-2xl border shadow-sm">
-            <div className="space-y-1.5">
-               <div className="flex items-center gap-2 text-primary font-medium">
-                  <TrendingUp className="h-5 w-5" />
+         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-card p-6 md:p-8 rounded-2xl border shadow-xs relative overflow-hidden">
+            {/* Efecto de fondo decorativo */}
+            <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-primary/5 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div className="space-y-2 relative z-10">
+               <div className="flex items-center gap-2 text-primary font-semibold tracking-wide text-sm uppercase">
+                  <TrendingUp className="h-4 w-4" />
                   <span>Resumen Operativo</span>
                </div>
-               <h1 className="text-3xl font-bold tracking-tight text-foreground">Centro de Control</h1>
-               <p className="text-muted-foreground max-w-xl">
-                  Visión general del estado de activos, inventario e indicadores financieros en tiempo real.
+               <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">Centro de Control</h1>
+               <p className="text-muted-foreground max-w-xl text-sm sm:text-base">
+                  Visión general del estado de activos, métricas de inventario e indicadores clave de rendimiento.
                </p>
             </div>
-            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground bg-muted/50 px-4 py-2 rounded-xl border">
-               <CalendarClock className="h-4 w-4" />
+            <div className="flex items-center gap-2.5 text-sm font-medium text-foreground bg-muted/30 px-5 py-2.5 rounded-full border border-border/50 shadow-xs relative z-10 whitespace-nowrap">
+               <CalendarClock className="h-4 w-4 text-primary" />
                <span className="capitalize">{new Date().toLocaleDateString('es-DO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
             </div>
          </div>
 
-         <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+         {/* KPIs */}
+         <div className="grid gap-4 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
             <StatCard
                title="Valor de Activos"
                value={formatCurrency(financials.totalValorActivos)}
@@ -194,68 +200,69 @@ export default async function DashboardPage() {
          </div>
 
          {/* Acciones Rápidas */}
-         <section className="space-y-4">
-            <h2 className="text-lg font-bold tracking-tight flex items-center gap-2">
+         <section className="space-y-4 pt-2">
+            <h2 className="text-lg font-bold tracking-tight text-foreground ml-1">
                Accesos Rápidos
             </h2>
             <QuickActions />
          </section>
 
          {/* Grillas de Contenido - Bento Grid Layout */}
-         <div className="grid gap-6 lg:grid-cols-12">
+         <div className="grid gap-6 lg:grid-cols-12 pt-2">
 
-            {/* Columna Principal (Gráficos y Alertas) */}
+            {/* Columna Principal */}
             <div className="lg:col-span-8 space-y-6 flex flex-col">
 
-               <Card className="flex-1 shadow-sm border-muted/60">
-                  <CardHeader className="pb-2">
-                     <CardTitle className="text-lg">Estado de la Flota</CardTitle>
-                     <CardDescription>Distribución porcentual de equipos por condición operativa</CardDescription>
+               {/* Gráfico Principal */}
+               <Card className="flex-1 shadow-sm border-muted/60 overflow-hidden">
+                  <CardHeader className="bg-muted/10 border-b pb-4">
+                     <CardTitle className="text-lg font-bold text-foreground">Estado Operativo de la Flota</CardTitle>
+                     <CardDescription>Distribución general de los equipos según su estado actual</CardDescription>
                   </CardHeader>
-                  <CardContent className="pl-0 min-h-75 flex items-center justify-center">
+                  <CardContent className="p-6 min-h-75 flex items-center justify-center bg-card">
                      <EquiposPorEstadoChart data={summary.equipos_por_estado} />
                   </CardContent>
                </Card>
 
+               {/* Alertas Críticas (Sub-Grid) */}
                <div className="grid gap-6 md:grid-cols-2">
-                  <Card className="shadow-sm border-muted/60 flex flex-col">
-                     <CardHeader className="pb-3 border-b bg-muted/20">
-                        <CardTitle className="text-base flex items-center gap-2">
-                           <Wrench className="h-4 w-4 text-amber-500" />
+                  <Card className="shadow-sm border-muted/60 flex flex-col overflow-hidden">
+                     <CardHeader className="bg-amber-500/5 border-b border-amber-500/10 pb-4">
+                        <CardTitle className="text-base font-bold flex items-center gap-2 text-amber-700 dark:text-amber-500">
+                           <Wrench className="h-4 w-4" />
                            Mantenimiento Próximo
                         </CardTitle>
                      </CardHeader>
-                     <CardContent className="pt-4 flex-1">
+                     <CardContent className="p-4 flex-1 bg-card">
                         <ProximosMantenimientosList mantenimientos={proximosMantenimientos} />
                      </CardContent>
                   </Card>
 
-                  <Card className="shadow-sm border-muted/60 flex flex-col">
-                     <CardHeader className="pb-3 border-b bg-muted/20">
-                        <CardTitle className="text-base flex items-center gap-2">
-                           <AlertCircle className="h-4 w-4 text-destructive" />
+                  <Card className="shadow-sm border-muted/60 flex flex-col overflow-hidden">
+                     <CardHeader className="bg-red-500/5 border-b border-red-500/10 pb-4">
+                        <CardTitle className="text-base font-bold flex items-center gap-2 text-red-700 dark:text-red-500">
+                           <AlertCircle className="h-4 w-4" />
                            Reposición Urgente
                         </CardTitle>
                      </CardHeader>
-                     <CardContent className="pt-4 flex-1">
+                     <CardContent className="p-4 flex-1 bg-card">
                         <ItemsBajoStockList items={itemsBajoStock as any} />
                      </CardContent>
                   </Card>
                </div>
             </div>
 
-            {/* Columna Lateral (Feed de Actividad) */}
+            {/* Columna Lateral (Feed) */}
             <div className="lg:col-span-4">
-               <Card className="h-full shadow-sm border-muted/60 flex flex-col">
-                  <CardHeader className="pb-3 border-b bg-muted/20">
-                     <CardTitle className="text-base flex items-center gap-2">
-                        <Activity className="h-4 w-4 text-primary" />
+               <Card className="h-full shadow-sm border-muted/60 flex flex-col overflow-hidden">
+                  <CardHeader className="bg-primary/5 border-b border-primary/10 pb-4">
+                     <CardTitle className="text-base font-bold flex items-center gap-2 text-primary">
+                        <Activity className="h-4 w-4" />
                         Registro de Movimientos
                      </CardTitle>
-                     <CardDescription className="text-xs">Últimos movimientos físicos de equipos</CardDescription>
+                     <CardDescription className="text-xs">Flujo reciente de los activos en la organización</CardDescription>
                   </CardHeader>
-                  <CardContent className="pt-4 flex-1 overflow-auto">
-                     {/* Pasamos la nueva propiedad del backend */}
+                  <CardContent className="p-4 flex-1 overflow-auto bg-card">
                      <RecentActivityList actividades={summary.movimientos_recientes} />
                   </CardContent>
                </Card>

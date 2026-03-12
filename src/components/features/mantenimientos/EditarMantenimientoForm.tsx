@@ -20,7 +20,13 @@ import { useToast } from "@/components/ui/use-toast";
 
 import { mantenimientosService } from "@/app/services/mantenimientosService";
 import { getFriendlyErrorMessage } from "@/lib/error-handling";
-import { Mantenimiento, Proveedor, EstadoMantenimientoEnum, MantenimientoUpdate, EstadoMantenimiento } from "@/types/api";
+import {
+   Mantenimiento,
+   ProveedorSimple,
+   EstadoMantenimientoEnum,
+   MantenimientoUpdate,
+   EstadoMantenimiento
+} from "@/types/api";
 import { cn } from "@/lib/utils";
 import { mantenimientoUpdateSchema } from "@/lib/zod";
 
@@ -33,7 +39,7 @@ type FormValues = z.infer<typeof formSchema>;
 
 interface EditarMantenimientoFormProps {
    mantenimiento: Mantenimiento;
-   proveedores: Proveedor[];
+   proveedores: ProveedorSimple[];
    tieneDocumentosAdjuntos: boolean;
    onSuccess: () => void;
 }
@@ -253,7 +259,7 @@ export function EditarMantenimientoForm({
                               </FormControl>
                            </PopoverTrigger>
                            <PopoverContent className="w-auto p-0" align="start">
-                              <Calendar mode="single" selected={field.value || undefined} onSelect={field.onChange} initialFocus />
+                              <Calendar mode="single" selected={field.value || undefined} onSelect={field.onChange} autoFocus />
                            </PopoverContent>
                         </Popover>
                         <FormMessage />
@@ -277,7 +283,7 @@ export function EditarMantenimientoForm({
                               </FormControl>
                            </PopoverTrigger>
                            <PopoverContent className="w-auto p-0" align="start">
-                              <Calendar mode="single" selected={field.value || undefined} onSelect={field.onChange} initialFocus />
+                              <Calendar mode="single" selected={field.value || undefined} onSelect={field.onChange} autoFocus />
                            </PopoverContent>
                         </Popover>
                         <FormMessage />

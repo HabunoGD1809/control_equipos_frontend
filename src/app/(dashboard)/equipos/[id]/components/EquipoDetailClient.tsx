@@ -2,20 +2,21 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Printer, Edit, Trash2, Box, FileText, Activity, History, Share2, Loader2 } from "lucide-react";
+import { ArrowLeft, Printer, Edit, Trash2, Box, FileText, Activity, History, Share2, Loader2, QrCode } from "lucide-react";
+import QRCode from "react-qr-code";
 
 import {
    EquipoRead,
    ComponenteInfo,
    PadreInfo,
-   Movimiento,
    Mantenimiento,
    Documentacion,
    AsignacionLicencia,
    EquipoSimple,
    TipoMantenimiento,
    TipoDocumento,
-   Proveedor
+   ProveedorSimple, // ← cambiado: ya no se importa Proveedor
+   EstadoEquipo
 } from "@/types/api";
 
 import { Button } from "@/components/ui/Button";
@@ -24,6 +25,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/Badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/DropdownMenu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/AlertDialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/Dialog";
+import { useToast } from "@/components/ui/use-toast";
 
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { useHasPermission } from "@/hooks/useHasPermission";
@@ -31,7 +34,6 @@ import { equiposService } from "@/app/services/equiposService";
 import { licenciasService } from "@/app/services/licenciasService";
 import { documentosService } from "@/app/services/documentosService";
 import { mantenimientosService } from "@/app/services/mantenimientosService";
-import { movimientosService } from "@/app/services/movimientosService";
 import { catalogosService } from "@/app/services/catalogosService";
 import { proveedoresService } from "@/app/services/proveedoresService";
 
@@ -43,6 +45,7 @@ import { EquipoMantenimientoTab } from "@/components/features/mantenimientos/Equ
 import { EquipoDocumentacionTab } from "@/components/features/documentos/EquipoDocumentacionTab";
 import { EquipoLicenciasTab } from "@/components/features/licencias/EquipoLicenciasTab";
 import { AuditTimeline } from "@/components/features/auditoria/AuditTimeline";
+import { EquipoForm } from "@/components/features/equipos/EquipoForm";
 
 interface EquipoDetailClientProps {
    equipo: EquipoRead;
@@ -63,6 +66,8 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
    padres,
 }) => {
    const router = useRouter();
+   const { toast } = useToast();
+
    const canEdit = useHasPermission(['editar_equipos']);
    const canDelete = useHasPermission(['eliminar_equipos']);
    const canAudit = useHasPermission(['ver_auditoria']);
@@ -70,19 +75,27 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
    const [activeTab, setActiveTab] = useState("detalles");
    const [isLoadingTab, setIsLoadingTab] = useState(false);
 
-   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
    const [mantenimientos, setMantenimientos] = useState<Mantenimiento[]>([]);
    const [documentos, setDocumentos] = useState<Documentacion[]>([]);
    const [asignaciones, setAsignaciones] = useState<AsignacionLicencia[]>([]);
    const [equiposDisponibles, setEquiposDisponibles] = useState<EquipoSimple[]>([]);
    const [tiposMantenimiento, setTiposMantenimiento] = useState<TipoMantenimiento[]>([]);
    const [tiposDocumento, setTiposDocumento] = useState<TipoDocumento[]>([]);
-   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+   const [proveedores, setProveedores] = useState<ProveedorSimple[]>([]); // ← CORRECCIÓN
+
+   // Estados para Modal de Edición
+   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+   const [estadosEquipo, setEstadosEquipo] = useState<EstadoEquipo[]>([]);
+   const [isOpeningEdit, setIsOpeningEdit] = useState(false);
+
+   // Estado para Modal de Código QR
+   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
 
    const [loadedTabs, setLoadedTabs] = useState<Record<string, boolean>>({
       detalles: true,
       componentes: true,
       jerarquia: true,
+      movimientos: true,
    });
 
    const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } = useDeleteConfirmation({
@@ -91,21 +104,37 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
       successMessage: "El equipo ha sido eliminado correctamente.",
    });
 
+   const handleOpenEdit = async () => {
+      setIsOpeningEdit(true);
+      try {
+         const [estadosData, provData] = await Promise.all([
+            catalogosService.getEstadosEquipo(),
+            proveedoresService.getOptions() // ← devuelve ProveedorSimple[], ahora compatible
+         ]);
+         setEstadosEquipo(estadosData);
+         setProveedores(provData);
+         setIsEditModalOpen(true);
+      } catch (error) {
+         toast({ variant: "destructive", title: "Error", description: "No se pudieron cargar los catálogos para editar." });
+      } finally {
+         setIsOpeningEdit(false);
+      }
+   };
+
+   // Construcción de la URL completa para el Código QR
+   const equipoUrl = typeof window !== 'undefined' ? `${window.location.origin}/equipos/${equipo.id}` : '';
+
    useEffect(() => {
       const loadTabData = async () => {
          if (loadedTabs[activeTab]) return;
 
          setIsLoadingTab(true);
          try {
-            if (activeTab === "movimientos") {
-               const res = await movimientosService.getAll({ equipo_id: equipo.id });
-               setMovimientos(unwrapClient(res));
-            }
-            else if (activeTab === "mantenimiento") {
+            if (activeTab === "mantenimiento") {
                const [mtoRes, tiposMtoRes, provRes] = await Promise.all([
                   mantenimientosService.getAll({ equipo_id: equipo.id }),
                   catalogosService.getTiposMantenimiento(),
-                  proveedoresService.getAll(),
+                  proveedoresService.getOptions(), // ← consistente con ProveedorSimple[]
                ]);
                setMantenimientos(unwrapClient(mtoRes));
                setTiposMantenimiento(unwrapClient(tiposMtoRes));
@@ -160,8 +189,9 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
 
             <div className="flex gap-2">
                {canEdit && (
-                  <Button variant="outline" className="shadow-sm" onClick={() => router.push(`/equipos/${equipo.id}/editar`)}>
-                     <Edit className="mr-2 h-4 w-4" /> Editar
+                  <Button variant="outline" className="shadow-sm" onClick={handleOpenEdit} disabled={isOpeningEdit}>
+                     {isOpeningEdit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Edit className="mr-2 h-4 w-4" />}
+                     Editar
                   </Button>
                )}
                <DropdownMenu>
@@ -169,6 +199,9 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
                      <Button variant="secondary" className="shadow-sm">Acciones</Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                     <DropdownMenuItem onClick={() => setIsQrModalOpen(true)}>
+                        <QrCode className="mr-2 h-4 w-4" /> Ver Código QR
+                     </DropdownMenuItem>
                      <DropdownMenuItem onClick={() => window.print()}>
                         <Printer className="mr-2 h-4 w-4" /> Imprimir Ficha
                      </DropdownMenuItem>
@@ -191,7 +224,7 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
                <TabsTrigger value="detalles">Detalles</TabsTrigger>
                <TabsTrigger value="componentes" className="gap-2"><Box className="h-4 w-4" /><span className="hidden md:inline">Componentes</span></TabsTrigger>
                <TabsTrigger value="jerarquia" className="gap-2"><Share2 className="h-4 w-4" /><span className="hidden md:inline">Jerarquía</span></TabsTrigger>
-               <TabsTrigger value="movimientos" className="gap-2"><Activity className="h-4 w-4" /><span className="hidden md:inline">Movimientos</span></TabsTrigger>
+               <TabsTrigger value="movimientos" className="gap-2"><Activity className="h-4 w-4" /><span className="hidden md:inline">Historial</span></TabsTrigger>
                <TabsTrigger value="mantenimiento">Mantenimiento</TabsTrigger>
                <TabsTrigger value="documentacion" className="gap-2"><FileText className="h-4 w-4" /><span className="hidden md:inline">Docs</span></TabsTrigger>
                <TabsTrigger value="licencias">Licencias</TabsTrigger>
@@ -226,7 +259,7 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
                </TabsContent>
 
                <TabsContent value="movimientos" className="mt-0 animate-in fade-in duration-300">
-                  <EquipoHistorialTab movimientos={movimientos} />
+                  <EquipoHistorialTab equipoId={equipo.id} />
                </TabsContent>
 
                <TabsContent value="mantenimiento" className="mt-0 animate-in fade-in duration-300">
@@ -269,6 +302,56 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
             </div>
          </Tabs>
 
+         {/* --- MODAL DE CÓDIGO QR --- */}
+         <Dialog open={isQrModalOpen} onOpenChange={setIsQrModalOpen}>
+            <DialogContent className="sm:max-w-sm text-center">
+               <DialogHeader>
+                  <DialogTitle className="text-center">Etiqueta de Activo</DialogTitle>
+                  <DialogDescription className="text-center">
+                     Escanea este código para acceder al perfil del equipo.
+                  </DialogDescription>
+               </DialogHeader>
+               <div className="flex flex-col items-center justify-center p-6 space-y-4 bg-white rounded-xl border">
+                  <QRCode
+                     value={equipoUrl}
+                     size={200}
+                     level="H"
+                  />
+                  <div className="text-center text-black">
+                     <p className="font-bold text-lg">{equipo.codigo_interno || equipo.numero_serie}</p>
+                     <p className="text-xs text-gray-500 uppercase tracking-widest">{equipo.nombre}</p>
+                  </div>
+               </div>
+               <div className="flex justify-center mt-2">
+                  <Button variant="outline" onClick={() => window.print()} className="w-full">
+                     <Printer className="mr-2 h-4 w-4" /> Imprimir Etiqueta
+                  </Button>
+               </div>
+            </DialogContent>
+         </Dialog>
+
+         {/* Modal de Edición Inyectado */}
+         <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+            <DialogContent className="sm:max-w-4xl max-h-[95vh] overflow-y-auto">
+               <DialogHeader>
+                  <DialogTitle className="text-primary text-xl">Editar Equipo</DialogTitle>
+                  <DialogDescription>Modifique los detalles del activo seleccionado.</DialogDescription>
+               </DialogHeader>
+               <EquipoForm
+                  estados={estadosEquipo}
+                  proveedores={proveedores}
+                  initialData={equipo}
+                  isEditing={true}
+                  onSuccess={() => {
+                     setIsEditModalOpen(false);
+                     router.refresh();
+                  }}
+                  onCancel={() => setIsEditModalOpen(false)}
+               />
+            </DialogContent>
+         </Dialog>
+
+         {/* Diálogo de Confirmación de Borrado */}
          <AlertDialog open={isAlertOpen} onOpenChange={(isOpen) => { if (!isOpen) closeAlert(); }}>
             <AlertDialogContent>
                <AlertDialogHeader>

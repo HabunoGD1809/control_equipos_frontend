@@ -38,13 +38,20 @@ export const columns: ColumnDef<InventarioMovimiento>[] = [
    {
       accessorKey: "ubicacion",
       header: "Ubicación (Origen -> Destino)",
-      cell: ({ row }) => (
-         <div className="flex items-center gap-2 text-xs">
-            <span>{row.original.ubicacion_origen || 'N/A'}</span>
-            <ArrowRight className="h-3 w-3 text-muted-foreground" />
-            <span>{row.original.ubicacion_destino || 'N/A'}</span>
-         </div>
-      )
+      cell: ({ row }) => {
+         const mov = row.original;
+         return (
+            <div className="flex items-center gap-2 text-xs">
+               <span className="text-muted-foreground truncate max-w-30" title={mov.ubicacion_origen_nombre || 'N/A'}>
+                  {mov.ubicacion_origen_nombre || 'N/A'}
+               </span>
+               <ArrowRight className="h-3 w-3 text-muted-foreground/40 shrink-0" />
+               <span className="font-medium text-foreground truncate max-w-30" title={mov.ubicacion_destino_nombre || 'N/A'}>
+                  {mov.ubicacion_destino_nombre || 'N/A'}
+               </span>
+            </div>
+         );
+      }
    },
    {
       accessorKey: "fecha_hora",

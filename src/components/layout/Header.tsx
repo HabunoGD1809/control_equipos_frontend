@@ -19,10 +19,20 @@ import { GlobalSearch } from "./GlobalSearch"
 import { LogoutModal } from "@/components/ui/LogoutModal"
 import { cn } from "@/lib/utils"
 
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace("/api/v1", "");
+
+const getAvatarSrc = (url?: string | null) => {
+   if (!url) return null;
+   if (url.startsWith("http")) return url;
+   return `${API_BASE_URL}${url}`;
+};
+
 export function Header() {
    const { user } = useSession();
    const router = useRouter();
    const [isLogoutModalOpen, setLogoutModalOpen] = useState(false);
+
+   const avatarSrc = getAvatarSrc((user as any)?.avatar_url);
 
    return (
       <>
@@ -30,12 +40,10 @@ export function Header() {
             "flex-none flex items-center justify-between h-16 px-4 sm:px-6",
             "bg-background/80 backdrop-blur-md border-b border-border/50 w-full gap-4 transition-all duration-300 ease-in-out z-10"
          )}>
-            {/* Buscador Global */}
             <div className="flex-1 min-w-0 max-w-2xl">
                <GlobalSearch />
             </div>
 
-            {/* Acciones y Perfil */}
             <div className="flex items-center gap-2 sm:gap-4 shrink-0">
                <div className="flex items-center gap-1 sm:gap-2 mr-2">
                   <ThemeToggle />
@@ -50,8 +58,12 @@ export function Header() {
                         variant="ghost"
                         className="relative h-10 w-auto px-2 sm:px-3 flex items-center gap-3 hover:bg-accent/80 rounded-full sm:rounded-lg transition-colors"
                      >
-                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
-                           <UserCircle className="h-5 w-5 text-primary" />
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20 overflow-hidden">
+                           {avatarSrc ? (
+                              <img src={avatarSrc} alt="Avatar" className="h-full w-full object-cover" />
+                           ) : (
+                              <UserCircle className="h-5 w-5 text-primary" />
+                           )}
                         </div>
                         <div className="text-left hidden sm:flex flex-col">
                            <span className="text-sm font-semibold leading-none text-foreground">{user?.nombre_usuario}</span>
@@ -61,11 +73,20 @@ export function Header() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent className="w-64 rounded-xl shadow-lg border-border/50" align="end" forceMount>
                      <DropdownMenuLabel className="font-normal p-3 bg-muted/30 rounded-t-lg">
-                        <div className="flex flex-col space-y-1.5">
-                           <p className="text-sm font-bold leading-none">{user?.nombre_usuario}</p>
-                           <p className="text-xs leading-none text-muted-foreground truncate">
-                              {user?.email || "Sin email registrado"}
-                           </p>
+                        <div className="flex items-center gap-3">
+                           <div className="h-10 w-10 rounded-full border border-primary/20 overflow-hidden bg-background">
+                              {avatarSrc ? (
+                                 <img src={avatarSrc} alt="Avatar" className="h-full w-full object-cover" />
+                              ) : (
+                                 <UserCircle className="h-full w-full p-1 text-primary" />
+                              )}
+                           </div>
+                           <div className="flex flex-col space-y-1">
+                              <p className="text-sm font-bold leading-none">{user?.nombre_usuario}</p>
+                              <p className="text-xs leading-none text-muted-foreground truncate">
+                                 {user?.email || "Sin email registrado"}
+                              </p>
+                           </div>
                         </div>
                      </DropdownMenuLabel>
                      <DropdownMenuSeparator className="mb-1" />

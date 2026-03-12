@@ -1,15 +1,16 @@
 import { serverApi } from '@/lib/http-server';
-import { InventarioStock, TipoItemInventario, Proveedor, EquipoSimple, InventarioMovimiento } from '@/types/api';
+import { InventarioStock, TipoItemInventario, Proveedor, EquipoSimple, InventarioMovimiento, Ubicacion } from '@/types/api';
 import { InventarioClient } from './components/InventarioClient';
 import { PageHeader } from '@/components/layout/PageHeader';
 
 export default async function InventarioPage() {
-   const [stockData, tiposData, proveedores, equipos, movimientosData] = await Promise.all([
+   const [stockData, tiposData, proveedores, equipos, movimientosData, ubicaciones] = await Promise.all([
       serverApi.get<InventarioStock[]>("/inventario/stock", { params: { limit: 200 } }),
       serverApi.get<TipoItemInventario[]>("/inventario/tipos", { params: { limit: 200 } }),
       serverApi.get<Proveedor[]>("/proveedores", { params: { limit: 500 } }),
       serverApi.get<EquipoSimple[]>("/equipos", { params: { limit: 500 } }),
       serverApi.get<InventarioMovimiento[]>("/inventario/movimientos", { params: { limit: 200 } }),
+      serverApi.get<Ubicacion[]>("/ubicaciones", { params: { limit: 200 } }),
    ]);
 
    return (
@@ -24,6 +25,7 @@ export default async function InventarioPage() {
             proveedores={proveedores || []}
             equipos={equipos || []}
             initialMovimientosData={movimientosData || []}
+            ubicaciones={ubicaciones || []}
          />
       </div>
    );

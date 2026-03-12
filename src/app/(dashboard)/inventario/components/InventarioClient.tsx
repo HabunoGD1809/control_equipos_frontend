@@ -16,7 +16,7 @@ import { useHasPermission } from "@/hooks/useHasPermission";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { api } from "@/lib/http";
 
-import type { InventarioStock, TipoItemInventario, EquipoSimple, Proveedor, InventarioMovimiento } from "@/types/api";
+import type { InventarioStock, TipoItemInventario, EquipoSimple, Proveedor, InventarioMovimiento, Ubicacion } from "@/types/api";
 
 import { RegistrarMovimientoForm } from "@/components/features/inventario/RegistrarMovimientoForm";
 import { TipoItemForm } from "./TipoItemForm";
@@ -29,6 +29,7 @@ interface InventarioClientProps {
    initialMovimientosData: InventarioMovimiento[];
    equipos: EquipoSimple[];
    proveedores: Proveedor[];
+   ubicaciones: Ubicacion[]; // Nueva prop
 }
 
 export const InventarioClient: React.FC<InventarioClientProps> = ({
@@ -37,6 +38,7 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
    initialMovimientosData,
    equipos,
    proveedores,
+   ubicaciones, // Recibida aquí
 }) => {
    const router = useRouter();
    const [isMovimientoModalOpen, setIsMovimientoModalOpen] = useState(false);
@@ -110,6 +112,7 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
                   tiposItem={initialTiposData}
                   equipos={equipos}
                   stockData={initialStockData}
+                  ubicaciones={ubicaciones}
                   onSuccess={() => {
                      setIsMovimientoModalOpen(false);
                      router.refresh();

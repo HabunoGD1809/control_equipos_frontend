@@ -11,4 +11,8 @@ export const reportesService = {
          responseType: "blob",
       });
    },
+
+   async getHistorial(): Promise<any[]> {
+      return api.get("/reportes/historial");
+   },
 };

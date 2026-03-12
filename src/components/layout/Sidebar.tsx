@@ -5,7 +5,7 @@ import Image from "next/image";
 import {
    LayoutDashboard, HardDrive, Settings, History, Package, Wrench, ShieldCheck,
    Calendar, ShoppingCart, Shield, User, BookUser, Book, ShieldAlert, DatabaseBackup,
-   FileText, LogOut, ChevronLeft, ChevronRight,
+   FileText, LogOut, ChevronLeft, ChevronRight, PieChart
 } from "lucide-react";
 import { useSession } from "@/contexts/SessionProvider";
 import { SidebarNav, NavItemProps } from "./SidebarNav";
@@ -28,13 +28,14 @@ const mainRoutes: NavItemProps[] = [
    {
       label: "Gestión",
       icon: Settings,
-      permissions: ["ver_mantenimientos", "ver_licencias", "ver_reservas", "ver_proveedores", "ver_documentacion"],
+      permissions: ["ver_mantenimientos", "ver_licencias", "ver_reservas", "ver_proveedores", "ver_documentacion", "generar_reportes"], 
       subRoutes: [
          { href: "/mantenimientos", icon: Wrench, label: "Mantenimientos", permissions: ["ver_mantenimientos"] },
          { href: "/licencias", icon: ShieldCheck, label: "Licencias", permissions: ["ver_licencias"] },
          { href: "/reservas", icon: Calendar, label: "Reservas", permissions: ["ver_reservas"] },
          { href: "/proveedores", icon: ShoppingCart, label: "Proveedores", permissions: ["ver_proveedores"] },
          { href: "/documentacion", icon: FileText, label: "Documentación", permissions: ["ver_documentacion"] },
+         { href: "/reportes", icon: PieChart, label: "Reportes", permissions: ["generar_reportes"] },
       ]
    }
 ];

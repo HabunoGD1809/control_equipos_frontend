@@ -1,5 +1,3 @@
-// src/types/api.ts
-
 type ValuesOf<T extends Record<string, string>> = T[keyof T];
 
 // ─── ENUMS → as const satisfies ─────────────────────────────────────────────
@@ -207,6 +205,7 @@ export interface UsuarioSimple {
   id: string;
   nombre_usuario: string;
   email?: string | null;
+  avatar_url?: string | null;
 }
 
 export interface RolResumen {
@@ -247,6 +246,45 @@ export interface Proveedor {
   updated_at: string;
 }
 
+// ─── UBICACIONES (Nuevo Catálogo Físico) ──────────────────────────────────────
+
+export interface Ubicacion {
+  id: string;
+  nombre: string;
+  edificio?: string | null;
+  departamento?: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface UbicacionCreate {
+  nombre: string;
+  edificio?: string | null;
+  departamento?: string | null;
+}
+
+export type UbicacionUpdate = Partial<UbicacionCreate> & { is_active?: boolean };
+
+
+// ─── CARGA MASIVA (BULK UPLOAD) ─────────────────────────────────────────────
+
+export interface EquipoBulkResult {
+  total_procesados: number;
+  insertados: number;
+  errores: string[];
+}
+
+// ─── TIMELINE (Historial Visual) ────────────────────────────────────────────
+
+export interface TimelineEvent {
+  fecha: string;
+  usuario?: string | null;
+  modulo: string;
+  icono: string;
+  titulo: string;
+  detalles: string[];
+}
+
 // ─── EQUIPOS ────────────────────────────────────────────────────────────────
 
 export interface EstadoEquipoSimple {
@@ -278,6 +316,7 @@ export interface EquipoRead {
   numero_serie: string;
   codigo_interno?: string | null;
   estado_id: string;
+  ubicacion_id?: string | null;
   ubicacion_actual?: string | null;
   marca?: string | null;
   modelo?: string | null;
@@ -445,6 +484,11 @@ export interface Documentacion {
   licencia?: LicenciaSoftwareSimple | null;
 }
 
+// ─── DTOs PARA HANDOFFS (Aprobar/Rechazar/Recibir) ────────────────────
+export interface MovimientoAccion {
+  observaciones?: string | null;
+}
+
 // ─── MOVIMIENTOS ─────────────────────────────────────────────────────────────
 
 export interface Movimiento {
@@ -461,6 +505,8 @@ export interface Movimiento {
   autorizado_por?: string | null;
   fecha_hora: string;
   fecha_retorno?: string | null;
+  ip_origen?: string | null;
+  user_agent?: string | null;
   estado: EstadoMovimientoEquipo;
   created_at: string;
   equipo: EquipoSimple;
@@ -584,7 +630,8 @@ export interface TipoItemInventarioConStock extends TipoItemInventario {
 export interface InventarioStock {
   id: string;
   tipo_item_id: string;
-  ubicacion: string;
+  ubicacion_id: string;
+  ubicacion?: string;    // Opcional: para el nombre que inyecta el backend
   lote?: string | null;
   fecha_caducidad?: string | null;
   cantidad_actual: number;
@@ -604,8 +651,10 @@ export interface InventarioMovimiento {
   tipo_movimiento: TipoMovimientoInv;
   cantidad: number;
   fecha_hora: string;
-  ubicacion_origen?: string | null;
-  ubicacion_destino?: string | null;
+  ubicacion_origen_id?: string | null;
+  ubicacion_destino_id?: string | null;
+  ubicacion_origen_nombre?: string | null;
+  ubicacion_destino_nombre?: string | null;
   lote_origen?: string | null;
   lote_destino?: string | null;
   costo_unitario?: string | null;
@@ -745,7 +794,7 @@ export interface EquipoCreate {
   numero_serie: string;
   codigo_interno?: string | null;
   estado_id: string;
-  ubicacion_actual?: string | null;
+  ubicacion_id?: string | null;
   marca?: string | null;
   modelo?: string | null;
   fecha_adquisicion?: string | null;
@@ -875,8 +924,8 @@ export interface InventarioMovimientoCreate {
   cantidad: number;
   fecha_hora?: string | null;
   costo_unitario?: number | string | null;
-  ubicacion_origen?: string | null;
-  ubicacion_destino?: string | null;
+  ubicacion_origen_id?: string | null;
+  ubicacion_destino_id?: string | null;
   lote_origen?: string | null;
   lote_destino?: string | null;
   motivo_ajuste?: string | null;

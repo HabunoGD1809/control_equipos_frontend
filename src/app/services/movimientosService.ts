@@ -4,6 +4,7 @@ import type {
    MovimientoCreate,
    MovimientoUpdate,
    TipoMovimientoEquipo,
+   MovimientoAccion,
 } from "@/types/api";
 import { TipoMovimientoEquipoEnum } from "@/types/api";
 
@@ -29,6 +30,15 @@ export const movimientosService = {
 
    cancelar: (id: string): Promise<Movimiento> =>
       api.post<Movimiento>(`/movimientos/${id}/cancelar`, {}),
+
+   aprobar: (id: string, payload: MovimientoAccion = {}): Promise<Movimiento> =>
+      api.post<Movimiento>(`/movimientos/${id}/aprobar`, payload),
+
+   rechazar: (id: string, payload: MovimientoAccion): Promise<Movimiento> =>
+      api.post<Movimiento>(`/movimientos/${id}/rechazar`, payload),
+
+   recibir: (id: string, payload: MovimientoAccion = {}): Promise<Movimiento> =>
+      api.post<Movimiento>(`/movimientos/${id}/recibir`, payload),
 
    predecirEstadoFinal: (tipo: TipoMovimientoEquipo, estadoNombreActual: string): string => {
       switch (tipo) {

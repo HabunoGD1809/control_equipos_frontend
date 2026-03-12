@@ -7,6 +7,8 @@ import type {
    ComponenteInfo,
    PadreInfo,
    EquipoSimple,
+   EquipoBulkResult,
+   TimelineEvent,
 } from "@/types/api";
 
 type GetAllParams = {
@@ -40,6 +42,19 @@ export const equiposService = {
       api.put<EquipoRead>(`/equipos/${id}`, payload),
 
    delete: (id: string) => api.delete<void>(`/equipos/${id}`),
+
+   bulkUpload: async (file: File): Promise<EquipoBulkResult> => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return api.post<EquipoBulkResult>("/equipos/bulk-upload", formData, {
+         headers: {
+            "Content-Type": "multipart/form-data",
+         },
+      });
+   },
+
+   getTimeline: (id: string): Promise<TimelineEvent[]> =>
+      api.get<TimelineEvent[]>(`/equipos/${id}/timeline`),
 
    search: async (termino: string) => {
       if (!termino) return [];

@@ -20,7 +20,8 @@ import {
    TipoMovimientoInvEnum,
    EquipoSimple,
    InventarioStock,
-   InventarioMovimientoCreate
+   InventarioMovimientoCreate,
+   Ubicacion // Importamos Ubicacion
 } from "@/types/api";
 import { inventarioService } from "@/app/services/inventarioService";
 
@@ -28,12 +29,13 @@ interface RegistrarMovimientoFormProps {
    tiposItem: TipoItemInventarioSimple[];
    equipos: EquipoSimple[];
    stockData: InventarioStock[];
+   ubicaciones: Ubicacion[]; // Recibimos las ubicaciones
    onSuccess: () => void;
 }
 
 type FormValues = z.infer<ReturnType<typeof createInventarioMovimientoSchema>>;
 
-export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSuccess }: RegistrarMovimientoFormProps) {
+export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, ubicaciones, onSuccess }: RegistrarMovimientoFormProps) {
    const { toast } = useToast();
    const queryClient = useQueryClient();
 
@@ -49,8 +51,8 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
          lote_destino: "N/A",
          costo_unitario: undefined as any,
          notas: "",
-         ubicacion_origen: "",
-         ubicacion_destino: "",
+         ubicacion_origen_id: "",
+         ubicacion_destino_id: "",
          motivo_ajuste: "",
          equipo_asociado_id: undefined,
       },
@@ -58,7 +60,7 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
 
    const tipoMovimiento = useWatch({ control: form.control, name: "tipo_movimiento" });
    const tipoItemId = useWatch({ control: form.control, name: "tipo_item_id" });
-   const ubicacionOrigenSel = useWatch({ control: form.control, name: "ubicacion_origen" });
+   const ubicacionOrigenSel = useWatch({ control: form.control, name: "ubicacion_origen_id" });
 
    const tipoStr = tipoMovimiento as string;
 
@@ -88,12 +90,12 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
    }, [stockData, tipoItemId]);
 
    const ubicacionesOrigenDisponibles = useMemo(() => {
-      return Array.from(new Set(stockDisponibleDelItem.map(s => s.ubicacion)));
+      return Array.from(new Set(stockDisponibleDelItem.map(s => s.ubicacion_id)));
    }, [stockDisponibleDelItem]);
 
    const lotesOrigenDisponibles = useMemo(() => {
       return stockDisponibleDelItem
-         .filter(s => s.ubicacion === ubicacionOrigenSel)
+         .filter(s => s.ubicacion_id === ubicacionOrigenSel)
          .map(s => s.lote || "N/A");
    }, [stockDisponibleDelItem, ubicacionOrigenSel]);
 
@@ -134,11 +136,11 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
       };
 
       if (!reqOrigen) {
-         delete payload.ubicacion_origen;
+         delete payload.ubicacion_origen_id;
          delete payload.lote_origen;
       }
       if (!reqDestino) {
-         delete payload.ubicacion_destino;
+         delete payload.ubicacion_destino_id;
          delete payload.lote_destino;
       }
       if (!isAjuste) {
@@ -166,7 +168,7 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                      <Select
                         onValueChange={(val) => {
                            field.onChange(val);
-                           form.setValue("ubicacion_origen", "");
+                           form.setValue("ubicacion_origen_id", "");
                            form.setValue("lote_origen", "N/A");
                            form.clearErrors("cantidad");
                         }}
@@ -273,14 +275,14 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                   <div className="space-y-4 bg-muted/30 p-3 rounded-md border">
                      <FormField
                         control={form.control}
-                        name="ubicacion_origen"
+                        name="ubicacion_origen_id"
                         render={({ field }) => (
                            <FormItem>
                               <FormLabel>Ubicación Origen <span className="text-destructive">*</span></FormLabel>
                               <Select
                                  onValueChange={(val) => {
                                     field.onChange(val);
-                                    form.clearErrors("ubicacion_origen");
+                                    form.clearErrors("ubicacion_origen_id");
                                  }}
                                  value={field.value || undefined}
                                  disabled={!tipoItemId || ubicacionesOrigenDisponibles.length === 0}
@@ -291,9 +293,15 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                                     </SelectTrigger>
                                  </FormControl>
                                  <SelectContent>
-                                    {ubicacionesOrigenDisponibles.map((ub) => (
-                                       <SelectItem key={ub} value={ub}>{ub}</SelectItem>
-                                    ))}
+                                    {ubicacionesOrigenDisponibles.map((ubId) => {
+                                       // Usamos el catálogo de ubicaciones reales para mostrar el nombre
+                                       const ubName = ubicaciones.find(u => u.id === ubId)?.nombre || ubId;
+                                       return (
+                                          <SelectItem key={ubId} value={ubId}>
+                                             {ubName}
+                                          </SelectItem>
+                                       );
+                                    })}
                                  </SelectContent>
                               </Select>
                               <FormDescription className="text-xs">Solo muestra ubicaciones con stock.</FormDescription>
@@ -330,13 +338,24 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, onSucce
                   <div className="space-y-4 bg-primary/5 p-3 rounded-md border border-primary/20">
                      <FormField
                         control={form.control}
-                        name="ubicacion_destino"
+                        name="ubicacion_destino_id" // FIX: Select de ubicaciones reales
                         render={({ field }) => (
                            <FormItem>
                               <FormLabel>Ubicación Destino <span className="text-destructive">*</span></FormLabel>
-                              <FormControl>
-                                 <Input placeholder="Ej: Almacén Principal" {...field} value={field.value || ""} />
-                              </FormControl>
+                              <Select onValueChange={field.onChange} value={field.value || undefined}>
+                                 <FormControl>
+                                    <SelectTrigger>
+                                       <SelectValue placeholder="Seleccione destino..." />
+                                    </SelectTrigger>
+                                 </FormControl>
+                                 <SelectContent>
+                                    {ubicaciones.map((ub) => (
+                                       <SelectItem key={ub.id} value={ub.id}>
+                                          {ub.nombre}
+                                       </SelectItem>
+                                    ))}
+                                 </SelectContent>
+                              </Select>
                               <FormMessage />
                            </FormItem>
                         )}

@@ -232,12 +232,8 @@ const equipoBaseSchema = z.object({
     .optional()
     .nullable(),
   estado_id: requiredUuid("Debe seleccionar un estado."),
+  ubicacion_id: z.string().pipe(z.guid()).optional().nullable(),
   proveedor_id: z.string().pipe(z.guid()).optional().nullable(),
-  ubicacion_actual: z
-    .string()
-    .max(255, { error: "Máximo 255 caracteres." })
-    .optional()
-    .nullable(),
   marca: z
     .string()
     .max(100, { error: "Máximo 100 caracteres." })
@@ -444,13 +440,14 @@ export const createInventarioMovimientoSchema = (
       costo_unitario: optionalMonetary4(),
       lote_origen: z.string().max(50).optional().default("N/A"),
       lote_destino: z.string().max(50).optional().default("N/A"),
-      ubicacion_origen: z.string().optional().nullable(),
-      ubicacion_destino: z.string().optional().nullable(),
+      // FIX: Ahora usan _id
+      ubicacion_origen_id: z.string().optional().nullable(),
+      ubicacion_destino_id: z.string().optional().nullable(),
       motivo_ajuste: z.string().optional().nullable(),
-      equipo_asociado_id: z.string().pipe(z.guid()).optional().nullable(),
-      mantenimiento_id: z.string().pipe(z.guid()).optional().nullable(),
+      equipo_asociado_id: z.string().pipe(z.string().uuid().optional().or(z.any())).optional().nullable(), // Mantenemos tu pipe si es custom, o simplemente string
+      mantenimiento_id: z.string().pipe(z.string().uuid().optional().or(z.any())).optional().nullable(),
       referencia_externa: z.string().optional().nullable(),
-      referencia_transferencia: z.string().pipe(z.guid()).optional().nullable(),
+      referencia_transferencia: z.string().pipe(z.string().uuid().optional().or(z.any())).optional().nullable(),
       notas: z.string().optional().nullable(),
     })
     .superRefine((data, ctx) => {
@@ -461,11 +458,12 @@ export const createInventarioMovimientoSchema = (
         TipoMovimientoInvEnum.DevolucionProveedor,
       ] as string[];
 
-      if (salidas.includes(data.tipo_movimiento) && !data.ubicacion_origen) {
+      // FIX: Validar la nueva propiedad ubicacion_origen_id
+      if (salidas.includes(data.tipo_movimiento) && !data.ubicacion_origen_id) {
         ctx.addIssue({
           code: "custom",
           message: "Origen requerido.",
-          path: ["ubicacion_origen"],
+          path: ["ubicacion_origen_id"],
         });
       }
 
@@ -475,11 +473,12 @@ export const createInventarioMovimientoSchema = (
         TipoMovimientoInvEnum.DevolucionInterna,
       ] as string[];
 
-      if (entradas.includes(data.tipo_movimiento) && !data.ubicacion_destino) {
+      // FIX: Validar la nueva propiedad ubicacion_destino_id
+      if (entradas.includes(data.tipo_movimiento) && !data.ubicacion_destino_id) {
         ctx.addIssue({
           code: "custom",
           message: "Destino requerido.",
-          path: ["ubicacion_destino"],
+          path: ["ubicacion_destino_id"],
         });
       }
 
@@ -499,17 +498,19 @@ export const createInventarioMovimientoSchema = (
         TipoMovimientoInvEnum.AjusteNegativo,
       ];
 
+      // FIX: Validar el stock usando ubicacion_id en lugar de ubicacion (string)
       if (
         stockData &&
         salidasParaStock.includes(data.tipo_movimiento) &&
-        data.ubicacion_origen
+        data.ubicacion_origen_id
       ) {
         const stockActual = stockData.find(
           (s) =>
             s.tipo_item_id === data.tipo_item_id &&
-            s.ubicacion === data.ubicacion_origen &&
+            s.ubicacion_id === data.ubicacion_origen_id && // Comparación por ID UUID
             s.lote === (data.lote_origen || "N/A"),
         );
+
         const disponible = stockActual ? stockActual.cantidad_actual : 0;
         if (data.cantidad > disponible) {
           ctx.addIssue({
@@ -786,7 +787,15 @@ export const movimientoEquipoSchema = z
     }
   });
 
-export const autorizarMovimientoSchema = z
+export const accionMovimientoSchema = z.object({
+  observaciones: z.string()
+    .min(5, { error: "Debe proveer una observación (mín. 5 caracteres)." })
+    .optional()
+    .nullable()
+});
+
+// Modal específico de Aprobar/Rechazar
+export const modalAutorizacionSchema = z
   .object({
     accion: z.enum(["Aprobar", "Rechazar"], {
       error: "Debe tomar una decisión.",
@@ -794,6 +803,7 @@ export const autorizarMovimientoSchema = z
     observaciones: z.string().optional(),
   })
   .superRefine((data, ctx) => {
+    // Si rechaza, la observación es OBLIGATORIA
     if (
       data.accion === "Rechazar" &&
       (!data.observaciones || data.observaciones.length < 5)
@@ -847,6 +857,13 @@ export const resetPasswordConfirmSchema = z
     error: "Las contraseñas no coinciden.",
     path: ["confirm_password"],
   });
+
+// ─── UBICACIONES ──────────────────────────────────────────────────────────
+export const ubicacionSchema = z.object({
+  nombre: requiredString("Nombre de ubicación requerido.").min(2).max(255),
+  edificio: z.string().optional().nullable(),
+  departamento: z.string().optional().nullable(),
+});
 
 // ─── OTROS ────────────────────────────────────────────────
 

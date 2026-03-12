@@ -3,7 +3,7 @@
 import { useForm } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { autorizarMovimientoSchema } from "@/lib/zod";
+import { modalAutorizacionSchema } from "@/lib/zod";
 import { movimientosService } from "@/app/services/movimientosService";
 import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import { Movimiento } from "@/types/api";
@@ -35,14 +35,14 @@ interface AutorizarMovimientoModalProps {
    onClose: () => void;
 }
 
-type AutorizarFormValues = z.infer<typeof autorizarMovimientoSchema>;
+type AutorizarFormValues = z.infer<typeof modalAutorizacionSchema>;
 
 export function AutorizarMovimientoModal({ movimiento, isOpen, onClose }: AutorizarMovimientoModalProps) {
    const { toast } = useToast();
    const queryClient = useQueryClient();
 
    const form = useForm<AutorizarFormValues>({
-      resolver: standardSchemaResolver(autorizarMovimientoSchema),
+      resolver: standardSchemaResolver(modalAutorizacionSchema),
       defaultValues: {
          accion: undefined as any,
          observaciones: "",
@@ -50,20 +50,22 @@ export function AutorizarMovimientoModal({ movimiento, isOpen, onClose }: Autori
    });
 
    const mutation = useMutation({
-      mutationFn: (data: AutorizarFormValues) => {
-         // NOTA ARQUITECTÓNICA: El OpenAPI actual no permite cambiar el 'estado' 
-         // directamente en un PUT ni expone un endpoint de Autorizar.
-         // Como solución estrictamente apegada al contrato, guardamos la decisión
-         // en las 'observaciones' que es el único campo de texto libre que el DTO acepta.
-         const accionPrefix = data.accion === "Aprobar" ? "[AUTORIZADO]" : "[RECHAZADO]";
-         const observacionesModificadas = `${accionPrefix} ${data.observaciones || ""}`.trim();
+      mutationFn: async (data: AutorizarFormValues) => {
+         if (!movimiento) throw new Error("No hay movimiento seleccionado");
 
-         return movimientosService.update(movimiento!.id, {
-            observaciones: observacionesModificadas,
-         });
+         const payload = { observaciones: data.observaciones };
+
+         if (data.accion === "Aprobar") {
+            return movimientosService.aprobar(movimiento.id, payload);
+         } else {
+            return movimientosService.rechazar(movimiento.id, payload);
+         }
       },
-      onSuccess: () => {
-         toast({ title: "Procesado", description: "La acción ha sido registrada en las observaciones." });
+      onSuccess: (data) => {
+         toast({
+            title: "Procesado",
+            description: `El movimiento ha sido ${data.estado.toLowerCase()} exitosamente.`
+         });
          queryClient.invalidateQueries({ queryKey: ["movimientos"] });
          onClose();
          form.reset();

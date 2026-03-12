@@ -40,12 +40,12 @@ export function ItemsBajoStockList({ items }: ItemsBajoStockListProps) {
                         <span className="font-bold text-red-600">
                            {item.cantidad_actual}
                         </span>{" "}
-                        {item.tipo_item.unidad_medida}
+                        <span className="lowercase">{item.tipo_item.unidad_medida}</span>
                      </p>
                   </div>
                </div>
                <Button variant="ghost" size="icon" asChild className="shrink-0 text-red-600 hover:text-red-700 hover:bg-red-500/10">
-                  <Link href={`/inventario/nuevo?tipo_item_id=${item.tipo_item_id}`}>
+                  <Link href={`/inventario`}>
                      <ArrowRight className="h-4 w-4" />
                   </Link>
                </Button>

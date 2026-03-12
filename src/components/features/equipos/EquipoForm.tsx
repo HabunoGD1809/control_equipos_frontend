@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { useRouter } from "next/navigation";
@@ -19,8 +19,9 @@ import { useToast } from "@/components/ui/use-toast";
 
 import { equipoSchema } from "@/lib/zod";
 import { equiposService } from "@/app/services/equiposService";
+import { ubicacionesService } from "@/app/services/ubicacionesService";
 import { getFriendlyErrorMessage } from "@/lib/error-handling";
-import type { EquipoCreate, EquipoRead, EstadoEquipo, ProveedorSimple } from "@/types/api";
+import type { EquipoCreate, EquipoRead, EstadoEquipo, ProveedorSimple, Ubicacion } from "@/types/api";
 
 interface EquipoFormProps {
    estados: EstadoEquipo[];
@@ -41,6 +42,15 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
    const { toast } = useToast();
    const [isLoading, setIsLoading] = useState(false);
 
+   // Estado para el catálogo de ubicaciones
+   const [ubicaciones, setUbicaciones] = useState<Ubicacion[]>([]);
+
+   useEffect(() => {
+      ubicacionesService.getAll({ limit: 200, include_inactive: false })
+         .then((data) => setUbicaciones(data))
+         .catch((err) => console.error("Error cargando catálogo de ubicaciones:", err));
+   }, []);
+
    const form = useForm<EquipoFormValues>({
       resolver: standardSchemaResolver(equipoSchema),
       defaultValues: {
@@ -49,7 +59,7 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
          codigo_interno: initialData?.codigo_interno ?? "",
          estado_id: initialData?.estado_id ?? "",
          proveedor_id: initialData?.proveedor_id ?? null,
-         ubicacion_actual: initialData?.ubicacion_actual ?? "",
+         ubicacion_id: initialData?.ubicacion_id ?? null,
          marca: initialData?.marca ?? "",
          modelo: initialData?.modelo ?? "",
          fecha_adquisicion: initialData?.fecha_adquisicion ? new Date(initialData.fecha_adquisicion) : null,
@@ -77,7 +87,7 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
             codigo_interno: cleanString(data.codigo_interno),
             marca: cleanString(data.marca),
             modelo: cleanString(data.modelo),
-            ubicacion_actual: cleanString(data.ubicacion_actual),
+            ubicacion_id: data.ubicacion_id || null,
             centro_costo: cleanString(data.centro_costo),
             notas: cleanString(data.notas),
             proveedor_id: data.proveedor_id || null,
@@ -101,10 +111,8 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
          const { message, field } = getFriendlyErrorMessage(error);
 
          if (field) {
-            // Si el error corresponde a un campo específico (ej. numero_serie), se lo asignamos al form de Zod
             form.setError(field as keyof EquipoFormValues, { type: "manual", message });
          } else {
-            // Si es un error general, usamos el Toast
             toast({ variant: "destructive", title: "Error al guardar", description: message });
          }
       } finally {
@@ -167,13 +175,31 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
                         <FormMessage />
                      </FormItem>
                   )} />
-                  <FormField control={form.control} name="ubicacion_actual" render={({ field }) => (
+
+                  {/* --- CAMPO DE UBICACIONES CON UUID --- */}
+                  <FormField control={form.control} name="ubicacion_id" render={({ field }) => (
                      <FormItem className="md:col-span-2 lg:col-span-3">
-                        <FormLabel>Ubicación Actual <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
-                        <FormControl><Input placeholder="Ej: Almacén Principal, Oficina 102..." {...field} value={field.value ?? ""} /></FormControl>
+                        <FormLabel>Ubicación Física Asignada <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
+                        <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
+                           <FormControl>
+                              <SelectTrigger>
+                                 <SelectValue placeholder="Seleccione la ubicación en el catálogo..." />
+                              </SelectTrigger>
+                           </FormControl>
+                           <SelectContent>
+                              <SelectItem value="none">-- Sin ubicación asignada / En tránsito --</SelectItem>
+                              {/* AHORA USAMOS el ID (UUID) COMO VALUE */}
+                              {ubicaciones.map((u) => (
+                                 <SelectItem key={u.id} value={u.id}>
+                                    {u.nombre} {u.edificio ? `(${u.edificio})` : ''}
+                                 </SelectItem>
+                              ))}
+                           </SelectContent>
+                        </Select>
                         <FormMessage />
                      </FormItem>
                   )} />
+
                </div>
             </div>
 

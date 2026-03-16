@@ -19,6 +19,7 @@ import {
   TipoMovimientoEquipo,
   EquipoRead,
   UsuarioSimple,
+  Ubicacion,
 } from "@/types/api";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
@@ -45,11 +46,12 @@ interface MovimientoFormProps {
   equipo?: EquipoRead;
   equipos?: EquipoRead[];
   usuarios: UsuarioSimple[];
+  ubicaciones: Ubicacion[];
   onSuccess?: () => void;
   onCancel: () => void;
 }
 
-export function MovimientoForm({ equipo, equipos, usuarios, onSuccess, onCancel }: MovimientoFormProps) {
+export function MovimientoForm({ equipo, equipos, usuarios, ubicaciones, onSuccess, onCancel }: MovimientoFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -58,8 +60,8 @@ export function MovimientoForm({ equipo, equipos, usuarios, onSuccess, onCancel 
     defaultValues: {
       equipo_id: equipo?.id ?? "",
       tipo_movimiento: undefined as unknown as TipoMovimientoEquipo,
-      origen: equipo?.ubicacion_actual ?? "",
-      destino: "",
+      ubicacion_origen_id: equipo?.ubicacion_id ?? null,
+      ubicacion_destino_id: null,
       proposito: "",
       observaciones: "",
       fecha_prevista_retorno: null,
@@ -72,39 +74,45 @@ export function MovimientoForm({ equipo, equipos, usuarios, onSuccess, onCancel 
 
   const isEntrada = tipoSeleccionado === TipoMovimientoEquipoEnum.Entrada;
 
+  // Lógica de auto-completar el origen basado en el equipo seleccionado
   useEffect(() => {
     if (equipo) return;
     if (!equipoIdSeleccionado) {
-      form.setValue("origen", "");
+      form.setValue("ubicacion_origen_id", null);
       return;
     }
 
     if (!isEntrada) {
       const foundInProps = equipos?.find((e) => e.id === equipoIdSeleccionado);
-      if (foundInProps) {
-        form.setValue("origen", foundInProps.ubicacion_actual ?? "Almacén Principal");
+      if (foundInProps && foundInProps.ubicacion_id) {
+        form.setValue("ubicacion_origen_id", foundInProps.ubicacion_id);
       } else {
         equiposService.getById(equipoIdSeleccionado).then((eq) => {
-          form.setValue("origen", eq.ubicacion_actual ?? "Almacén Principal");
+          if (eq.ubicacion_id) {
+            form.setValue("ubicacion_origen_id", eq.ubicacion_id);
+          }
         }).catch(() => {
-          form.setValue("origen", "Almacén Principal");
+          // Fallback silently
         });
       }
     }
   }, [equipoIdSeleccionado, equipos, equipo, form, isEntrada]);
 
+  // Limpieza de campos al cambiar el tipo de movimiento
   useEffect(() => {
     if (!tipoSeleccionado) return;
 
     if (tipoSeleccionado === TipoMovimientoEquipoEnum.Entrada) {
-      form.setValue("origen", "");
-      form.setValue("destino", "Almacén Principal");
+      form.setValue("ubicacion_origen_id", null);
+      // Intentar auto-seleccionar "Almacén Principal" si existe en las ubicaciones
+      const almacenPrincipal = ubicaciones.find(u => u.nombre.toLowerCase().includes("almacén"));
+      form.setValue("ubicacion_destino_id", almacenPrincipal ? almacenPrincipal.id : null);
       form.setValue("recibido_por", null);
       form.setValue("fecha_prevista_retorno", null);
     } else if (tipoSeleccionado === TipoMovimientoEquipoEnum.AsignacionInterna) {
-      form.setValue("destino", "");
+      form.setValue("ubicacion_destino_id", null);
     }
-  }, [tipoSeleccionado, form]);
+  }, [tipoSeleccionado, form, ubicaciones]);
 
   const mutation = useMutation({
     mutationFn: movimientosService.create,
@@ -128,8 +136,8 @@ export function MovimientoForm({ equipo, equipos, usuarios, onSuccess, onCancel 
     const payload: MovimientoCreate = {
       equipo_id: data.equipo_id,
       tipo_movimiento: data.tipo_movimiento,
-      origen: data.origen || null,
-      destino: data.destino || null,
+      ubicacion_origen_id: data.ubicacion_origen_id || null,
+      ubicacion_destino_id: data.ubicacion_destino_id || null,
       proposito: data.proposito || null,
       observaciones: data.observaciones || null,
       recibido_por: data.recibido_por || null,
@@ -144,8 +152,8 @@ export function MovimientoForm({ equipo, equipos, usuarios, onSuccess, onCancel 
     form.reset({
       equipo_id: equipo?.id ?? "",
       tipo_movimiento: undefined as unknown as TipoMovimientoEquipo,
-      origen: equipo?.ubicacion_actual ?? "",
-      destino: "",
+      ubicacion_origen_id: equipo?.ubicacion_id ?? null,
+      ubicacion_destino_id: null,
       proposito: "",
       observaciones: "",
       fecha_prevista_retorno: null,
@@ -202,22 +210,45 @@ export function MovimientoForm({ equipo, equipos, usuarios, onSuccess, onCancel 
 
         {tipoSeleccionado && (
           <div className="grid grid-cols-1 gap-5 border-l-2 border-primary/20 pl-4 bg-muted/20 p-4 rounded-r-lg animate-in slide-in-from-left-2 duration-300">
-            <FormField control={form.control} name="origen" render={({ field }) => (
+
+            {/* --- SELECT ORIGEN --- */}
+            <FormField control={form.control} name="ubicacion_origen_id" render={({ field }) => (
               <FormItem>
-                <FormLabel>Ubicación origen {isEntrada && <span className="text-destructive">*</span>}</FormLabel>
-                <FormControl>
-                  <Input {...field} value={field.value ?? ""} readOnly={!isEntrada} className={!isEntrada ? "bg-muted text-muted-foreground cursor-not-allowed" : "bg-card"} tabIndex={!isEntrada ? -1 : undefined} placeholder={isEntrada ? "Ej: Proveedor, Donación, Sede Central..." : ""} />
-                </FormControl>
+                <FormLabel>Ubicación Origen {isEntrada && <span className="text-destructive">*</span>}</FormLabel>
+                <Select value={field.value ?? ""} onValueChange={field.onChange} disabled={!isEntrada}>
+                  <FormControl>
+                    <SelectTrigger className={!isEntrada ? "bg-muted text-muted-foreground cursor-not-allowed" : "bg-card"}>
+                      <SelectValue placeholder={isEntrada ? "Seleccione origen (ej. Proveedor)" : "Origen automático..."} />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {ubicaciones.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>{u.nombre}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 {isEntrada && <FormDescription>Especifique de dónde ingresa el equipo al almacén.</FormDescription>}
                 <FormMessage />
               </FormItem>
             )} />
 
+            {/* --- SELECT DESTINO --- */}
             {mostrarDestino && (
-              <FormField control={form.control} name="destino" render={({ field }) => (
+              <FormField control={form.control} name="ubicacion_destino_id" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Ubicación destino <span className="text-destructive">*</span></FormLabel>
-                  <FormControl><Input placeholder="Ej: Oficina Cliente, Departamento de Finanzas..." className="bg-card" {...field} value={field.value ?? ""} /></FormControl>
+                  <FormLabel>Ubicación Destino <span className="text-destructive">*</span></FormLabel>
+                  <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger className="bg-card">
+                        <SelectValue placeholder="Seleccione el destino físico..." />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {ubicaciones.map((u) => (
+                        <SelectItem key={u.id} value={u.id}>{u.nombre}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormDescription>El lugar físico donde quedará el equipo.</FormDescription>
                   <FormMessage />
                 </FormItem>

@@ -16,7 +16,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
 import { PageHeader } from "@/components/layout/PageHeader";
 
-import type { Mantenimiento, EquipoSimple, TipoMantenimiento, Proveedor } from "@/types/api";
+import type { Mantenimiento, EquipoSimple, TipoMantenimiento, Tecnico } from "@/types/api";
 import { EstadoMantenimientoEnum } from "@/types/api";
 import { useHasPermission } from "@/hooks/useHasPermission";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
@@ -30,7 +30,7 @@ interface MantenimientosClientProps {
    initialData: Mantenimiento[];
    equipos: EquipoSimple[];
    tiposMantenimiento: TipoMantenimiento[];
-   proveedores: Proveedor[];
+   tecnicos: Tecnico[];
 }
 
 function getErrorMessage(err: unknown, fallback: string): string {
@@ -44,7 +44,7 @@ function getErrorMessage(err: unknown, fallback: string): string {
    return fallback;
 }
 
-export function MantenimientosClient({ initialData, equipos, tiposMantenimiento, proveedores }: MantenimientosClientProps) {
+export function MantenimientosClient({ initialData, equipos, tiposMantenimiento, tecnicos }: MantenimientosClientProps) {
    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
    const [selectedMantenimiento, setSelectedMantenimiento] = useState<Mantenimiento | null>(null);
@@ -126,7 +126,8 @@ export function MantenimientosClient({ initialData, equipos, tiposMantenimiento,
          },
       },
       {
-         accessorKey: "tecnico_responsable",
+         accessorFn: (row) => row.tecnico?.nombre_completo || row.tecnico_id,
+         id: "tecnico_responsable",
          header: "Técnico Asignado",
          cell: ({ row }) => <span className="capitalize">{row.getValue("tecnico_responsable") || "--"}</span>
       },
@@ -192,7 +193,7 @@ export function MantenimientosClient({ initialData, equipos, tiposMantenimiento,
                <MantenimientoForm
                   equipos={equipos}
                   tiposMantenimiento={tiposMantenimiento}
-                  proveedores={proveedores}
+                  tecnicos={tecnicos}
                   onSuccess={() => {
                      setIsCreateModalOpen(false);
                      router.refresh();
@@ -213,7 +214,7 @@ export function MantenimientosClient({ initialData, equipos, tiposMantenimiento,
 
                   <EditarMantenimientoForm
                      mantenimiento={selectedMantenimiento}
-                     proveedores={proveedores}
+                     tecnicos={tecnicos}
                      tieneDocumentosAdjuntos={hasDocs}
                      onSuccess={() => {
                         setIsEditModalOpen(false);

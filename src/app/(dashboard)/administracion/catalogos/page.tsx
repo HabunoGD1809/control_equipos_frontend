@@ -1,6 +1,13 @@
 import { cookies } from 'next/headers';
 import { CatalogosClient } from "./components/CatalogosClient";
-import { EstadoEquipo, TipoDocumento, TipoMantenimiento, Proveedor, Ubicacion } from "@/types/api";
+import {
+   EstadoEquipo,
+   TipoDocumento,
+   TipoMantenimiento,
+   Proveedor,
+   Ubicacion,
+   Tecnico
+} from "@/types/api";
 
 async function getCatalogosData() {
    const accessToken = (await cookies()).get('access_token')?.value;
@@ -10,12 +17,13 @@ async function getCatalogosData() {
    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
    try {
-      const [estadosRes, tiposDocRes, tiposMantRes, proveedoresRes, ubicacionesRes] = await Promise.all([
+      const [estadosRes, tiposDocRes, tiposMantRes, proveedoresRes, ubicacionesRes, tecnicosRes] = await Promise.all([
          fetch(`${baseUrl}/catalogos/estados-equipo/`, { headers, cache: 'no-store' }),
          fetch(`${baseUrl}/catalogos/tipos-documento/`, { headers, cache: 'no-store' }),
          fetch(`${baseUrl}/catalogos/tipos-mantenimiento/`, { headers, cache: 'no-store' }),
          fetch(`${baseUrl}/proveedores/`, { headers, cache: 'no-store' }),
          fetch(`${baseUrl}/ubicaciones/`, { headers, cache: 'no-store' }),
+         fetch(`${baseUrl}/tecnicos/`, { headers, cache: 'no-store' }),
       ]);
 
       return {
@@ -24,6 +32,7 @@ async function getCatalogosData() {
          tiposMantenimiento: tiposMantRes.ok ? await tiposMantRes.json() as TipoMantenimiento[] : [],
          proveedores: proveedoresRes.ok ? await proveedoresRes.json() as Proveedor[] : [],
          ubicaciones: ubicacionesRes.ok ? await ubicacionesRes.json() as Ubicacion[] : [],
+         tecnicos: tecnicosRes.ok ? await tecnicosRes.json() as Tecnico[] : [],
       };
    } catch (error) {
       console.error("[GET_CATALOGOS_DATA_ERROR]", error);
@@ -52,6 +61,7 @@ export default async function CatalogosPage() {
             initialTiposMantenimiento={data.tiposMantenimiento}
             initialProveedores={data.proveedores}
             initialUbicaciones={data.ubicaciones}
+            initialTecnicos={data.tecnicos}
          />
       </div>
    );

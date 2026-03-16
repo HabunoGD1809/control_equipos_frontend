@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/Badge";
 import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
 import { useToast } from "@/components/ui/use-toast";
 
-import { Mantenimiento, Proveedor, TipoMantenimiento } from "@/types/api";
+import { Mantenimiento, Tecnico, TipoMantenimiento } from "@/types/api";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { useHasPermission } from "@/hooks/useHasPermission";
 
@@ -28,10 +28,10 @@ interface EquipoMantenimientoTabProps {
    equipoId: string;
    mantenimientos: Mantenimiento[];
    tiposMantenimiento: TipoMantenimiento[];
-   proveedores: Proveedor[];
+   tecnicos: Tecnico[];
 }
 
-export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenimiento, proveedores }: EquipoMantenimientoTabProps) {
+export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenimiento, tecnicos }: EquipoMantenimientoTabProps) {
    const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
    const [selectedMantenimiento, setSelectedMantenimiento] = useState<Mantenimiento | null>(null);
@@ -88,7 +88,11 @@ export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenim
          cell: ({ row }) => row.original.fecha_finalizacion ? format(new Date(row.original.fecha_finalizacion), "PPP", { locale: es }) : 'N/A'
       },
       { accessorKey: "estado", header: "Estado", cell: ({ row }) => <Badge variant="outline">{row.getValue("estado")}</Badge> },
-      { accessorKey: "tecnico_responsable", header: "Técnico" },
+      {
+         accessorFn: row => row.tecnico?.nombre_completo || row.tecnico_id,
+         id: "tecnico_responsable",
+         header: "Técnico"
+      },
       {
          id: "actions",
          cell: ({ row }) => (
@@ -142,7 +146,7 @@ export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenim
                   </DialogHeader>
                   <EditarMantenimientoForm
                      mantenimiento={selectedMantenimiento}
-                     proveedores={proveedores}
+                     tecnicos={tecnicos}
                      tieneDocumentosAdjuntos={hasDocs}
                      onSuccess={() => {
                         setIsEditModalOpen(false);
@@ -169,7 +173,7 @@ export function EquipoMantenimientoTab({ equipoId, mantenimientos, tiposMantenim
                   <ScheduleMantenimientoForm
                      equipoId={equipoId}
                      tiposMantenimiento={tiposMantenimiento}
-                     proveedores={proveedores}
+                     tecnicos={tecnicos}
                      onSuccess={() => {
                         setIsScheduleModalOpen(false);
                         router.refresh();

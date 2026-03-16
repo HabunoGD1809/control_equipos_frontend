@@ -55,14 +55,13 @@ export function DocumentacionTable({
    const [selectedDocumento, setSelectedDocumento] = useState<Documentacion | null>(null);
 
    const router = useRouter();
-   const queryClient = useQueryClient(); // Cliente de caché añadido
+   const queryClient = useQueryClient();
    const canVerify = useHasPermission(["verificar_documentacion"]);
    const canUpload = useHasPermission(["gestionar_documentacion"]);
 
    const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } = useDeleteConfirmation({
       onDelete: (id) => api.delete(`/documentacion/${id}`),
       onSuccess: () => {
-         // 🚀 CORRECCIÓN DE CACHÉ:
          queryClient.invalidateQueries({ queryKey: ["documentos"] });
          if (equipoId) queryClient.invalidateQueries({ queryKey: ["equipo", equipoId] });
          router.refresh();

@@ -22,7 +22,7 @@ import { mantenimientosService } from "@/app/services/mantenimientosService";
 import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import {
    Mantenimiento,
-   ProveedorSimple,
+   Tecnico,
    EstadoMantenimientoEnum,
    MantenimientoUpdate,
    EstadoMantenimiento
@@ -32,21 +32,21 @@ import { mantenimientoUpdateSchema } from "@/lib/zod";
 
 const formSchema = mantenimientoUpdateSchema.extend({
    estado: z.enum(Object.values(EstadoMantenimientoEnum) as [string, ...string[]]),
-   tecnico_responsable: z.string().min(3, "El técnico es requerido"),
+   tecnico_id: z.string().pipe(z.guid()),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
 interface EditarMantenimientoFormProps {
    mantenimiento: Mantenimiento;
-   proveedores: ProveedorSimple[];
+   tecnicos: Tecnico[];
    tieneDocumentosAdjuntos: boolean;
    onSuccess: () => void;
 }
 
 export function EditarMantenimientoForm({
    mantenimiento,
-   proveedores,
+   tecnicos,
    tieneDocumentosAdjuntos,
    onSuccess,
 }: EditarMantenimientoFormProps) {
@@ -57,8 +57,7 @@ export function EditarMantenimientoForm({
       resolver: standardSchemaResolver(formSchema),
       defaultValues: {
          estado: mantenimiento.estado,
-         tecnico_responsable: mantenimiento.tecnico_responsable ?? "",
-         proveedor_servicio_id: mantenimiento.proveedor_servicio_id || null,
+         tecnico_id: mantenimiento.tecnico_id,
          costo_estimado: mantenimiento.costo_estimado ? String(mantenimiento.costo_estimado) : undefined,
          costo_real: mantenimiento.costo_real ? String(mantenimiento.costo_real) : undefined,
          fecha_programada: mantenimiento.fecha_programada ? new Date(mantenimiento.fecha_programada) : undefined,
@@ -71,15 +70,13 @@ export function EditarMantenimientoForm({
 
    const watchEstado = form.watch("estado");
    const reqDocs = mantenimiento.tipo_mantenimiento.requiere_documentacion;
-
    const isCierreBloqueado = watchEstado === EstadoMantenimientoEnum.Completado && reqDocs && !tieneDocumentosAdjuntos;
 
    const mutation = useMutation({
       mutationFn: async (data: FormValues) => {
          const payload: MantenimientoUpdate = {
             estado: data.estado as EstadoMantenimiento,
-            tecnico_responsable: data.tecnico_responsable,
-            proveedor_servicio_id: data.proveedor_servicio_id || null,
+            tecnico_id: data.tecnico_id,
             costo_estimado: data.costo_estimado ?? null,
             costo_real: data.costo_real ?? null,
             fecha_programada: data.fecha_programada ? format(data.fecha_programada, "yyyy-MM-dd'T'HH:mm:ssXXX") : undefined,
@@ -93,15 +90,11 @@ export function EditarMantenimientoForm({
       onSuccess: () => {
          toast({
             title: "Mantenimiento actualizado",
-            description: watchEstado === EstadoMantenimientoEnum.Completado
-               ? "La orden ha sido cerrada exitosamente."
-               : "Cambios guardados correctamente."
+            description: watchEstado === EstadoMantenimientoEnum.Completado ? "La orden ha sido cerrada exitosamente." : "Cambios guardados correctamente."
          });
-
          queryClient.invalidateQueries({ queryKey: ["mantenimientos"] });
          queryClient.invalidateQueries({ queryKey: ["equipos", mantenimiento.equipo_id] });
          queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-
          onSuccess();
       },
       onError: (err: any) => {
@@ -159,9 +152,7 @@ export function EditarMantenimientoForm({
                         <FormLabel>Estado Operativo</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                            <FormControl>
-                              <SelectTrigger>
-                                 <SelectValue placeholder="Seleccione estado" />
-                              </SelectTrigger>
+                              <SelectTrigger><SelectValue placeholder="Seleccione estado" /></SelectTrigger>
                            </FormControl>
                            <SelectContent>
                               {Object.values(EstadoMantenimientoEnum).map((est) => (
@@ -176,13 +167,24 @@ export function EditarMantenimientoForm({
 
                <FormField
                   control={form.control}
-                  name="tecnico_responsable"
+                  name="tecnico_id"
                   render={({ field }) => (
                      <FormItem>
                         <FormLabel>Técnico Responsable</FormLabel>
-                        <FormControl>
-                           <Input placeholder="Nombre del técnico..." {...field} />
-                        </FormControl>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                           <FormControl>
+                              <SelectTrigger>
+                                 <SelectValue placeholder="Seleccione técnico..." />
+                              </SelectTrigger>
+                           </FormControl>
+                           <SelectContent>
+                              {tecnicos.map((tecnico) => (
+                                 <SelectItem key={tecnico.id} value={tecnico.id}>
+                                    {tecnico.nombre_completo}
+                                 </SelectItem>
+                              ))}
+                           </SelectContent>
+                        </Select>
                         <FormMessage />
                      </FormItem>
                   )}
@@ -197,16 +199,7 @@ export function EditarMantenimientoForm({
                         <FormControl>
                            <div className="relative">
                               <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
-                              <Input
-                                 type="number"
-                                 step="0.01"
-                                 className="pl-7"
-                                 value={field.value ?? ""}
-                                 onChange={(e) => {
-                                    const val = e.target.value;
-                                    field.onChange(val === "" ? null : val);
-                                 }}
-                              />
+                              <Input type="number" step="0.01" className="pl-7" value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : e.target.value)} />
                            </div>
                         </FormControl>
                         <FormMessage />
@@ -219,22 +212,11 @@ export function EditarMantenimientoForm({
                   name="costo_real"
                   render={({ field }) => (
                      <FormItem>
-                        <FormLabel>
-                           Costo Real (Final) {watchEstado === EstadoMantenimientoEnum.Completado && <span className="text-destructive">*</span>}
-                        </FormLabel>
+                        <FormLabel>Costo Real (Final) {watchEstado === EstadoMantenimientoEnum.Completado && <span className="text-destructive">*</span>}</FormLabel>
                         <FormControl>
                            <div className="relative">
                               <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
-                              <Input
-                                 type="number"
-                                 step="0.01"
-                                 className="pl-7"
-                                 value={field.value ?? ""}
-                                 onChange={(e) => {
-                                    const val = e.target.value;
-                                    field.onChange(val === "" ? null : val);
-                                 }}
-                              />
+                              <Input type="number" step="0.01" className="pl-7" value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : e.target.value)} />
                            </div>
                         </FormControl>
                         <FormDescription>Requerido para completar.</FormDescription>
@@ -286,30 +268,6 @@ export function EditarMantenimientoForm({
                               <Calendar mode="single" selected={field.value || undefined} onSelect={field.onChange} autoFocus />
                            </PopoverContent>
                         </Popover>
-                        <FormMessage />
-                     </FormItem>
-                  )}
-               />
-
-               <FormField
-                  control={form.control}
-                  name="proveedor_servicio_id"
-                  render={({ field }) => (
-                     <FormItem className="col-span-1 md:col-span-2">
-                        <FormLabel>Proveedor de Servicio Externo (Opcional)</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || "none"}>
-                           <FormControl>
-                              <SelectTrigger>
-                                 <SelectValue placeholder="Seleccione proveedor" />
-                              </SelectTrigger>
-                           </FormControl>
-                           <SelectContent>
-                              <SelectItem value="none" className="text-muted-foreground">-- Ninguno / Interno --</SelectItem>
-                              {proveedores.map((p) => (
-                                 <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
-                              ))}
-                           </SelectContent>
-                        </Select>
                         <FormMessage />
                      </FormItem>
                   )}

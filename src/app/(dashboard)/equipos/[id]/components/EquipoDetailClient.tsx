@@ -15,7 +15,8 @@ import {
    EquipoSimple,
    TipoMantenimiento,
    TipoDocumento,
-   ProveedorSimple, // ← cambiado: ya no se importa Proveedor
+   ProveedorSimple,
+   Tecnico,
    EstadoEquipo
 } from "@/types/api";
 
@@ -36,6 +37,7 @@ import { documentosService } from "@/app/services/documentosService";
 import { mantenimientosService } from "@/app/services/mantenimientosService";
 import { catalogosService } from "@/app/services/catalogosService";
 import { proveedoresService } from "@/app/services/proveedoresService";
+import { tecnicosService } from "@/app/services/tecnicosService";
 
 import { EquipoDetailTab } from "@/components/features/equipos/EquipoDetailTab";
 import { EquipoComponentesTab } from "@/components/features/equipos/EquipoComponentesTab";
@@ -81,7 +83,8 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
    const [equiposDisponibles, setEquiposDisponibles] = useState<EquipoSimple[]>([]);
    const [tiposMantenimiento, setTiposMantenimiento] = useState<TipoMantenimiento[]>([]);
    const [tiposDocumento, setTiposDocumento] = useState<TipoDocumento[]>([]);
-   const [proveedores, setProveedores] = useState<ProveedorSimple[]>([]); // ← CORRECCIÓN
+   const [proveedores, setProveedores] = useState<ProveedorSimple[]>([]);
+   const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
 
    // Estados para Modal de Edición
    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -109,7 +112,7 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
       try {
          const [estadosData, provData] = await Promise.all([
             catalogosService.getEstadosEquipo(),
-            proveedoresService.getOptions() // ← devuelve ProveedorSimple[], ahora compatible
+            proveedoresService.getOptions()
          ]);
          setEstadosEquipo(estadosData);
          setProveedores(provData);
@@ -121,7 +124,6 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
       }
    };
 
-   // Construcción de la URL completa para el Código QR
    const equipoUrl = typeof window !== 'undefined' ? `${window.location.origin}/equipos/${equipo.id}` : '';
 
    useEffect(() => {
@@ -131,14 +133,14 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
          setIsLoadingTab(true);
          try {
             if (activeTab === "mantenimiento") {
-               const [mtoRes, tiposMtoRes, provRes] = await Promise.all([
+               const [mtoRes, tiposMtoRes, tecnicosRes] = await Promise.all([
                   mantenimientosService.getAll({ equipo_id: equipo.id }),
                   catalogosService.getTiposMantenimiento(),
-                  proveedoresService.getOptions(), // ← consistente con ProveedorSimple[]
+                  tecnicosService.getAll({ limit: 500 }),
                ]);
                setMantenimientos(unwrapClient(mtoRes));
                setTiposMantenimiento(unwrapClient(tiposMtoRes));
-               setProveedores(unwrapClient(provRes));
+               setTecnicos(unwrapClient(tecnicosRes));
             }
             else if (activeTab === "documentacion") {
                const [docsRes, tiposDocRes] = await Promise.all([
@@ -170,7 +172,6 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
 
    return (
       <div className="space-y-6 animate-in fade-in duration-300">
-         {/* Header */}
          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="flex items-center gap-2">
                <Button variant="ghost" size="icon" onClick={() => router.back()}>
@@ -267,7 +268,7 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
                      equipoId={equipo.id}
                      mantenimientos={mantenimientos}
                      tiposMantenimiento={tiposMantenimiento}
-                     proveedores={proveedores}
+                     tecnicos={tecnicos}
                   />
                </TabsContent>
 
@@ -339,7 +340,7 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
                </DialogHeader>
                <EquipoForm
                   estados={estadosEquipo}
-                  proveedores={proveedores}
+                  proveedores={proveedores} // Esto sí es proveedores porque el equipo se lo compramos a un proveedor
                   initialData={equipo}
                   isEditing={true}
                   onSuccess={() => {

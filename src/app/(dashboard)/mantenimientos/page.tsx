@@ -1,8 +1,7 @@
 import { cookies } from 'next/headers';
-import { Mantenimiento, EquipoSimple, TipoMantenimiento, Proveedor } from "@/types/api";
+import { Mantenimiento, EquipoSimple, TipoMantenimiento, Tecnico } from "@/types/api";
 import { MantenimientosClient } from "./components/MantenimientosClient";
 
-// Helper genérico para obtener datos en el servidor
 async function fetchData(endpoint: string) {
    const accessToken = (await cookies()).get('access_token')?.value;
    if (!accessToken) return [];
@@ -24,11 +23,11 @@ async function fetchData(endpoint: string) {
 }
 
 export default async function MantenimientosPage() {
-   const [mantenimientos, equipos, tiposMantenimiento, proveedores] = await Promise.all([
+   const [mantenimientos, equipos, tiposMantenimiento, tecnicos] = await Promise.all([
       fetchData('/mantenimientos/?limit=200') as Promise<Mantenimiento[]>,
       fetchData('/equipos/?limit=500') as Promise<EquipoSimple[]>,
       fetchData('/catalogos/tipos-mantenimiento/') as Promise<TipoMantenimiento[]>,
-      fetchData('/proveedores/?limit=500') as Promise<Proveedor[]>,
+      fetchData('/tecnicos/?limit=500') as Promise<Tecnico[]>,
    ]);
 
    return (
@@ -37,7 +36,7 @@ export default async function MantenimientosPage() {
             initialData={mantenimientos}
             equipos={equipos}
             tiposMantenimiento={tiposMantenimiento}
-            proveedores={proveedores}
+            tecnicos={tecnicos}
          />
       </div>
    );

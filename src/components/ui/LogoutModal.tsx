@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react";
-import { useAuthStore } from "@/store/authStore";
 import { useQueryClient } from "@tanstack/react-query";
 import { logoutAction } from "@/actions/auth-actions";
 import {
@@ -21,22 +20,16 @@ interface LogoutModalProps {
 }
 
 export function LogoutModal({ isOpen, onOpenChange }: LogoutModalProps) {
-   const logoutZustand = useAuthStore(state => state.logout);
    const queryClient = useQueryClient();
    const [isLoading, setIsLoading] = useState(false);
 
    const handleLogout = async () => {
       try {
          setIsLoading(true);
-         // 1. Limpiamos estados del cliente
-         logoutZustand();
          queryClient.clear();
-
-         // 2. Ejecutamos el Server Action
-         await logoutAction();
+         await logoutAction(); // revoca token + borra cookies + redirige
       } catch (error) {
          console.error("Error al cerrar sesión:", error);
-      } finally {
          setIsLoading(false);
          onOpenChange(false);
       }
@@ -48,7 +41,8 @@ export function LogoutModal({ isOpen, onOpenChange }: LogoutModalProps) {
             <AlertDialogHeader>
                <AlertDialogTitle>¿Cerrar sesión?</AlertDialogTitle>
                <AlertDialogDescription>
-                  Estás a punto de salir de tu cuenta. Tendrás que volver a ingresar tus credenciales para acceder al sistema. ¿Deseas continuar?
+                  Estás a punto de salir de tu cuenta. Tendrás que volver a ingresar
+                  tus credenciales para acceder al sistema. ¿Deseas continuar?
                </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

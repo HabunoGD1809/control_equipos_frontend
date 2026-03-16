@@ -9,22 +9,13 @@ import { Loader2, Shield, CheckSquare } from "lucide-react";
 
 import { rolSchema } from "@/lib/zod";
 import { rolesService } from "@/app/services/rolesService";
-import { useAuthStore } from "@/store/authStore";
 import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import type { Rol, Permiso } from "@/types/api";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/Button";
-import {
-   Form,
-   FormControl,
-   FormDescription,
-   FormField,
-   FormItem,
-   FormLabel,
-   FormMessage,
-} from "@/components/ui/Form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { Checkbox } from "@/components/ui/Checkbox";
@@ -42,8 +33,6 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
    const router = useRouter();
    const { toast } = useToast();
 
-   const { isInitialized, isAuthenticated } = useAuthStore();
-
    const [isLoading, setIsLoading] = useState(false);
    const [permisosDisponibles, setPermisosDisponibles] = useState<Permiso[]>([]);
    const [loadingPermisos, setLoadingPermisos] = useState(true);
@@ -59,14 +48,9 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
       },
    });
 
-   const selectedPermisos = useWatch({
-      control: form.control,
-      name: "permiso_ids",
-   });
+   const selectedPermisos = useWatch({ control: form.control, name: "permiso_ids" });
 
    useEffect(() => {
-      if (!isInitialized || !isAuthenticated) return;
-
       rolesService
          .getAllPermisos()
          .then(setPermisosDisponibles)
@@ -74,12 +58,11 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
             toast({
                variant: "destructive",
                title: "Error de carga",
-               description:
-                  "No se pudieron cargar los permisos. Verifique conexión.",
-            }),
+               description: "No se pudieron cargar los permisos. Verifique conexión.",
+            })
          )
          .finally(() => setLoadingPermisos(false));
-   }, [isInitialized, isAuthenticated, toast]);
+   }, [toast]);
 
    const onSubmit = async (data: RoleFormValues) => {
       setIsLoading(true);
@@ -108,16 +91,9 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
          const { message, field } = getFriendlyErrorMessage(error);
 
          if (field === "nombre" || message.includes("uq_roles_nombre") || message.includes("ya existe")) {
-            form.setError("nombre", {
-               type: "manual",
-               message: "Este nombre de rol ya existe.",
-            });
+            form.setError("nombre", { type: "manual", message: "Este nombre de rol ya existe." });
          } else {
-            toast({
-               variant: "destructive",
-               title: "Error al guardar",
-               description: message,
-            });
+            toast({ variant: "destructive", title: "Error al guardar", description: message });
          }
       } finally {
          setIsLoading(false);
@@ -130,9 +106,7 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
       return permisosDisponibles.reduce<Record<string, Permiso[]>>((acc, p) => {
          const parts = p.nombre.split("_");
          let key = parts.length > 1 ? parts[1] : "general";
-
          if (key === "software") key = "licencias";
-
          (acc[key] ??= []).push(p);
          return acc;
       }, {});
@@ -140,28 +114,11 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
 
    const handleToggleGroup = (groupPerms: Permiso[], selectAll: boolean) => {
       const currentSet = new Set(form.getValues("permiso_ids") || []);
-
       groupPerms.forEach((p) => {
-         if (selectAll) {
-            currentSet.add(p.id);
-         } else {
-            currentSet.delete(p.id);
-         }
+         if (selectAll) { currentSet.add(p.id); } else { currentSet.delete(p.id); }
       });
-
-      form.setValue("permiso_ids", Array.from(currentSet), {
-         shouldValidate: true,
-         shouldDirty: true,
-      });
+      form.setValue("permiso_ids", Array.from(currentSet), { shouldValidate: true, shouldDirty: true });
    };
-
-   if (!isInitialized) {
-      return (
-         <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-         </div>
-      );
-   }
 
    return (
       <Form {...form}>
@@ -172,15 +129,9 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
                   name="nombre"
                   render={({ field }) => (
                      <FormItem>
-                        <FormLabel>
-                           Nombre del Rol <span className="text-destructive">*</span>
-                        </FormLabel>
+                        <FormLabel>Nombre del Rol <span className="text-destructive">*</span></FormLabel>
                         <FormControl>
-                           <Input
-                              placeholder="Ej: supervisor_almacen"
-                              {...field}
-                              disabled={isAdminRole || isLoading}
-                           />
+                           <Input placeholder="Ej: supervisor_almacen" {...field} disabled={isAdminRole || isLoading} />
                         </FormControl>
                         {isAdminRole && (
                            <FormDescription className="text-amber-600">
@@ -191,7 +142,6 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
                      </FormItem>
                   )}
                />
-
                <FormField
                   control={form.control}
                   name="descripcion"
@@ -279,9 +229,7 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
                                                          field.onChange(
                                                             checked
                                                                ? [...field.value, permiso.id]
-                                                               : field.value.filter(
-                                                                  (v) => v !== permiso.id,
-                                                               ),
+                                                               : field.value.filter((v) => v !== permiso.id)
                                                          )
                                                       }
                                                    />
@@ -294,9 +242,7 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
                                                       {permiso.nombre}
                                                    </FormLabel>
                                                    {permiso.descripcion && (
-                                                      <FormDescription className="text-xs">
-                                                         {permiso.descripcion}
-                                                      </FormDescription>
+                                                      <FormDescription className="text-xs">{permiso.descripcion}</FormDescription>
                                                    )}
                                                 </div>
                                              </FormItem>
@@ -309,6 +255,7 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
                         })}
                      </div>
                   )}
+
                   {form.formState.errors.permiso_ids?.message && (
                      <p className="text-sm font-medium text-destructive mt-4 text-center bg-destructive/10 py-2 rounded-md">
                         {form.formState.errors.permiso_ids.message}

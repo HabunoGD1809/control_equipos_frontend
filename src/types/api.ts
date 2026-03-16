@@ -246,7 +246,36 @@ export interface Proveedor {
   updated_at: string;
 }
 
-// ─── UBICACIONES (Nuevo Catálogo Físico) ──────────────────────────────────────
+// ─── TÉCNICOS (Catálogo) ────────────────────────────────────────────────
+
+export interface TecnicoSimple {
+  id: string;
+  nombre_completo: string;
+  es_externo: boolean;
+}
+
+export interface Tecnico extends TecnicoSimple {
+  proveedor_id?: string | null;
+  telefono_contacto?: string | null;
+  email_contacto?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  proveedor?: ProveedorSimple | null;
+}
+
+export interface TecnicoCreate {
+  nombre_completo: string;
+  es_externo?: boolean;
+  proveedor_id?: string | null;
+  telefono_contacto?: string | null;
+  email_contacto?: string | null;
+  is_active?: boolean;
+}
+
+export type TecnicoUpdate = Partial<TecnicoCreate>;
+
+// ─── UBICACIONES (Catálogo Físico) ──────────────────────────────────────
 
 export interface Ubicacion {
   id: string;
@@ -426,6 +455,7 @@ export interface MantenimientoSimple {
   fecha_programada?: string | null;
   fecha_finalizacion?: string | null;
   estado: EstadoMantenimiento;
+  tecnico_nombre?: string | null;
 }
 
 export interface Mantenimiento {
@@ -437,8 +467,7 @@ export interface Mantenimiento {
   fecha_finalizacion?: string | null;
   costo_estimado?: string | number | null;
   costo_real?: string | number | null;
-  tecnico_responsable: string;
-  proveedor_servicio_id?: string | null;
+  tecnico_id: string;
   estado: EstadoMantenimiento;
   prioridad: number;
   observaciones?: string | null;
@@ -447,7 +476,7 @@ export interface Mantenimiento {
   updated_at: string;
   equipo: EquipoSimple;
   tipo_mantenimiento: TipoMantenimiento;
-  proveedor_servicio?: ProveedorSimple | null;
+  tecnico: TecnicoSimple;
 }
 
 // ─── DOCUMENTACIÓN ───────────────────────────────────────────────────────────
@@ -496,8 +525,10 @@ export interface Movimiento {
   equipo_id: string;
   tipo_movimiento: TipoMovimientoEquipo;
   fecha_prevista_retorno?: string | null;
-  origen?: string | null;
-  destino?: string | null;
+  ubicacion_origen_id?: string | null;
+  ubicacion_destino_id?: string | null;
+  ubicacion_origen_nombre?: string | null;
+  ubicacion_destino_nombre?: string | null;
   proposito?: string | null;
   recibido_por?: string | null;
   observaciones?: string | null;
@@ -513,7 +544,6 @@ export interface Movimiento {
   usuario_registrador?: UsuarioSimple | null;
   usuario_autorizador?: UsuarioSimple | null;
 }
-
 export interface MovimientoReciente {
   id: string;
   equipo_nombre: string;
@@ -631,7 +661,7 @@ export interface InventarioStock {
   id: string;
   tipo_item_id: string;
   ubicacion_id: string;
-  ubicacion?: string;    // Opcional: para el nombre que inyecta el backend
+  ubicacion?: string;
   lote?: string | null;
   fecha_caducidad?: string | null;
   cantidad_actual: number;
@@ -829,8 +859,7 @@ export interface MantenimientoCreate {
   fecha_finalizacion?: string | null;
   costo_estimado?: number | string | null;
   costo_real?: number | string | null;
-  tecnico_responsable: string;
-  proveedor_servicio_id?: string | null;
+  tecnico_id: string;
   estado?: EstadoMantenimiento;
   prioridad?: number;
   observaciones?: string | null;
@@ -842,8 +871,7 @@ export interface MantenimientoUpdate {
   fecha_finalizacion?: string | null;
   costo_estimado?: number | string | null;
   costo_real?: number | string | null;
-  tecnico_responsable?: string | null;
-  proveedor_servicio_id?: string | null;
+  tecnico_id?: string | null;
   estado?: EstadoMantenimiento | null;
   prioridad?: number | null;
   observaciones?: string | null;
@@ -853,8 +881,8 @@ export interface MovimientoCreate {
   equipo_id: string;
   tipo_movimiento: TipoMovimientoEquipo;
   fecha_prevista_retorno?: string | null;
-  origen?: string | null;
-  destino?: string | null;
+  ubicacion_origen_id?: string | null;
+  ubicacion_destino_id?: string | null;
   proposito?: string | null;
   recibido_por?: string | null;
   observaciones?: string | null;

@@ -27,7 +27,6 @@ import { ReporteParams } from "@/types/api";
 
 type FormValues = z.infer<typeof reporteSchema>;
 
-// FIX: Interfaz alineada exactamente con el Backend (ReporteResponse)
 interface ReporteGenerado {
    id: string;
    tipo_reporte: string;

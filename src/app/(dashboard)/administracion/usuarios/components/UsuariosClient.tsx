@@ -13,12 +13,10 @@ import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/use-toast";
 import { UsuarioForm } from "@/components/features/usuarios/UsuarioForm";
 import { usuariosService } from "@/app/services/usuariosService";
-import { useAuthStore } from "@/store/authStore";
 import type { Usuario } from "@/types/api";
 
 export function UsuariosClient() {
    const { toast } = useToast();
-   const { isInitialized, isAuthenticated } = useAuthStore();
 
    const [data, setData] = useState<Usuario[]>([]);
    const [loading, setLoading] = useState(true);
@@ -26,12 +24,11 @@ export function UsuariosClient() {
    const [selectedUser, setSelectedUser] = useState<Usuario | undefined>(undefined);
 
    const fetchUsuarios = useCallback(async () => {
-      if (!isInitialized || !isAuthenticated) return;
       setLoading(true);
       try {
          const users = await usuariosService.getAll();
          setData(users);
-      } catch (error) {
+      } catch {
          toast({
             variant: "destructive",
             title: "Error",
@@ -40,25 +37,14 @@ export function UsuariosClient() {
       } finally {
          setLoading(false);
       }
-   }, [isInitialized, isAuthenticated, toast]);
+   }, [toast]);
 
    useEffect(() => {
-      if (isInitialized && isAuthenticated) {
-         fetchUsuarios();
-      } else if (isInitialized && !isAuthenticated) {
-         setLoading(false);
-      }
-   }, [isInitialized, isAuthenticated, fetchUsuarios]);
+      fetchUsuarios();
+   }, [fetchUsuarios]);
 
-   const handleEdit = (user: Usuario) => {
-      setSelectedUser(user);
-      setIsModalOpen(true);
-   };
-
-   const handleCreate = () => {
-      setSelectedUser(undefined);
-      setIsModalOpen(true);
-   };
+   const handleEdit = (user: Usuario) => { setSelectedUser(user); setIsModalOpen(true); };
+   const handleCreate = () => { setSelectedUser(undefined); setIsModalOpen(true); };
 
    const handleToggleBloqueo = async (user: Usuario) => {
       try {
@@ -69,7 +55,7 @@ export function UsuariosClient() {
             description: `Usuario ${user.nombre_usuario} ${nuevoEstado ? "bloqueado" : "desbloqueado"}.`,
          });
          fetchUsuarios();
-      } catch (error) {
+      } catch {
          toast({
             variant: "destructive",
             title: "Error",
@@ -87,15 +73,15 @@ export function UsuariosClient() {
       {
          accessorKey: "email",
          header: "Email",
-         cell: ({ row }) => <span className="text-muted-foreground">{row.original.email || "--"}</span>
+         cell: ({ row }) => (
+            <span className="text-muted-foreground">{row.original.email || "--"}</span>
+         ),
       },
       {
          accessorKey: "rol.nombre",
          header: "Rol",
          cell: ({ row }) => (
-            <Badge variant="secondary" className="capitalize">
-               {row.original.rol?.nombre}
-            </Badge>
+            <Badge variant="secondary" className="capitalize">{row.original.rol?.nombre}</Badge>
          ),
       },
       {
@@ -112,7 +98,9 @@ export function UsuariosClient() {
          header: "Último Acceso",
          cell: ({ row }) => {
             const dateStr = row.original.ultimo_login;
-            return dateStr ? format(new Date(dateStr), "dd MMM yyyy HH:mm", { locale: es }) : "Nunca";
+            return dateStr
+               ? format(new Date(dateStr), "dd MMM yyyy HH:mm", { locale: es })
+               : "Nunca";
          },
       },
       {
@@ -129,7 +117,11 @@ export function UsuariosClient() {
                      size="sm"
                      onClick={() => handleToggleBloqueo(user)}
                      title={user.bloqueado ? "Desbloquear" : "Bloquear"}
-                     className={user.bloqueado ? "text-green-600 hover:text-green-700" : "text-destructive hover:text-destructive"}
+                     className={
+                        user.bloqueado
+                           ? "text-green-600 hover:text-green-700"
+                           : "text-destructive hover:text-destructive"
+                     }
                   >
                      {user.bloqueado ? <CheckCircle className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
                   </Button>
@@ -139,7 +131,7 @@ export function UsuariosClient() {
       },
    ];
 
-   if (!isInitialized || (loading && data.length === 0)) {
+   if (loading && data.length === 0) {
       return (
          <div className="flex justify-center items-center h-40">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -152,7 +144,7 @@ export function UsuariosClient() {
          <div className="flex justify-end items-center mb-4">
             <div className="flex gap-2">
                <Button variant="outline" onClick={fetchUsuarios} disabled={loading} title="Actualizar lista">
-                  <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                </Button>
                <Button onClick={handleCreate}>
                   <Plus className="mr-2 h-4 w-4" /> Nuevo Usuario
@@ -169,10 +161,7 @@ export function UsuariosClient() {
                </DialogHeader>
                <UsuarioForm
                   initialData={selectedUser}
-                  onSuccess={() => {
-                     setIsModalOpen(false);
-                     fetchUsuarios();
-                  }}
+                  onSuccess={() => { setIsModalOpen(false); fetchUsuarios(); }}
                   onCancel={() => setIsModalOpen(false)}
                />
             </DialogContent>

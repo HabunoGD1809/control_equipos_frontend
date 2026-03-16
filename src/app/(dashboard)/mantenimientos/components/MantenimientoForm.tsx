@@ -15,14 +15,14 @@ import { Textarea } from "@/components/ui/Textarea";
 import { DatePickerField } from "@/components/ui/DatePickerField";
 import { useToast } from "@/components/ui/use-toast";
 
-import type { EquipoSimple, TipoMantenimiento, Proveedor, MantenimientoCreate } from "@/types/api";
+import type { EquipoSimple, TipoMantenimiento, Tecnico, MantenimientoCreate } from "@/types/api";
 import { mantenimientoSchema } from "@/lib/zod";
 import { api } from "@/lib/http";
 
 interface MantenimientoFormProps {
    equipos: EquipoSimple[];
    tiposMantenimiento: TipoMantenimiento[];
-   proveedores: Proveedor[];
+   tecnicos: Tecnico[];
    onSuccess: () => void;
 }
 
@@ -38,17 +38,18 @@ function getErrorMessage(err: unknown, fallback = "No se pudo programar el mante
    return fallback;
 }
 
-export function MantenimientoForm({ equipos, tiposMantenimiento, proveedores, onSuccess }: MantenimientoFormProps) {
+export function MantenimientoForm({ equipos, tiposMantenimiento, tecnicos, onSuccess }: MantenimientoFormProps) {
    const { toast } = useToast();
    const [isLoading, setIsLoading] = useState(false);
 
    const form = useForm<FormValues>({
       resolver: standardSchemaResolver(mantenimientoSchema),
       defaultValues: {
-         tecnico_responsable: "",
+         equipo_id: "",
+         tipo_mantenimiento_id: "",
+         tecnico_id: "",
          prioridad: 0,
          observaciones: null,
-         proveedor_servicio_id: null,
          costo_estimado: null,
          fecha_programada: undefined as any,
       },
@@ -60,11 +61,6 @@ export function MantenimientoForm({ equipos, tiposMantenimiento, proveedores, on
          const dataToSubmit: MantenimientoCreate = {
             ...values,
             fecha_programada: values.fecha_programada ? values.fecha_programada.toISOString() : undefined,
-            // ✅ convertir "none" de vuelta a null
-            proveedor_servicio_id:
-               !values.proveedor_servicio_id || values.proveedor_servicio_id === "none"
-                  ? null
-                  : values.proveedor_servicio_id,
             costo_estimado:
                values.costo_estimado !== undefined && values.costo_estimado !== null
                   ? String(values.costo_estimado)
@@ -145,7 +141,7 @@ export function MantenimientoForm({ equipos, tiposMantenimiento, proveedores, on
                )}
             />
 
-            {/* Fecha Programada — reutilizamos DatePickerField con type="button" ya incluido */}
+            {/* Fecha Programada */}
             <FormField
                control={form.control}
                name="fecha_programada"
@@ -159,46 +155,55 @@ export function MantenimientoForm({ equipos, tiposMantenimiento, proveedores, on
                )}
             />
 
-            {/* Técnico */}
+            {/* Técnico - SELECT */}
             <FormField
                control={form.control}
-               name="tecnico_responsable"
+               name="tecnico_id"
                render={({ field }) => (
                   <FormItem>
                      <FormLabel>Técnico Responsable</FormLabel>
-                     <FormControl>
-                        <Input placeholder="Nombre del técnico o empresa" {...field} value={field.value ?? ""} />
-                     </FormControl>
+                     <Select
+                        value={field.value ?? undefined}
+                        onValueChange={field.onChange}
+                     >
+                        <FormControl>
+                           <SelectTrigger>
+                              <SelectValue placeholder="Seleccione el técnico o empresa" />
+                           </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                           {tecnicos.filter(t => t.is_active).map((tecnico) => (
+                              <SelectItem key={tecnico.id} value={tecnico.id}>
+                                 {tecnico.nombre_completo} {tecnico.es_externo ? '(Externo)' : '(Interno)'}
+                              </SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
                      <FormMessage />
                   </FormItem>
                )}
             />
 
-            {/* Proveedor — ✅ "none" en lugar de "" */}
+            {/* Costo Estimado */}
             <FormField
                control={form.control}
-               name="proveedor_servicio_id"
+               name="costo_estimado"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Proveedor Externo (Opcional)</FormLabel>
-                     <Select
-                        value={field.value ?? "none"}
-                        onValueChange={(v) => field.onChange(v === "none" ? null : v)}
-                     >
-                        <FormControl>
-                           <SelectTrigger>
-                              <SelectValue placeholder="Selecciona un proveedor si aplica" />
-                           </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                           <SelectItem value="none">-- Ninguno --</SelectItem>
-                           {proveedores.map((proveedor) => (
-                              <SelectItem key={proveedor.id} value={proveedor.id}>
-                                 {proveedor.nombre}
-                              </SelectItem>
-                           ))}
-                        </SelectContent>
-                     </Select>
+                     <FormLabel>Costo Estimado (Opcional)</FormLabel>
+                     <FormControl>
+                        <div className="relative">
+                           <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
+                           <Input
+                              type="number"
+                              step="0.01"
+                              className="pl-7"
+                              placeholder="0.00"
+                              value={field.value ?? ""}
+                              onChange={(e) => field.onChange(e.target.value === "" ? null : e.target.value)}
+                           />
+                        </div>
+                     </FormControl>
                      <FormMessage />
                   </FormItem>
                )}
@@ -216,6 +221,7 @@ export function MantenimientoForm({ equipos, tiposMantenimiento, proveedores, on
                            placeholder="Añade notas o comentarios sobre el mantenimiento"
                            {...field}
                            value={field.value ?? ""}
+                           className="resize-none"
                         />
                      </FormControl>
                      <FormMessage />

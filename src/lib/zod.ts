@@ -333,9 +333,9 @@ export const mantenimientoSchema = z.object({
     },
     { error: "La fecha programada no puede estar en el pasado." },
   ),
-  tecnico_responsable: requiredString(
-    "El nombre del técnico es requerido.",
-  ).min(3, { error: "Mínimo 3 caracteres." }),
+  tecnico_id: requiredUuid(
+    "Debe seleccionar un técnico o empresa responsable.",
+  ),
   prioridad: z.coerce
     .number()
     .int()
@@ -343,7 +343,6 @@ export const mantenimientoSchema = z.object({
     .max(2, { error: "Prioridad inválida (0-2)." }),
   observaciones: z.string().optional().nullable(),
   costo_estimado: optionalMonetary2(),
-  proveedor_servicio_id: z.string().pipe(z.guid()).optional().nullable(),
 });
 
 export const mantenimientoUpdateSchema = z.object({
@@ -352,8 +351,7 @@ export const mantenimientoUpdateSchema = z.object({
   fecha_finalizacion: optionalDate(),
   costo_estimado: optionalMonetary2(),
   costo_real: optionalMonetary2(),
-  tecnico_responsable: z.string().optional().nullable(),
-  proveedor_servicio_id: z.string().pipe(z.guid()).optional().nullable(),
+  tecnico_id: z.string().pipe(z.guid()).optional().nullable(),
   prioridad: z.coerce.number().int().min(0).max(2).optional(),
   estado: requiredEnum(Object.values(EstadoMantenimientoEnum)).optional(),
   observaciones: z.string().optional().nullable(),
@@ -370,7 +368,9 @@ export const createCierreMantenimientoSchema = (
       fecha_inicio: requiredDate("Fecha de inicio real requerida."),
       fecha_finalizacion: requiredDate("Fecha de finalización requerida."),
       observaciones: z.string().optional().nullable(),
-      tecnico_responsable: requiredString("Técnico responsable requerido."),
+      tecnico_id: requiredUuid(
+        "Debe confirmar el técnico que realizó el trabajo.",
+      ),
     })
     .superRefine((data, ctx) => {
       if (
@@ -380,12 +380,11 @@ export const createCierreMantenimientoSchema = (
       ) {
         ctx.addIssue({
           code: "custom",
-          message:
-            "Este tipo de mantenimiento requiere adjuntar documentación antes de completarse.",
+          message: "Este tipo requiere documentación adjunta.",
           path: ["estado"],
         });
       }
-
+      
       if (
         data.fecha_inicio &&
         data.fecha_finalizacion &&
@@ -440,14 +439,12 @@ export const createInventarioMovimientoSchema = (
       costo_unitario: optionalMonetary4(),
       lote_origen: z.string().max(50).optional().default("N/A"),
       lote_destino: z.string().max(50).optional().default("N/A"),
-      // FIX: Ahora usan _id
-      ubicacion_origen_id: z.string().optional().nullable(),
-      ubicacion_destino_id: z.string().optional().nullable(),
+      ubicacion_origen_id: z.uuid().optional().nullable(),
+      ubicacion_destino_id: z.uuid().optional().nullable(),
       motivo_ajuste: z.string().optional().nullable(),
-      equipo_asociado_id: z.string().pipe(z.string().uuid().optional().or(z.any())).optional().nullable(), // Mantenemos tu pipe si es custom, o simplemente string
-      mantenimiento_id: z.string().pipe(z.string().uuid().optional().or(z.any())).optional().nullable(),
+      mantenimiento_id: z.uuid().optional().nullable(),
       referencia_externa: z.string().optional().nullable(),
-      referencia_transferencia: z.string().pipe(z.string().uuid().optional().or(z.any())).optional().nullable(),
+      referencia_transferencia: z.uuid().optional().nullable(),
       notas: z.string().optional().nullable(),
     })
     .superRefine((data, ctx) => {
@@ -458,7 +455,6 @@ export const createInventarioMovimientoSchema = (
         TipoMovimientoInvEnum.DevolucionProveedor,
       ] as string[];
 
-      // FIX: Validar la nueva propiedad ubicacion_origen_id
       if (salidas.includes(data.tipo_movimiento) && !data.ubicacion_origen_id) {
         ctx.addIssue({
           code: "custom",
@@ -473,8 +469,10 @@ export const createInventarioMovimientoSchema = (
         TipoMovimientoInvEnum.DevolucionInterna,
       ] as string[];
 
-      // FIX: Validar la nueva propiedad ubicacion_destino_id
-      if (entradas.includes(data.tipo_movimiento) && !data.ubicacion_destino_id) {
+      if (
+        entradas.includes(data.tipo_movimiento) &&
+        !data.ubicacion_destino_id
+      ) {
         ctx.addIssue({
           code: "custom",
           message: "Destino requerido.",
@@ -498,7 +496,6 @@ export const createInventarioMovimientoSchema = (
         TipoMovimientoInvEnum.AjusteNegativo,
       ];
 
-      // FIX: Validar el stock usando ubicacion_id en lugar de ubicacion (string)
       if (
         stockData &&
         salidasParaStock.includes(data.tipo_movimiento) &&
@@ -507,7 +504,7 @@ export const createInventarioMovimientoSchema = (
         const stockActual = stockData.find(
           (s) =>
             s.tipo_item_id === data.tipo_item_id &&
-            s.ubicacion_id === data.ubicacion_origen_id && // Comparación por ID UUID
+            s.ubicacion_id === data.ubicacion_origen_id &&
             s.lote === (data.lote_origen || "N/A"),
         );
 
@@ -658,6 +655,36 @@ export const proveedorSchema = z.object({
   rnc: z.string().max(50).optional().nullable(),
 });
 
+export const tecnicoSchema = z
+  .object({
+    nombre_completo: requiredString("El nombre completo es requerido.")
+      .min(3, { error: "Mínimo 3 caracteres." })
+      .max(255),
+    es_externo: z.boolean().default(false),
+    proveedor_id: z.guid().optional().nullable(),
+    telefono_contacto: z.string().max(50).optional().nullable(),
+    email_contacto: z.union([
+      z.email(),
+      z.literal(""),
+      z.null(),
+      z.undefined(),
+    ]),
+    is_active: z.boolean().default(true),
+  })
+  .superRefine((data, ctx) => {
+    if (data.es_externo && !data.proveedor_id) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "Debe seleccionar la empresa proveedora para el técnico externo.",
+        path: ["proveedor_id"],
+      });
+    }
+    if (!data.es_externo && data.proveedor_id) {
+      data.proveedor_id = null;
+    }
+  });
+
 export const estadoEquipoSchema = z.object({
   nombre: requiredString("Nombre requerido.").min(2).max(100),
   descripcion: z.string().optional().nullable(),
@@ -724,11 +751,11 @@ export const movimientoEquipoSchema = z
       Object.values(TipoMovimientoEquipoEnum),
       "Tipo inválido.",
     ),
-    destino: z.string().optional().nullable(),
+    ubicacion_destino_id: z.string().pipe(z.guid()).optional().nullable(),
     proposito: z.string().optional().nullable(),
     observaciones: z.string().optional().nullable(),
     fecha_prevista_retorno: optionalDate(),
-    origen: z.string().optional().nullable(),
+    ubicacion_origen_id: z.string().pipe(z.guid()).optional().nullable(),
     recibido_por: z.string().optional().nullable(),
   })
   .superRefine((data, ctx) => {
@@ -744,28 +771,30 @@ export const movimientoEquipoSchema = z
     }
 
     if (data.tipo_movimiento === TipoMovimientoEquipoEnum.AsignacionInterna) {
-      if (!data.destino || data.destino.length < 3) {
+      if (!data.ubicacion_destino_id) {
         ctx.addIssue({
           code: "custom",
           message: "Ubicación/Destino de la asignación requerido.",
-          path: ["destino"],
+          path: ["ubicacion_destino_id"],
         });
       }
-      if (!data.origen || data.origen.length < 3) {
+      if (!data.ubicacion_origen_id) {
         ctx.addIssue({
           code: "custom",
           message: "Ubicación de origen requerida para asignaciones.",
-          path: ["origen"],
+          path: ["ubicacion_origen_id"],
         });
       }
     }
 
     if (data.tipo_movimiento === TipoMovimientoEquipoEnum.Entrada) {
-      if (!data.origen || data.origen.length < 3) {
+      // Para una entrada, "origen" podría ser un proveedor (texto), 
+      // pero si ahora usamos ubicaciones obligatorias, podemos pedir que seleccionen la ubicación "Externa" o "Proveedor"
+      if (!data.ubicacion_origen_id) {
         ctx.addIssue({
           code: "custom",
           message: "Ubicación de origen requerida para registrar una entrada.",
-          path: ["origen"],
+          path: ["ubicacion_origen_id"],
         });
       }
     }
@@ -777,21 +806,22 @@ export const movimientoEquipoSchema = z
 
     if (
       salidasConDestinoRequerido.includes(data.tipo_movimiento) &&
-      (!data.destino || data.destino.length < 3)
+      !data.ubicacion_destino_id
     ) {
       ctx.addIssue({
         code: "custom",
         message: "Destino físico requerido.",
-        path: ["destino"],
+        path: ["ubicacion_destino_id"],
       });
     }
   });
 
 export const accionMovimientoSchema = z.object({
-  observaciones: z.string()
+  observaciones: z
+    .string()
     .min(5, { error: "Debe proveer una observación (mín. 5 caracteres)." })
     .optional()
-    .nullable()
+    .nullable(),
 });
 
 // Modal específico de Aprobar/Rechazar
@@ -846,11 +876,9 @@ export const resetPasswordConfirmSchema = z
   .object({
     username: requiredString("El usuario es requerido."),
     token: requiredString("El token es requerido."),
-    new_password: z
-      .string()
-      .min(8, {
-        error: "La nueva contraseña debe tener al menos 8 caracteres.",
-      }),
+    new_password: z.string().min(8, {
+      error: "La nueva contraseña debe tener al menos 8 caracteres.",
+    }),
     confirm_password: z.string().min(8, { error: "Confirme la contraseña." }),
   })
   .refine((data) => data.new_password === data.confirm_password, {

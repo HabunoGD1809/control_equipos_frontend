@@ -8,7 +8,7 @@ import { Calendar as BigCalendar, momentLocalizer, View } from 'react-big-calend
 
 import { ReservaEquipo, EquipoSimple } from '@/types/api';
 import { EstadoReservaEnum } from '@/types/api';
-import { useAuthStore } from '@/store/authStore';
+import { useSession } from '@/contexts/SessionProvider';
 import { useHasPermission } from '@/hooks/useHasPermission';
 import { Button } from '@/components/ui/Button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
@@ -57,7 +57,7 @@ export function ReservasClient({ initialEvents, equipos }: { initialEvents: Rese
 
    const router = useRouter();
    const { toast } = useToast();
-   const user = useAuthStore(state => state.user);
+   const { user } = useSession();
    const canManage = useHasPermission(['aprobar_reservas']);
 
    const calendarEvents = useMemo(() => events.map(reserva => ({

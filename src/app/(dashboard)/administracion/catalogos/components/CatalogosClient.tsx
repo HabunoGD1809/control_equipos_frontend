@@ -1,9 +1,10 @@
 "use client"
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
-import { EstadoEquipo, TipoDocumento, TipoMantenimiento, Proveedor, Ubicacion } from "@/types/api";
+import { EstadoEquipo, TipoDocumento, TipoMantenimiento, Proveedor, Ubicacion, Tecnico } from "@/types/api";
 import { GenericCatalogTab } from "@/components/features/catalogos/GenericCatalogTab";
 import { ProveedoresTab } from "@/components/features/proveedores/ProveedoresTab";
+import { TecnicosTab } from "@/components/features/catalogos/TecnicosTab";
 
 interface CatalogosClientProps {
    initialEstados: EstadoEquipo[];
@@ -11,6 +12,7 @@ interface CatalogosClientProps {
    initialTiposMantenimiento: TipoMantenimiento[];
    initialProveedores: Proveedor[];
    initialUbicaciones: Ubicacion[];
+   initialTecnicos: Tecnico[];
 }
 
 export const CatalogosClient: React.FC<CatalogosClientProps> = ({
@@ -18,7 +20,8 @@ export const CatalogosClient: React.FC<CatalogosClientProps> = ({
    initialTiposDocumento,
    initialTiposMantenimiento,
    initialProveedores,
-   initialUbicaciones
+   initialUbicaciones,
+   initialTecnicos
 }) => {
    return (
       <Tabs defaultValue="estados" className="w-full">
@@ -27,9 +30,9 @@ export const CatalogosClient: React.FC<CatalogosClientProps> = ({
             <TabsTrigger value="tipos-documento">Tipos de Documento</TabsTrigger>
             <TabsTrigger value="tipos-mantenimiento">Tipos de Mantenimiento</TabsTrigger>
             <TabsTrigger value="proveedores">Proveedores</TabsTrigger>
+            <TabsTrigger value="tecnicos">Técnicos</TabsTrigger>
             <TabsTrigger value="ubicaciones">Ubicaciones Físicas</TabsTrigger>
          </TabsList>
-
          <TabsContent value="estados" className="mt-0 animate-in fade-in duration-300">
             <GenericCatalogTab
                data={initialEstados as any[]}
@@ -59,6 +62,11 @@ export const CatalogosClient: React.FC<CatalogosClientProps> = ({
 
          <TabsContent value="proveedores" className="mt-0 animate-in fade-in duration-300">
             <ProveedoresTab data={initialProveedores} />
+         </TabsContent>
+
+         {/* --- PESTAÑA DE TÉCNICOS --- */}
+         <TabsContent value="tecnicos" className="mt-0 animate-in fade-in duration-300">
+            <TecnicosTab initialData={initialTecnicos} proveedores={initialProveedores} />
          </TabsContent>
 
          <TabsContent value="ubicaciones" className="mt-0 animate-in fade-in duration-300">

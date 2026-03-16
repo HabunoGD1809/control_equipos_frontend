@@ -16,14 +16,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/components/ui/use-toast";
 import { loginSchema } from "@/lib/zod";
 import { loginAction } from "@/actions/auth-actions";
-import { useAuthStore } from "@/store/authStore";
 
 type FormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
    const router = useRouter();
    const { toast } = useToast();
-   const { setUser } = useAuthStore();
    const [error, setError] = useState<string | null>(null);
    const [isPending, startTransition] = useTransition();
 
@@ -45,16 +43,11 @@ export default function LoginPage() {
          }
 
          if (result.success) {
-            if (result.user) {
-               setUser(result.user);
-            }
-
             toast({
                title: "¡Bienvenido!",
                description: "Has iniciado sesión correctamente.",
             });
 
-            router.refresh();
             router.push("/dashboard");
          }
       });

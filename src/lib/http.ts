@@ -20,7 +20,6 @@ function onRefreshed(success: boolean) {
 
 function handleUnauthorizedClient() {
    if (typeof window !== "undefined") {
-      localStorage.removeItem("auth-storage");
       window.location.href = "/login";
    }
 }
@@ -97,7 +96,6 @@ async function http<T>(path: string, options: FetchOptions & { method: string; b
             const body = await res.json();
             errorData = body;
 
-            // Pydantic 422 parser: extraemos el campo (loc) y el mensaje (msg)
             message = Array.isArray(body?.detail)
                ? body.detail.map((e: any) => `${e.loc?.slice(-1) || 'Campo'}: ${e.msg}`).join(" | ")
                : (body?.detail || body?.message || message);

@@ -101,8 +101,9 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
       onError: (error: unknown) => {
          const { message } = getFriendlyErrorMessage(error);
 
-         if (message.includes("overlap") || message.includes("solapamiento") || message.includes("excl")) {
-            setAvailabilityError("El sistema ha detectado un conflicto de horario (El equipo ya fue reservado en este instante).");
+         const msgLower = message.toLowerCase();
+         if (msgLower.includes("overlap") || msgLower.includes("solapamiento") || msgLower.includes("conflicting") || msgLower.includes("excl")) {
+            setAvailabilityError("El equipo ya tiene una reserva confirmada en ese horario. Por favor, selecciona otro rango.");
          } else {
             toast({ variant: "destructive", title: "Error", description: message });
          }
@@ -121,6 +122,7 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
          return;
       }
 
+      // Check pre-vuelo en el Frontend (Opcional, pero recomendado)
       const hasConflict = await checkOverlap({
          equipoId: payload.equipo_id,
          startDate: startIsoDate,
@@ -151,7 +153,7 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
       <Form {...form}>
          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
             {availabilityError && (
-               <Alert variant="destructive" className="bg-destructive/10">
+               <Alert variant="destructive" className="bg-destructive/10 animate-in fade-in zoom-in duration-300">
                   <AlertCircle className="h-4 w-4" />
                   <AlertTitle>Horario no disponible</AlertTitle>
                   <AlertDescription>{availabilityError}</AlertDescription>

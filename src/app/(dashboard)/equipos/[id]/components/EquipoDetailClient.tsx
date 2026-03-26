@@ -184,7 +184,11 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
                         {equipo.estado?.nombre}
                      </Badge>
                   </h1>
-                  <p className="text-muted-foreground text-sm">Serie: {equipo.numero_serie} | Código: {equipo.codigo_interno || 'N/A'}</p>
+                  <p className="text-muted-foreground text-sm">
+                     Serie: {equipo.numero_serie}
+                     {equipo.codigo_interno && ` | Código: ${equipo.codigo_interno}`}
+                     {equipo.ubicacion?.nombre && ` | Ubicación: ${equipo.ubicacion.nombre}`}
+                  </p>
                </div>
             </div>
 
@@ -340,7 +344,7 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
                </DialogHeader>
                <EquipoForm
                   estados={estadosEquipo}
-                  proveedores={proveedores} // Esto sí es proveedores porque el equipo se lo compramos a un proveedor
+                  proveedores={proveedores}
                   initialData={equipo}
                   isEditing={true}
                   onSuccess={() => {

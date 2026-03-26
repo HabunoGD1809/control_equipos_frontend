@@ -3,7 +3,7 @@
 import { useForm, useWatch } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import * as z from "zod";
-import { useMemo } from "react";
+import { useMemo, useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, ArrowRightLeft, PackageMinus, PackagePlus } from "lucide-react";
 
@@ -13,23 +13,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { useToast } from "@/components/ui/use-toast";
+import { AsyncCombobox, type Option } from "@/components/ui/AsyncCombobox";
+
 import { createInventarioMovimientoSchema } from "@/lib/zod";
 import { getFriendlyErrorMessage } from "@/lib/error-handling";
+import { inventarioService } from "@/app/services/inventarioService";
+import { ubicacionesService } from "@/app/services/ubicacionesService";
 import {
    TipoItemInventarioSimple,
    TipoMovimientoInvEnum,
    EquipoSimple,
    InventarioStock,
    InventarioMovimientoCreate,
-   Ubicacion // Importamos Ubicacion
+   Ubicacion
 } from "@/types/api";
-import { inventarioService } from "@/app/services/inventarioService";
 
 interface RegistrarMovimientoFormProps {
    tiposItem: TipoItemInventarioSimple[];
    equipos: EquipoSimple[];
    stockData: InventarioStock[];
-   ubicaciones: Ubicacion[]; // Recibimos las ubicaciones
+   ubicaciones: Ubicacion[];
    onSuccess: () => void;
 }
 
@@ -42,14 +45,15 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, ubicaci
    const dynamicSchema = useMemo(() => createInventarioMovimientoSchema(stockData), [stockData]);
 
    const form = useForm<FormValues>({
-      resolver: standardSchemaResolver(dynamicSchema as any),
+      // @ts-expect-error Zod schema dynamic resolution typing
+      resolver: standardSchemaResolver(dynamicSchema),
       defaultValues: {
-         tipo_item_id: undefined as any,
+         tipo_item_id: "",
          tipo_movimiento: TipoMovimientoInvEnum.EntradaCompra,
          cantidad: 1,
          lote_origen: "N/A",
          lote_destino: "N/A",
-         costo_unitario: undefined as any,
+         costo_unitario: null as any,
          notas: "",
          ubicacion_origen_id: "",
          ubicacion_destino_id: "",
@@ -85,6 +89,7 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, ubicaci
    const showCosto = tipoStr === TipoMovimientoInvEnum.EntradaCompra;
    const showEquipoAsociado = tipoStr === TipoMovimientoInvEnum.SalidaUso;
 
+   // ─── LÓGICA DE STOCK (ORIGEN ESTRICTO) ───
    const stockDisponibleDelItem = useMemo(() => {
       return stockData.filter(s => s.tipo_item_id === tipoItemId && s.cantidad_actual > 0);
    }, [stockData, tipoItemId]);
@@ -98,6 +103,31 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, ubicaci
          .filter(s => s.ubicacion_id === ubicacionOrigenSel)
          .map(s => s.lote || "N/A");
    }, [stockDisponibleDelItem, ubicacionOrigenSel]);
+
+   // ─── FETCHER DESTINO (ASYNC COMBOBOX) ───
+   const fetchUbicaciones = useCallback(async (search: string): Promise<Option[]> => {
+      try {
+         const data = await ubicacionesService.getAll({ include_inactive: false });
+         const searchLower = search.toLowerCase();
+         const filtered = search
+            ? data.filter(u => u.nombre.toLowerCase().includes(searchLower) || u.edificio?.toLowerCase().includes(searchLower))
+            : data;
+         return filtered.slice(0, 50).map((u) => ({
+            value: u.id,
+            label: `${u.nombre} ${u.edificio ? `(${u.edificio})` : ''}`.trim()
+         }));
+      } catch (error) {
+         console.error("Error al buscar ubicaciones:", error);
+         return [];
+      }
+   }, []);
+
+   const defaultUbicacionOptions = useMemo<Option[]>(() => {
+      return ubicaciones.slice(0, 50).map(u => ({
+         value: u.id,
+         label: `${u.nombre} ${u.edificio ? `(${u.edificio})` : ''}`.trim()
+      }));
+   }, [ubicaciones]);
 
    const mutation = useMutation({
       mutationFn: inventarioService.registrarMovimiento,
@@ -116,15 +146,10 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, ubicaci
       },
       onError: (error: unknown) => {
          const { message, field } = getFriendlyErrorMessage(error);
-
          if (field) {
             form.setError(field as keyof FormValues, { type: "manual", message });
          } else {
-            toast({
-               variant: "destructive",
-               title: "Error de Validación",
-               description: message,
-            });
+            toast({ variant: "destructive", title: "Error de Validación", description: message });
          }
       }
    });
@@ -206,9 +231,7 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, ubicaci
                         </FormControl>
                         <SelectContent>
                            {Object.values(TipoMovimientoInvEnum).map((tipo) => (
-                              <SelectItem key={tipo} value={tipo}>
-                                 {tipo}
-                              </SelectItem>
+                              <SelectItem key={tipo} value={tipo}>{tipo}</SelectItem>
                            ))}
                         </SelectContent>
                      </Select>
@@ -294,7 +317,6 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, ubicaci
                                  </FormControl>
                                  <SelectContent>
                                     {ubicacionesOrigenDisponibles.map((ubId) => {
-                                       // Usamos el catálogo de ubicaciones reales para mostrar el nombre
                                        const ubName = ubicaciones.find(u => u.id === ubId)?.nombre || ubId;
                                        return (
                                           <SelectItem key={ubId} value={ubId}>
@@ -338,24 +360,19 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, ubicaci
                   <div className="space-y-4 bg-primary/5 p-3 rounded-md border border-primary/20">
                      <FormField
                         control={form.control}
-                        name="ubicacion_destino_id" // FIX: Select de ubicaciones reales
+                        name="ubicacion_destino_id"
                         render={({ field }) => (
                            <FormItem>
                               <FormLabel>Ubicación Destino <span className="text-destructive">*</span></FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value || undefined}>
-                                 <FormControl>
-                                    <SelectTrigger>
-                                       <SelectValue placeholder="Seleccione destino..." />
-                                    </SelectTrigger>
-                                 </FormControl>
-                                 <SelectContent>
-                                    {ubicaciones.map((ub) => (
-                                       <SelectItem key={ub.id} value={ub.id}>
-                                          {ub.nombre}
-                                       </SelectItem>
-                                    ))}
-                                 </SelectContent>
-                              </Select>
+                              <FormControl>
+                                 <AsyncCombobox
+                                    value={field.value}
+                                    onChange={field.onChange}
+                                    fetcher={fetchUbicaciones}
+                                    defaultOptions={defaultUbicacionOptions}
+                                    placeholder="Buscar destino físico..."
+                                 />
+                              </FormControl>
                               <FormMessage />
                            </FormItem>
                         )}
@@ -384,10 +401,7 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, ubicaci
                   render={({ field }) => (
                      <FormItem>
                         <FormLabel>Equipo Asociado (Opcional)</FormLabel>
-                        <Select
-                           onValueChange={field.onChange}
-                           value={field.value ?? undefined}
-                        >
+                        <Select onValueChange={field.onChange} value={field.value ?? undefined}>
                            <FormControl>
                               <SelectTrigger>
                                  <SelectValue placeholder="Seleccione equipo..." />

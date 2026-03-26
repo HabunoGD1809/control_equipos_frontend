@@ -206,6 +206,7 @@ export interface UsuarioSimple {
   nombre_usuario: string;
   email?: string | null;
   avatar_url?: string | null;
+  is_active?: boolean;
 }
 
 export interface RolResumen {
@@ -218,8 +219,10 @@ export interface Usuario {
   id: string;
   nombre_usuario: string;
   email?: string | null;
+  avatar_url?: string | null;
   rol_id: string;
   bloqueado: boolean;
+  is_active: boolean; // Agregado Soft Delete
   ultimo_login?: string | null;
   created_at: string;
   updated_at: string;
@@ -242,6 +245,7 @@ export interface Proveedor {
   direccion?: string | null;
   sitio_web?: string | null;
   rnc?: string | null;
+  is_active: boolean; // Agregado Soft Delete
   created_at: string;
   updated_at: string;
 }
@@ -294,7 +298,6 @@ export interface UbicacionCreate {
 
 export type UbicacionUpdate = Partial<UbicacionCreate> & { is_active?: boolean };
 
-
 // ─── CARGA MASIVA (BULK UPLOAD) ─────────────────────────────────────────────
 
 export interface EquipoBulkResult {
@@ -346,7 +349,7 @@ export interface EquipoRead {
   codigo_interno?: string | null;
   estado_id: string;
   ubicacion_id?: string | null;
-  ubicacion_actual?: string | null;
+  ubicacion_actual?: string | null; // Mantenido por retrocompatibilidad temporal
   marca?: string | null;
   modelo?: string | null;
   fecha_adquisicion?: string | null;
@@ -360,6 +363,7 @@ export interface EquipoRead {
   updated_at: string;
   estado?: EstadoEquipoSimple | null;
   proveedor?: ProveedorSimple | null;
+  ubicacion?: Ubicacion | null;
 }
 
 export interface EquipoSearchResult {
@@ -467,7 +471,7 @@ export interface Mantenimiento {
   fecha_finalizacion?: string | null;
   costo_estimado?: string | number | null;
   costo_real?: string | number | null;
-  tecnico_id: string;
+  tecnico_id: string; // Migrado a UUID
   estado: EstadoMantenimiento;
   prioridad: number;
   observaciones?: string | null;
@@ -566,6 +570,7 @@ export interface SoftwareCatalogo extends SoftwareCatalogoSimple {
   categoria?: string | null;
   tipo_licencia: TipoLicenciaSoftware;
   metrica_licenciamiento: MetricaLicenciamiento;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -651,6 +656,7 @@ export interface TipoItemInventario extends TipoItemInventarioSimple {
   codigo_barras?: string | null;
   proveedor_preferido_id?: string | null;
   proveedor_preferido?: ProveedorSimple | null;
+  is_active: boolean;
 }
 
 export interface TipoItemInventarioConStock extends TipoItemInventario {
@@ -699,7 +705,7 @@ export interface InventarioMovimiento {
   tipo_item?: TipoItemInventarioSimple | null;
 }
 
-// ─── NOTIFICACIONES ──────────────────────────────────────────────────────────
+// ─── NOTIFICACIONES Y REPORTES ───────────────────────────────────────────────
 
 export interface Notificacion {
   id: string;
@@ -715,6 +721,23 @@ export interface Notificacion {
 
 export interface NotificacionUpdate {
   leido: boolean;
+}
+
+// Interfaz de BD para Reportes (Habilita el Background Processing y SSE)
+export type EstadoReporte = "Pendiente" | "En Proceso" | "Completado" | "Error";
+
+export interface Reporte {
+  id: string;
+  usuario_id: string;
+  tipo_reporte: string;
+  formato: string;
+  parametros?: Record<string, unknown> | null;
+  estado: EstadoReporte;
+  archivo_path?: string | null;
+  archivo_size_bytes?: number | null;
+  error_msg?: string | null;
+  fecha_solicitud: string;
+  fecha_completado?: string | null;
 }
 
 // ─── LOGS Y AUDITORÍA ────────────────────────────────────────────────────────
@@ -760,13 +783,14 @@ export interface ProveedorCreate {
   rnc?: string | null;
 }
 
-export type ProveedorUpdate = Partial<ProveedorCreate>;
+export type ProveedorUpdate = Partial<ProveedorCreate> & { is_active?: boolean };
 
 export interface UsuarioCreate {
   nombre_usuario: string;
   email?: string | null;
   password: string;
   rol_id: string;
+  requiere_cambio_contrasena?: boolean;
 }
 
 export interface UsuarioUpdate {
@@ -774,8 +798,10 @@ export interface UsuarioUpdate {
   email?: string | null;
   password?: string | null;
   rol_id?: string | null;
+  avatar_url?: string | null;
   intentos_fallidos?: number | null;
   bloqueado?: boolean | null;
+  is_active?: boolean;
   requiere_cambio_contrasena?: boolean | null;
 }
 
@@ -817,14 +843,14 @@ export interface SoftwareCatalogoCreate {
   tipo_licencia: TipoLicenciaSoftware;
   metrica_licenciamiento: MetricaLicenciamiento;
 }
-export type SoftwareCatalogoUpdate = Partial<SoftwareCatalogoCreate>;
+export type SoftwareCatalogoUpdate = Partial<SoftwareCatalogoCreate> & { is_active?: boolean };
 
 export interface EquipoCreate {
   nombre: string;
   numero_serie: string;
   codigo_interno?: string | null;
   estado_id: string;
-  ubicacion_id?: string | null;
+  ubicacion_id?: string | null; // Obliga a usar UUID
   marca?: string | null;
   modelo?: string | null;
   fecha_adquisicion?: string | null;
@@ -859,7 +885,7 @@ export interface MantenimientoCreate {
   fecha_finalizacion?: string | null;
   costo_estimado?: number | string | null;
   costo_real?: number | string | null;
-  tecnico_id: string;
+  tecnico_id: string; // Exige UUID
   estado?: EstadoMantenimiento;
   prioridad?: number;
   observaciones?: string | null;
@@ -892,6 +918,7 @@ export interface MovimientoUpdate {
   fecha_retorno?: string | null;
   recibido_por?: string | null;
   observaciones?: string | null;
+  estado?: EstadoMovimientoEquipo;
 }
 
 export interface ReservaEquipoCreate {
@@ -944,7 +971,7 @@ export interface TipoItemInventarioCreate {
   proveedor_preferido_id?: string | null;
 }
 
-export type TipoItemInventarioUpdate = Partial<TipoItemInventarioCreate>;
+export type TipoItemInventarioUpdate = Partial<TipoItemInventarioCreate> & { is_active?: boolean };
 
 export interface InventarioMovimientoCreate {
   tipo_item_id: string;

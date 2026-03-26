@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useCallback } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import * as z from "zod";
@@ -96,6 +96,15 @@ export function UploadDocumentoForm({
       return [...mimes, ...exts].join(",");
    }, [selectedTipoId, tiposDocumento]);
 
+   // 🚀 SOLUCIÓN DE RENDIMIENTO: useCallback para evitar re-renderizados del Combobox
+   const fetchEquiposAsync = useCallback(async (query: string) => {
+      const resultados = await equiposService.search(query);
+      return resultados.map((eq) => ({
+         value: eq.id,
+         label: `${eq.nombre} (${eq.numero_serie})`
+      }));
+   }, []);
+
    const uploadMutation = useMutation({
       mutationFn: (values: UploadDocumentoValues) => {
          return documentosService.upload({
@@ -175,13 +184,7 @@ export function UploadDocumentoForm({
                               onChange={field.onChange}
                               placeholder="Buscar equipo por nombre o serie..."
                               emptyMessage="No se encontraron equipos."
-                              fetcher={async (query) => {
-                                 const resultados = await equiposService.search(query);
-                                 return resultados.map((eq) => ({
-                                    value: eq.id,
-                                    label: `${eq.nombre} (${eq.numero_serie})`
-                                 }));
-                              }}
+                              fetcher={fetchEquiposAsync}
                            />
                         </FormControl>
                         <FormMessage />

@@ -234,7 +234,7 @@ export function EditarMantenimientoForm({
                         <Popover>
                            <PopoverTrigger asChild>
                               <FormControl>
-                                 <Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                 <Button type="button" variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
                                     {field.value ? format(field.value, "PPP", { locale: es }) : <span>Elegir fecha</span>}
                                     <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                                  </Button>
@@ -258,7 +258,7 @@ export function EditarMantenimientoForm({
                         <Popover>
                            <PopoverTrigger asChild>
                               <FormControl>
-                                 <Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                 <Button type="button" variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
                                     {field.value ? format(field.value, "PPP", { locale: es }) : <span>Elegir fecha</span>}
                                     <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                                  </Button>

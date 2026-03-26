@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { Plus, Pencil, Ban, CheckCircle, Loader2, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/Dialog";
 import { Badge } from "@/components/ui/Badge";
+import { Switch } from "@/components/ui/Switch";
+import { Label } from "@/components/ui/Label";
 import { useToast } from "@/components/ui/use-toast";
 import { UsuarioForm } from "@/components/features/usuarios/UsuarioForm";
 import { usuariosService } from "@/app/services/usuariosService";
@@ -22,11 +24,12 @@ export function UsuariosClient() {
    const [loading, setLoading] = useState(true);
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [selectedUser, setSelectedUser] = useState<Usuario | undefined>(undefined);
+   const [showInactive, setShowInactive] = useState(false);
 
    const fetchUsuarios = useCallback(async () => {
       setLoading(true);
       try {
-         const users = await usuariosService.getAll();
+         const users = await usuariosService.getAll({ include_inactive: showInactive });
          setData(users);
       } catch {
          toast({
@@ -37,11 +40,15 @@ export function UsuariosClient() {
       } finally {
          setLoading(false);
       }
-   }, [toast]);
+   }, [toast, showInactive]);
 
    useEffect(() => {
       fetchUsuarios();
    }, [fetchUsuarios]);
+
+   const filteredData = useMemo(() => {
+      return data.filter((u) => showInactive || u.is_active !== false);
+   }, [data, showInactive]);
 
    const handleEdit = (user: Usuario) => { setSelectedUser(user); setIsModalOpen(true); };
    const handleCreate = () => { setSelectedUser(undefined); setIsModalOpen(true); };
@@ -68,7 +75,14 @@ export function UsuariosClient() {
       {
          accessorKey: "nombre_usuario",
          header: "Usuario",
-         cell: ({ row }) => <span className="font-medium">{row.original.nombre_usuario}</span>,
+         cell: ({ row }) => (
+            <div className="flex items-center gap-2">
+               <span className="font-medium">{row.original.nombre_usuario}</span>
+               {row.original.is_active === false && (
+                  <Badge variant="outline" className="text-[10px] text-destructive border-destructive">Inactivo</Badge>
+               )}
+            </div>
+         ),
       },
       {
          accessorKey: "email",
@@ -86,12 +100,15 @@ export function UsuariosClient() {
       },
       {
          accessorKey: "bloqueado",
-         header: "Estado",
-         cell: ({ row }) => (
-            <Badge variant={row.original.bloqueado ? "destructive" : "success"}>
-               {row.original.bloqueado ? "Bloqueado" : "Activo"}
-            </Badge>
-         ),
+         header: "Acceso",
+         cell: ({ row }) => {
+            if (row.original.is_active === false) return <Badge variant="secondary">Cuenta Eliminada</Badge>;
+            return (
+               <Badge variant={row.original.bloqueado ? "destructive" : "default"}>
+                  {row.original.bloqueado ? "Bloqueado" : "Permitido"}
+               </Badge>
+            );
+         },
       },
       {
          accessorKey: "ultimo_login",
@@ -117,6 +134,7 @@ export function UsuariosClient() {
                      size="sm"
                      onClick={() => handleToggleBloqueo(user)}
                      title={user.bloqueado ? "Desbloquear" : "Bloquear"}
+                     disabled={user.is_active === false}
                      className={
                         user.bloqueado
                            ? "text-green-600 hover:text-green-700"
@@ -141,7 +159,13 @@ export function UsuariosClient() {
 
    return (
       <div className="space-y-4 animate-in fade-in duration-300">
-         <div className="flex justify-end items-center mb-4">
+         <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center space-x-2">
+               <Switch id="show-inactive" checked={showInactive} onCheckedChange={setShowInactive} />
+               <Label htmlFor="show-inactive" className="text-sm text-muted-foreground cursor-pointer">
+                  Mostrar eliminados
+               </Label>
+            </div>
             <div className="flex gap-2">
                <Button variant="outline" onClick={fetchUsuarios} disabled={loading} title="Actualizar lista">
                   <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
@@ -152,7 +176,7 @@ export function UsuariosClient() {
             </div>
          </div>
 
-         <DataTable columns={columns} data={data} tableContainerClassName="shadow-sm border rounded-md" />
+         <DataTable columns={columns} data={filteredData} tableContainerClassName="shadow-sm border rounded-md" />
 
          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
             <DialogContent className="sm:max-w-125">

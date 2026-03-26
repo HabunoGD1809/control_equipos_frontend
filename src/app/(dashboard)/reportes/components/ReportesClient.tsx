@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import * as z from "zod";
@@ -23,34 +23,26 @@ import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 import { reporteSchema } from "@/lib/zod";
 import { reportesService } from "@/app/services/reportesService";
-import { ReporteParams } from "@/types/api";
+import type { ReporteParams, Reporte, EstadoReporte } from "@/types/api";
 
 type FormValues = z.infer<typeof reporteSchema>;
 
-interface ReporteGenerado {
-   id: string;
-   tipo_reporte: string;
-   formato: string;
-   estado: "completado" | "pendiente" | "procesando" | "error" | "expirado";
-   fecha_solicitud: string;
-   fecha_completado?: string;
-   error_msg?: string;
-}
+const EstadoBadge = ({ estado }: { estado: EstadoReporte }) => {
+   const config: Record<EstadoReporte, { label: string; icon: React.ElementType; className: string }> = {
+      Completado: { label: "Disponible", icon: CheckCircle2, className: "bg-green-100 text-green-700 border-green-200" },
+      Pendiente: { label: "En Cola", icon: Clock, className: "bg-yellow-100 text-yellow-700 border-yellow-200" },
+      "En Proceso": { label: "Procesando", icon: Loader2, className: "bg-blue-100 text-blue-700 border-blue-200" },
+      Error: { label: "Error", icon: XCircle, className: "bg-red-100 text-red-700 border-red-200" },
+   };
 
-const EstadoBadge = ({ estado }: { estado: ReporteGenerado["estado"] }) => {
-   const config = {
-      completado: { label: "Disponible", icon: CheckCircle2, className: "bg-green-100 text-green-700 border-green-200" },
-      pendiente: { label: "En Cola", icon: Clock, className: "bg-yellow-100 text-yellow-700 border-yellow-200" },
-      procesando: { label: "Procesando", icon: Loader2, className: "bg-blue-100 text-blue-700 border-blue-200" },
-      error: { label: "Error", icon: XCircle, className: "bg-red-100 text-red-700 border-red-200" },
-      expirado: { label: "Expirado", icon: AlertTriangle, className: "bg-muted text-muted-foreground border-muted" },
-   }[estado] ?? { label: estado, icon: Clock, className: "bg-muted text-muted-foreground" };
+   const defaultCfg = { label: estado, icon: AlertTriangle, className: "bg-muted text-muted-foreground border-muted" };
+   const currentConfig = config[estado] ?? defaultCfg;
+   const Icon = currentConfig.icon;
 
-   const Icon = config.icon;
    return (
-      <span className={cn("inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border", config.className)}>
-         <Icon className={cn("h-3 w-3", estado === "procesando" && "animate-spin")} />
-         {config.label}
+      <span className={cn("inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border", currentConfig.className)}>
+         <Icon className={cn("h-3 w-3", estado === "En Proceso" && "animate-spin")} />
+         {currentConfig.label}
       </span>
    );
 };
@@ -78,12 +70,49 @@ export const ReportesClient = () => {
       },
    });
 
-   // Historial conectado al backend
+   // ─── QUERY: HISTORIAL DE REPORTES ───
    const { data: historialReportes = [], isLoading: isLoadingHistory, refetch: refetchHistorial } = useQuery({
       queryKey: ["reportes_historial"],
-      queryFn: () => reportesService.getHistorial() as Promise<ReporteGenerado[]>,
+      queryFn: reportesService.getHistorial,
       staleTime: 30_000,
    });
+
+   // ─── CONEXIÓN SSE PARA TIEMPO REAL ───
+   useEffect(() => {
+      const eventSource = new EventSource("/api/sse/notificaciones");
+
+      eventSource.onmessage = (event) => {
+         try {
+            const data = JSON.parse(event.data);
+
+            // Si la notificación es un sistema/reporte, actualizamos la tabla dinámicamente
+            if (data.tipo === "sistema" || data.referencia_tabla === "reportes" || data.mensaje?.toLowerCase().includes("reporte")) {
+               queryClient.invalidateQueries({ queryKey: ["reportes_historial"] });
+
+               // Mostrar toast si el reporte terminó exitosamente o falló
+               if (data.mensaje) {
+                  toast({
+                     title: "Actualización de Reporte",
+                     description: data.mensaje,
+                  });
+               }
+            }
+         } catch (error) {
+            // Si el backend manda un ping plano, igual invalidamos por precaución
+            queryClient.invalidateQueries({ queryKey: ["reportes_historial"] });
+         }
+      };
+
+      eventSource.onerror = (err) => {
+         console.error("[SSE] Error en la conexión de notificaciones:", err);
+         // El navegador intentará reconectar automáticamente
+      };
+
+      return () => {
+         eventSource.close();
+      };
+   }, [queryClient, toast]);
+   // ─────────────────────────────────────
 
    const generarReporteMutation = useMutation({
       mutationFn: async (data: FormValues) => {
@@ -112,8 +141,8 @@ export const ReportesClient = () => {
       },
    });
 
-   const handleDescargar = async (reporte: ReporteGenerado) => {
-      if (reporte.estado !== "completado") return;
+   const handleDescargar = async (reporte: Reporte) => {
+      if (reporte.estado !== "Completado") return;
       setDownloadingId(reporte.id);
       try {
          const blob = await reportesService.descargarReporte(reporte.id);
@@ -183,7 +212,7 @@ export const ReportesClient = () => {
                                     <SelectContent>
                                        <SelectItem value="equipos">Catálogo de Equipos</SelectItem>
                                        <SelectItem value="movimientos">Registro de Movimientos</SelectItem>
-                                       <SelectItem value="mantenimiento">Historial de Mantenimientos</SelectItem>
+                                       <SelectItem value="mantenimientos">Historial de Mantenimientos</SelectItem>
                                        <SelectItem value="inventario">Estado de Inventario</SelectItem>
                                        <SelectItem value="licencias">Asignaciones de Software</SelectItem>
                                        <SelectItem value="auditoria">Logs de Auditoría</SelectItem>
@@ -329,7 +358,7 @@ export const ReportesClient = () => {
                      <div className="divide-y overflow-y-auto max-h-125">
                         {historialReportes.map((reporte) => {
                            const isDownloading = downloadingId === reporte.id;
-                           const isDescargable = reporte.estado === "completado";
+                           const isDescargable = reporte.estado === "Completado";
 
                            return (
                               <div

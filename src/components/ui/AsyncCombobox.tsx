@@ -4,19 +4,8 @@ import * as React from "react";
 import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
-import {
-   Command,
-   CommandEmpty,
-   CommandGroup,
-   CommandInput,
-   CommandItem,
-   CommandList,
-} from "@/components/ui/Command";
-import {
-   Popover,
-   PopoverContent,
-   PopoverTrigger,
-} from "@/components/ui/Popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/Command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/Popover";
 import { useDebounce } from "@/hooks/useDebounce";
 
 export interface Option {
@@ -31,7 +20,10 @@ interface AsyncComboboxProps {
    placeholder?: string;
    emptyMessage?: string;
    defaultOptions?: Option[];
+   disabled?: boolean;
 }
+
+const EMPTY_OPTIONS: Option[] = [];
 
 export function AsyncCombobox({
    value,
@@ -39,15 +31,14 @@ export function AsyncCombobox({
    fetcher,
    placeholder = "Seleccione una opción...",
    emptyMessage = "No se encontraron resultados.",
-   defaultOptions = [],
+   defaultOptions = EMPTY_OPTIONS,
+   disabled = false,
 }: AsyncComboboxProps) {
    const [open, setOpen] = React.useState(false);
    const [options, setOptions] = React.useState<Option[]>(defaultOptions);
    const [isLoading, setIsLoading] = React.useState(false);
    const [searchTerm, setSearchTerm] = React.useState("");
 
-   // Si usas tu propio hook useDebounce. 
-   // Si no lo tienes, puedes instalar usehooks-ts o crear uno simple.
    const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
    React.useEffect(() => {
@@ -63,7 +54,14 @@ export function AsyncCombobox({
          try {
             const results = await fetcher(debouncedSearchTerm);
             if (isMounted) {
-               setOptions(results);
+               const valueExistsInResults = results.some(r => r.value === value);
+               const defaultSelected = defaultOptions.find(d => d.value === value);
+
+               if (value && !valueExistsInResults && defaultSelected) {
+                  setOptions([defaultSelected, ...results]);
+               } else {
+                  setOptions(results);
+               }
             }
          } catch (error) {
             console.error("Error fetching options:", error);
@@ -79,7 +77,7 @@ export function AsyncCombobox({
       return () => {
          isMounted = false;
       };
-   }, [debouncedSearchTerm, fetcher, defaultOptions]);
+   }, [debouncedSearchTerm, fetcher, defaultOptions, value]);
 
    const selectedOption = React.useMemo(
       () => options.find((opt) => opt.value === value),
@@ -93,7 +91,11 @@ export function AsyncCombobox({
                variant="outline"
                role="combobox"
                aria-expanded={open}
-               className="w-full justify-between font-normal"
+               disabled={disabled}
+               className={cn(
+                  "w-full justify-between font-normal bg-background",
+                  disabled && "opacity-50 cursor-not-allowed"
+               )}
             >
                {selectedOption ? (
                   <span className="truncate">{selectedOption.label}</span>
@@ -105,11 +107,7 @@ export function AsyncCombobox({
          </PopoverTrigger>
          <PopoverContent className="w-(--radix-popover-trigger-width) p-0" align="start">
             <Command shouldFilter={false}>
-               <CommandInput
-                  placeholder="Escriba para buscar..."
-                  value={searchTerm}
-                  onValueChange={setSearchTerm}
-               />
+               <CommandInput placeholder="Escriba para buscar..." value={searchTerm} onValueChange={setSearchTerm} />
                <CommandList>
                   {isLoading && (
                      <div className="flex items-center justify-center p-4">
@@ -117,7 +115,12 @@ export function AsyncCombobox({
                      </div>
                   )}
                   {!isLoading && options.length === 0 && (
-                     <CommandEmpty>{emptyMessage}</CommandEmpty>
+                     <CommandEmpty>
+                        {/* 🚀 UX FIX: Mensaje dinámico si faltan letras */}
+                        {searchTerm.trim().length > 0 && searchTerm.trim().length < 3
+                           ? "Escriba al menos 3 caracteres..."
+                           : emptyMessage}
+                     </CommandEmpty>
                   )}
                   <CommandGroup>
                      {!isLoading &&
@@ -125,18 +128,15 @@ export function AsyncCombobox({
                            <CommandItem
                               key={option.value}
                               value={option.value}
-                              onSelect={(currentValue) => {
-                                 onChange(currentValue === value ? null : option.value);
+                              onSelect={() => {
+                                 onChange(option.value === value ? null : option.value);
                                  setOpen(false);
                               }}
                            >
                               <Check
-                                 className={cn(
-                                    "mr-2 h-4 w-4",
-                                    value === option.value ? "opacity-100" : "opacity-0"
-                                 )}
+                                 className={cn("mr-2 h-4 w-4 shrink-0", value === option.value ? "opacity-100" : "opacity-0")}
                               />
-                              {option.label}
+                              <span className="truncate">{option.label}</span>
                            </CommandItem>
                         ))}
                   </CommandGroup>

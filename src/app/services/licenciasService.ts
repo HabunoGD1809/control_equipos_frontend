@@ -12,12 +12,12 @@ import type {
 
 export const licenciasService = {
    // --- Catálogo ---
-   getCatalogo(): Promise<SoftwareCatalogo[]> {
-      return api.get<SoftwareCatalogo[]>("/licencias/catalogo/");
+   getCatalogo(params?: { include_inactive?: boolean; limit?: number }): Promise<SoftwareCatalogo[]> {
+      return api.get<SoftwareCatalogo[]>("/licencias/catalogo", { params });
    },
 
    createSoftware(payload: SoftwareCatalogoCreate): Promise<SoftwareCatalogo> {
-      return api.post<SoftwareCatalogo>("/licencias/catalogo/", payload);
+      return api.post<SoftwareCatalogo>("/licencias/catalogo", payload);
    },
 
    updateSoftware(
@@ -30,7 +30,6 @@ export const licenciasService = {
    deleteSoftware(id: string): Promise<void> {
       return api.delete<void>(`/licencias/catalogo/${id}`);
    },
-
    // --- Licencias ---
    getAll(): Promise<LicenciaSoftware[]> {
       return api.get<LicenciaSoftware[]>("/licencias/");

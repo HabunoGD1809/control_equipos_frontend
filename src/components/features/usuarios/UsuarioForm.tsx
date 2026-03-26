@@ -24,6 +24,7 @@ interface FormValues {
    password?: string;
    rol_id: string;
    bloqueado?: boolean;
+   is_active?: boolean;
    requiere_cambio_contrasena?: boolean;
 }
 
@@ -46,13 +47,15 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
    const formSchema = isEditing ? usuarioUpdateSchema : usuarioCreateSchema;
 
    const form = useForm<FormValues>({
-      resolver: standardSchemaResolver(formSchema as any),
+      // @ts-expect-error TypeScript inference con zod resolver mixto
+      resolver: standardSchemaResolver(formSchema),
       defaultValues: {
          nombre_usuario: initialData?.nombre_usuario ?? "",
          email: initialData?.email ?? "",
          password: "",
          rol_id: initialData?.rol_id ?? "",
          bloqueado: initialData?.bloqueado ?? false,
+         is_active: initialData?.is_active ?? true,
          requiere_cambio_contrasena: initialData?.requiere_cambio_contrasena ?? false,
       },
    });
@@ -85,9 +88,11 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
                email: cleanString(data.email),
                rol_id: data.rol_id,
                bloqueado: data.bloqueado,
+               is_active: data.is_active,
                requiere_cambio_contrasena: data.requiere_cambio_contrasena,
             };
             if (data.password) payload.password = data.password;
+
             await usuariosService.update(initialData!.id, payload);
             toast({ title: "Éxito", description: "Usuario actualizado correctamente." });
          } else {
@@ -96,6 +101,7 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
                email: cleanString(data.email),
                password: data.password!,
                rol_id: data.rol_id,
+               requiere_cambio_contrasena: data.requiere_cambio_contrasena,
             });
             toast({ title: "Éxito", description: "Usuario creado correctamente." });
          }
@@ -182,40 +188,62 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
                )}
             />
 
-            {isEditing && (
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                     control={form.control}
-                     name="bloqueado"
-                     render={({ field }) => (
-                        <FormItem className="flex items-center justify-between rounded-lg border p-3 bg-card">
-                           <div className="space-y-0.5">
-                              <FormLabel className="text-sm font-medium">Cuenta Bloqueada</FormLabel>
-                              <p className="text-xs text-muted-foreground">Impide el inicio de sesión.</p>
-                           </div>
-                           <FormControl>
-                              <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
-                           </FormControl>
-                        </FormItem>
-                     )}
-                  />
-                  <FormField
-                     control={form.control}
-                     name="requiere_cambio_contrasena"
-                     render={({ field }) => (
-                        <FormItem className="flex items-center justify-between rounded-lg border p-3 bg-card">
-                           <div className="space-y-0.5">
-                              <FormLabel className="text-sm font-medium">Forzar Cambio</FormLabel>
-                              <p className="text-xs text-muted-foreground">Al próximo login.</p>
-                           </div>
-                           <FormControl>
-                              <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
-                           </FormControl>
-                        </FormItem>
-                     )}
-                  />
-               </div>
-            )}
+            {/* TOGGLES Y PERMISOS ADICIONALES */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+               <FormField
+                  control={form.control}
+                  name="requiere_cambio_contrasena"
+                  render={({ field }) => (
+                     <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 bg-card shadow-sm">
+                        <div className="space-y-0.5">
+                           <FormLabel className="text-sm font-medium">Forzar Cambio</FormLabel>
+                           <p className="text-xs text-muted-foreground">Al próximo login.</p>
+                        </div>
+                        <FormControl>
+                           <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+                        </FormControl>
+                     </FormItem>
+                  )}
+               />
+
+               {isEditing && (
+                  <>
+                     <FormField
+                        control={form.control}
+                        name="bloqueado"
+                        render={({ field }) => (
+                           <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 bg-card shadow-sm">
+                              <div className="space-y-0.5">
+                                 <FormLabel className="text-sm font-medium">Bloquear Acceso</FormLabel>
+                                 <p className="text-xs text-muted-foreground">Impide inicio de sesión temporal.</p>
+                              </div>
+                              <FormControl>
+                                 <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+                              </FormControl>
+                           </FormItem>
+                        )}
+                     />
+
+                     <FormField
+                        control={form.control}
+                        name="is_active"
+                        render={({ field }) => (
+                           <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 bg-card shadow-sm border-destructive/20">
+                              <div className="space-y-0.5">
+                                 <FormLabel className="text-sm font-medium text-destructive">Cuenta Activa</FormLabel>
+                                 <p className="text-[10px] leading-tight text-muted-foreground">
+                                    Desactivar oculta al usuario (Borrado Lógico).
+                                 </p>
+                              </div>
+                              <FormControl>
+                                 <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+                              </FormControl>
+                           </FormItem>
+                        )}
+                     />
+                  </>
+               )}
+            </div>
 
             <div className="flex justify-between items-center pt-4 border-t mt-6">
                {!isEditing ? (

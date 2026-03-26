@@ -57,9 +57,9 @@ export const equiposService = {
       api.get<TimelineEvent[]>(`/equipos/${id}/timeline`),
 
    search: async (termino: string) => {
-      if (!termino) return [];
-      return api.get<EquipoSearchResult[]>("/equipos/search/", {
-         params: { q: termino },
+      if (!termino || termino.trim().length < 3) return [];
+      return api.get<EquipoSearchResult[]>("/equipos/search", {
+         params: { q: termino.trim() },
       });
    },
 
@@ -87,9 +87,9 @@ export const equiposService = {
       api.delete<void>(`/equipos/componentes/${relacionId}`),
 
    getOptions: async (termino?: string): Promise<EquipoSimple[]> => {
-      if (termino && termino.length > 2) {
-         const results = await api.get<EquipoSearchResult[]>("/equipos/search/", {
-            params: { q: termino },
+      if (termino && termino.trim().length >= 3) {
+         const results = await api.get<EquipoSearchResult[]>("/equipos/search", {
+            params: { q: termino.trim() },
          });
          return results.map((e) => ({
             id: e.id,

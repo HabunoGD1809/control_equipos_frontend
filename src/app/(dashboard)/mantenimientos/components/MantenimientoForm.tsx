@@ -13,14 +13,16 @@ import { Input } from "@/components/ui/Input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { DatePickerField } from "@/components/ui/DatePickerField";
+import { AsyncCombobox } from "@/components/ui/AsyncCombobox";
 import { useToast } from "@/components/ui/use-toast";
 
 import type { EquipoSimple, TipoMantenimiento, Tecnico, MantenimientoCreate } from "@/types/api";
 import { mantenimientoSchema } from "@/lib/zod";
 import { api } from "@/lib/http";
+import { equiposService } from "@/app/services/equiposService";
 
 interface MantenimientoFormProps {
-   equipos: EquipoSimple[];
+   equipos: EquipoSimple[]; // Usado solo para inicializar defaults rápidos
    tiposMantenimiento: TipoMantenimiento[];
    tecnicos: Tecnico[];
    onSuccess: () => void;
@@ -83,30 +85,26 @@ export function MantenimientoForm({ equipos, tiposMantenimiento, tecnicos, onSuc
       <Form {...form}>
          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
 
-            {/* Equipo */}
+            {/* Equipo - ACTUALIZADO A ASYNC COMBOBOX */}
             <FormField
                control={form.control}
                name="equipo_id"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Equipo</FormLabel>
-                     <Select
-                        value={field.value ?? undefined}
-                        onValueChange={field.onChange}
-                     >
-                        <FormControl>
-                           <SelectTrigger>
-                              <SelectValue placeholder="Selecciona un equipo" />
-                           </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                           {equipos.map((equipo) => (
-                              <SelectItem key={equipo.id} value={equipo.id}>
-                                 {equipo.nombre} ({equipo.numero_serie})
-                              </SelectItem>
-                           ))}
-                        </SelectContent>
-                     </Select>
+                     <FormLabel>Equipo a Mantener <span className="text-destructive">*</span></FormLabel>
+                     <FormControl>
+                        <AsyncCombobox
+                           value={field.value}
+                           onChange={field.onChange}
+                           placeholder="Buscar por nombre, serie o código..."
+                           emptyMessage="No se encontraron equipos."
+                           defaultOptions={equipos.slice(0, 50).map(e => ({ value: e.id, label: `${e.nombre} (${e.numero_serie})` }))}
+                           fetcher={async (query) => {
+                              const res = await equiposService.search(query);
+                              return res.map(eq => ({ value: eq.id, label: `${eq.nombre} (${eq.numero_serie})` }));
+                           }}
+                        />
+                     </FormControl>
                      <FormMessage />
                   </FormItem>
                )}
@@ -118,7 +116,7 @@ export function MantenimientoForm({ equipos, tiposMantenimiento, tecnicos, onSuc
                name="tipo_mantenimiento_id"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Tipo de Mantenimiento</FormLabel>
+                     <FormLabel>Tipo de Mantenimiento <span className="text-destructive">*</span></FormLabel>
                      <Select
                         value={field.value ?? undefined}
                         onValueChange={field.onChange}
@@ -155,20 +153,20 @@ export function MantenimientoForm({ equipos, tiposMantenimiento, tecnicos, onSuc
                )}
             />
 
-            {/* Técnico - SELECT */}
+            {/* Técnico - Filtrando solo activos */}
             <FormField
                control={form.control}
                name="tecnico_id"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Técnico Responsable</FormLabel>
+                     <FormLabel>Técnico o Empresa Responsable <span className="text-destructive">*</span></FormLabel>
                      <Select
                         value={field.value ?? undefined}
                         onValueChange={field.onChange}
                      >
                         <FormControl>
                            <SelectTrigger>
-                              <SelectValue placeholder="Seleccione el técnico o empresa" />
+                              <SelectValue placeholder="Seleccione el responsable..." />
                            </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -190,7 +188,7 @@ export function MantenimientoForm({ equipos, tiposMantenimiento, tecnicos, onSuc
                name="costo_estimado"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Costo Estimado (Opcional)</FormLabel>
+                     <FormLabel>Costo Estimado <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                      <FormControl>
                         <div className="relative">
                            <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
@@ -215,7 +213,7 @@ export function MantenimientoForm({ equipos, tiposMantenimiento, tecnicos, onSuc
                name="observaciones"
                render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Observaciones</FormLabel>
+                     <FormLabel>Observaciones <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                      <FormControl>
                         <Textarea
                            placeholder="Añade notas o comentarios sobre el mantenimiento"
@@ -229,7 +227,7 @@ export function MantenimientoForm({ equipos, tiposMantenimiento, tecnicos, onSuc
                )}
             />
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full mt-4" disabled={isLoading}>
                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                Programar Mantenimiento
             </Button>

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useState, useEffect } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { useRouter } from "next/navigation";
@@ -16,12 +16,13 @@ import { Textarea } from "@/components/ui/Textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
 import { DatePickerField } from "@/components/ui/DatePickerField";
 import { useToast } from "@/components/ui/use-toast";
+import { AsyncCombobox, type Option } from "@/components/ui/AsyncCombobox";
 
 import { equipoSchema } from "@/lib/zod";
 import { equiposService } from "@/app/services/equiposService";
 import { ubicacionesService } from "@/app/services/ubicacionesService";
 import { getFriendlyErrorMessage } from "@/lib/error-handling";
-import type { EquipoCreate, EquipoRead, EstadoEquipo, ProveedorSimple, Ubicacion } from "@/types/api";
+import type { EquipoCreate, EquipoRead, EstadoEquipo, ProveedorSimple } from "@/types/api";
 
 interface EquipoFormProps {
    estados: EstadoEquipo[];
@@ -41,15 +42,6 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
    const router = useRouter();
    const { toast } = useToast();
    const [isLoading, setIsLoading] = useState(false);
-
-   // Estado para el catálogo de ubicaciones
-   const [ubicaciones, setUbicaciones] = useState<Ubicacion[]>([]);
-
-   useEffect(() => {
-      ubicacionesService.getAll({ limit: 200, include_inactive: false })
-         .then((data) => setUbicaciones(data))
-         .catch((err) => console.error("Error cargando catálogo de ubicaciones:", err));
-   }, []);
 
    const form = useForm<EquipoFormValues>({
       resolver: standardSchemaResolver(equipoSchema),
@@ -78,6 +70,36 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
       const value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "");
       fieldChange(value);
    };
+
+   // ─── FETCHER SEGURO PARA TYPESCRIPT ───
+   const fetchUbicaciones = useCallback(async (search: string): Promise<Option[]> => {
+      try {
+         const data = await ubicacionesService.getAll({ include_inactive: false });
+         const searchLower = search.toLowerCase();
+         const filtered = search
+            ? data.filter(u => u.nombre.toLowerCase().includes(searchLower) || u.edificio?.toLowerCase().includes(searchLower))
+            : data;
+
+         return filtered.slice(0, 50).map((u) => ({
+            value: u.id,
+            label: `${u.nombre} ${u.edificio ? `(${u.edificio})` : ''}`.trim()
+         }));
+      } catch (error) {
+         console.error("Error al buscar ubicaciones:", error);
+         return [];
+      }
+   }, []);
+
+   const defaultUbicacionOptions = useMemo<Option[]>(() => {
+      if (initialData?.ubicacion) {
+         const { id, nombre, edificio } = initialData.ubicacion;
+         return [{
+            value: id,
+            label: `${nombre} ${edificio ? `(${edificio})` : ''}`.trim()
+         }];
+      }
+      return [];
+   }, [initialData]);
 
    const onSubmit: SubmitHandler<EquipoFormValues> = async (data) => {
       setIsLoading(true);
@@ -176,30 +198,22 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
                      </FormItem>
                   )} />
 
-                  {/* --- CAMPO DE UBICACIONES CON UUID --- */}
                   <FormField control={form.control} name="ubicacion_id" render={({ field }) => (
                      <FormItem className="md:col-span-2 lg:col-span-3">
                         <FormLabel>Ubicación Física Asignada <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
-                        <Select value={field.value ?? "none"} onValueChange={(v) => field.onChange(v === "none" ? null : v)}>
-                           <FormControl>
-                              <SelectTrigger>
-                                 <SelectValue placeholder="Seleccione la ubicación en el catálogo..." />
-                              </SelectTrigger>
-                           </FormControl>
-                           <SelectContent>
-                              <SelectItem value="none">-- Sin ubicación asignada / En tránsito --</SelectItem>
-                              {/* AHORA USAMOS el ID (UUID) COMO VALUE */}
-                              {ubicaciones.map((u) => (
-                                 <SelectItem key={u.id} value={u.id}>
-                                    {u.nombre} {u.edificio ? `(${u.edificio})` : ''}
-                                 </SelectItem>
-                              ))}
-                           </SelectContent>
-                        </Select>
+                        <FormControl>
+                           <AsyncCombobox
+                              value={field.value}
+                              onChange={field.onChange}
+                              fetcher={fetchUbicaciones}
+                              defaultOptions={defaultUbicacionOptions}
+                              placeholder="Buscar ubicación..."
+                              emptyMessage="No se encontraron ubicaciones activas."
+                           />
+                        </FormControl>
                         <FormMessage />
                      </FormItem>
                   )} />
-
                </div>
             </div>
 
@@ -223,6 +237,7 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
                         return false;
                      }} />
                   )} />
+
                   <FormField control={form.control} name="proveedor_id" render={({ field }) => (
                      <FormItem>
                         <FormLabel>Proveedor <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
@@ -261,7 +276,9 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
                   <FormField control={form.control} name="notas" render={({ field }) => (
                      <FormItem className="md:col-span-2 lg:col-span-3">
                         <FormLabel>Notas / Observaciones <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
-                        <FormControl><Textarea placeholder="Detalles adicionales sobre el equipo..." className="resize-none min-h-25" {...field} value={field.value ?? ""} /></FormControl>
+                        <FormControl>
+                           <Textarea placeholder="Detalles adicionales sobre el equipo..." className="resize-none min-h-25" {...field} value={field.value ?? ""} />
+                        </FormControl>
                         <FormMessage />
                      </FormItem>
                   )} />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
 import { PlusCircle, MoreHorizontal, Pencil, Trash2, RefreshCw } from "lucide-react";
@@ -11,6 +11,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/DropdownMenu";
 import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
+import { Switch } from "@/components/ui/Switch";
+import { Label } from "@/components/ui/Label";
+import { Badge } from "@/components/ui/Badge";
 
 import { useHasPermission } from "@/hooks/useHasPermission";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
@@ -29,7 +32,7 @@ interface InventarioClientProps {
    initialMovimientosData: InventarioMovimiento[];
    equipos: EquipoSimple[];
    proveedores: Proveedor[];
-   ubicaciones: Ubicacion[]; // Nueva prop
+   ubicaciones: Ubicacion[];
 }
 
 export const InventarioClient: React.FC<InventarioClientProps> = ({
@@ -38,22 +41,47 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
    initialMovimientosData,
    equipos,
    proveedores,
-   ubicaciones, // Recibida aquí
+   ubicaciones,
 }) => {
    const router = useRouter();
    const [isMovimientoModalOpen, setIsMovimientoModalOpen] = useState(false);
    const [isTipoItemModalOpen, setIsTipoItemModalOpen] = useState(false);
    const [selectedTipoItem, setSelectedTipoItem] = useState<TipoItemInventario | null>(null);
    const [isRefreshing, setIsRefreshing] = useState(false);
+   const [showInactiveTipos, setShowInactiveTipos] = useState(false);
 
    const canManageTipos = useHasPermission(["administrar_inventario_tipos"]);
    const canRegisterMoves = useHasPermission(["administrar_inventario_stock"]);
 
+   // SOLUCIÓN: Estado local para Tipos
+   const [localTipos, setLocalTipos] = useState<TipoItemInventario[]>(initialTiposData);
+   const [hasFetchedAllTipos, setHasFetchedAllTipos] = useState(false);
+
+   useEffect(() => {
+      setLocalTipos(initialTiposData);
+      setHasFetchedAllTipos(false);
+   }, [initialTiposData]);
+
+   useEffect(() => {
+      if (showInactiveTipos && !hasFetchedAllTipos) {
+         api.get<TipoItemInventario[]>("/inventario/tipos/", { params: { include_inactive: true, limit: 200 } })
+            .then(res => {
+               setLocalTipos(res);
+               setHasFetchedAllTipos(true);
+            })
+            .catch(console.error);
+      }
+   }, [showInactiveTipos, hasFetchedAllTipos]);
+
    const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } = useDeleteConfirmation({
       onDelete: (id) => api.delete(`/inventario/tipos/${id}`),
       onSuccess: () => router.refresh(),
-      successMessage: "El tipo de ítem ha sido eliminado del catálogo.",
+      successMessage: "El tipo de ítem ha sido eliminado (ocultado) del catálogo.",
    });
+
+   const filteredTipos = useMemo(() => {
+      return localTipos.filter((t) => showInactiveTipos || t.is_active !== false);
+   }, [localTipos, showInactiveTipos]);
 
    const handleOpenTipoModal = (item: TipoItemInventario | null = null) => {
       setSelectedTipoItem(item);
@@ -67,7 +95,16 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
    };
 
    const tiposColumns: ColumnDef<TipoItemInventario>[] = [
-      { accessorKey: "nombre", header: "Nombre", cell: ({ row }) => <span className="font-semibold">{row.original.nombre}</span> },
+      {
+         accessorKey: "nombre",
+         header: "Nombre",
+         cell: ({ row }) => (
+            <div className="flex items-center gap-2">
+               <span className="font-semibold">{row.original.nombre}</span>
+               {row.original.is_active === false && <Badge variant="outline" className="text-destructive border-destructive text-[10px]">Inactivo</Badge>}
+            </div>
+         )
+      },
       { accessorKey: "categoria", header: "Categoría", cell: ({ row }) => <span className="capitalize">{row.original.categoria}</span> },
       { accessorKey: "marca", header: "Marca", cell: ({ row }) => <span className="text-muted-foreground">{row.original.marca || "--"}</span> },
       { accessorKey: "modelo", header: "Modelo", cell: ({ row }) => <span className="text-muted-foreground">{row.original.modelo || "--"}</span> },
@@ -86,12 +123,14 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
                   <DropdownMenuItem onClick={() => handleOpenTipoModal(row.original)} className="cursor-pointer">
                      <Pencil className="mr-2 h-4 w-4 text-primary" /> Editar
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                     className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
-                     onClick={() => openAlert(row.original.id)}
-                  >
-                     <Trash2 className="mr-2 h-4 w-4" /> Eliminar
-                  </DropdownMenuItem>
+                  {row.original.is_active !== false && (
+                     <DropdownMenuItem
+                        className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                        onClick={() => openAlert(row.original.id)}
+                     >
+                        <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                     </DropdownMenuItem>
+                  )}
                </DropdownMenuContent>
             </DropdownMenu>
          ),
@@ -109,7 +148,7 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
                   </DialogDescription>
                </DialogHeader>
                <RegistrarMovimientoForm
-                  tiposItem={initialTiposData}
+                  tiposItem={initialTiposData.filter(t => t.is_active !== false)} // Solo activos en el combo
                   equipos={equipos}
                   stockData={initialStockData}
                   ubicaciones={ubicaciones}
@@ -146,7 +185,7 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
             onClose={closeAlert}
             onConfirm={confirmDelete}
             title="¿Eliminar Tipo de Ítem?"
-            description="Esta acción eliminará el tipo de ítem del catálogo. No se puede deshacer si existen registros históricos asociados."
+            description="Esta acción eliminará lógicamente el tipo de ítem del catálogo."
          />
 
          <Tabs defaultValue="stock" className="w-full">
@@ -184,9 +223,15 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
 
             {canManageTipos && (
                <TabsContent value="tipos" className="mt-0 outline-none">
+                  <div className="flex justify-end mb-3">
+                     <div className="flex items-center space-x-2">
+                        <Switch id="show-inactive-tipos" checked={showInactiveTipos} onCheckedChange={setShowInactiveTipos} />
+                        <Label htmlFor="show-inactive-tipos" className="text-sm text-muted-foreground cursor-pointer">Mostrar inactivos</Label>
+                     </div>
+                  </div>
                   <DataTable
                      columns={tiposColumns}
-                     data={initialTiposData}
+                     data={filteredTipos}
                      filterColumn="nombre"
                      tableContainerClassName="shadow-sm border rounded-lg bg-card"
                   />

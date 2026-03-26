@@ -6,6 +6,7 @@ export const usuariosService = {
       skip?: number;
       limit?: number;
       q?: string;
+      include_inactive?: boolean;
    }): Promise<Usuario[]> => {
       return await api.get<Usuario[]>("/usuarios/", {
          params: {

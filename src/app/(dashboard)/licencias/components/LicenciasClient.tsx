@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
@@ -14,10 +14,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/DropdownMenu";
 import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Switch } from "@/components/ui/Switch";
+import { Label } from "@/components/ui/Label";
+import { Badge } from "@/components/ui/Badge";
 
 import { useHasPermission } from "@/hooks/useHasPermission";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { licenciasService } from "@/app/services/licenciasService";
+import { api } from "@/lib/http";
 import type { LicenciaSoftware, SoftwareCatalogo, Proveedor, EquipoSimple, UsuarioSimple, AsignacionLicencia } from "@/types/api";
 
 import { SoftwareCatalogoForm } from "@/components/features/licencias/SoftwareCatalogoForm";
@@ -48,10 +52,30 @@ export function LicenciasClient({
    const [activeTab, setActiveTab] = useState("licencias");
    const [modal, setModal] = useState<{ type: ModalType; data?: LicenciaSoftware | SoftwareCatalogo }>({ type: null });
    const [isRefreshing, setIsRefreshing] = useState(false);
+   const [showInactiveCatalogo, setShowInactiveCatalogo] = useState(false);
 
    const canManageCatalogo = useHasPermission(['administrar_software_catalogo']);
    const canManageLicencias = useHasPermission(['administrar_licencias']);
    const canAssignLicencias = useHasPermission(['asignar_licencias']);
+
+   const [localCatalogo, setLocalCatalogo] = useState<SoftwareCatalogo[]>(initialCatalogo);
+   const [hasFetchedAllCatalogo, setHasFetchedAllCatalogo] = useState(false);
+
+   useEffect(() => {
+      setLocalCatalogo(initialCatalogo);
+      setHasFetchedAllCatalogo(false);
+   }, [initialCatalogo]);
+
+   useEffect(() => {
+      if (showInactiveCatalogo && !hasFetchedAllCatalogo) {
+         api.get<SoftwareCatalogo[]>("/licencias/software/", { params: { include_inactive: true, limit: 200 } })
+            .then(res => {
+               setLocalCatalogo(res);
+               setHasFetchedAllCatalogo(true);
+            })
+            .catch(console.error);
+      }
+   }, [showInactiveCatalogo, hasFetchedAllCatalogo]);
 
    const licenciaDelete = useDeleteConfirmation({
       onDelete: (id) => licenciasService.delete(id as string),
@@ -62,8 +86,12 @@ export function LicenciasClient({
    const catalogoDelete = useDeleteConfirmation({
       onDelete: (id) => licenciasService.deleteSoftware(id as string),
       onSuccess: () => router.refresh(),
-      successMessage: "Software eliminado del catálogo."
+      successMessage: "Software eliminado (ocultado) del catálogo."
    });
+
+   const filteredCatalogo = useMemo(() => {
+      return localCatalogo.filter((c) => showInactiveCatalogo || c.is_active !== false);
+   }, [localCatalogo, showInactiveCatalogo]);
 
    const handleOpenModal = (type: ModalType, data: LicenciaSoftware | SoftwareCatalogo | null = null) => {
       setModal({ type, data: data || undefined });
@@ -136,7 +164,16 @@ export function LicenciasClient({
    ];
 
    const catalogoColumns: ColumnDef<SoftwareCatalogo>[] = [
-      { accessorKey: "nombre", header: "Nombre", cell: ({ row }) => <span className="font-medium text-foreground">{row.original.nombre}</span> },
+      {
+         accessorKey: "nombre",
+         header: "Nombre",
+         cell: ({ row }) => (
+            <div className="flex items-center gap-2">
+               <span className="font-medium text-foreground">{row.original.nombre}</span>
+               {row.original.is_active === false && <Badge variant="outline" className="text-destructive border-destructive text-[10px]">Inactivo</Badge>}
+            </div>
+         )
+      },
       { accessorKey: "version", header: "Versión", cell: ({ row }) => <span className="text-muted-foreground">{row.original.version || "N/A"}</span> },
       { accessorKey: "fabricante", header: "Fabricante" },
       { accessorKey: "tipo_licencia", header: "Tipo Licencia", cell: ({ row }) => <span className="capitalize">{row.original.tipo_licencia}</span> },
@@ -155,9 +192,11 @@ export function LicenciasClient({
                         <DropdownMenuItem onClick={() => handleOpenModal('catalogo', row.original)} className="cursor-pointer">
                            <Pencil className="mr-2 h-4 w-4 text-primary" /> Editar
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer" onClick={() => catalogoDelete.openAlert(row.original.id)}>
-                           <Trash2 className="mr-2 h-4 w-4" /> Eliminar
-                        </DropdownMenuItem>
+                        {row.original.is_active !== false && (
+                           <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer" onClick={() => catalogoDelete.openAlert(row.original.id)}>
+                              <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                           </DropdownMenuItem>
+                        )}
                      </>
                   )}
                </DropdownMenuContent>
@@ -188,7 +227,7 @@ export function LicenciasClient({
                   </DialogDescription>
                </DialogHeader>
                {modal.type === 'catalogo' && <SoftwareCatalogoForm initialData={modal.data as SoftwareCatalogo} onSuccess={handleCloseModal} />}
-               {modal.type === 'licencia' && <LicenciaSoftwareForm initialData={modal.data as LicenciaSoftware} catalogo={initialCatalogo} proveedores={proveedores} onSuccess={handleCloseModal} />}
+               {modal.type === 'licencia' && <LicenciaSoftwareForm initialData={modal.data as LicenciaSoftware} catalogo={initialCatalogo.filter(c => c.is_active !== false)} proveedores={proveedores} onSuccess={handleCloseModal} />}
                {modal.type === 'asignar' && <AsignarLicenciaForm licenciaId={(modal.data as LicenciaSoftware).id} equipos={equipos} usuarios={usuarios} onSuccess={handleCloseModal} />}
             </DialogContent>
          </Dialog>
@@ -208,7 +247,7 @@ export function LicenciasClient({
             onClose={catalogoDelete.closeAlert}
             onConfirm={catalogoDelete.confirmDelete}
             title="¿Eliminar del Catálogo?"
-            description="Esta acción removerá el software de las opciones disponibles. No se puede deshacer."
+            description="Esta acción ocultará lógicamente el software de las opciones disponibles."
          />
 
          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -251,9 +290,15 @@ export function LicenciasClient({
 
             {canManageCatalogo && (
                <TabsContent value="catalogo" className="mt-0 outline-none">
+                  <div className="flex justify-end mb-3">
+                     <div className="flex items-center space-x-2">
+                        <Switch id="show-inactive-catalogo" checked={showInactiveCatalogo} onCheckedChange={setShowInactiveCatalogo} />
+                        <Label htmlFor="show-inactive-catalogo" className="text-sm text-muted-foreground cursor-pointer">Mostrar inactivos</Label>
+                     </div>
+                  </div>
                   <DataTable
                      columns={catalogoColumns}
-                     data={initialCatalogo}
+                     data={filteredCatalogo}
                      filterColumn="nombre"
                      tableContainerClassName="shadow-sm border rounded-lg bg-card"
                   />

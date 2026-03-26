@@ -15,6 +15,7 @@ import {
   TipoMovimientoEquipo,
   EstadoReservaEnum,
   InventarioStock,
+  EstadoMovimientoEquipoEnum,
 } from "@/types/api";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -41,7 +42,10 @@ const requiredString = (message = "Este campo es requerido.") =>
   z.string({ error: message }).min(1, { error: message });
 
 const requiredUuid = (message = "Debe seleccionar una opción.") =>
-  z.string({ error: message }).min(1, { error: message }).pipe(z.guid());
+  z
+    .string({ error: message })
+    .min(1, { error: message })
+    .pipe(z.string().uuid({ message: "Formato UUID inválido" }));
 
 const requiredDate = (message = "La fecha es requerida.") =>
   z.preprocess(
@@ -62,6 +66,13 @@ const requiredEnum = <T extends string>(
   values: T[],
   message = "Debe seleccionar una opción válida.",
 ) => z.enum(values as [T, ...T[]], { error: message });
+
+const urlField = z.union([
+  z.string().url({ error: "Formato de URL inválido." }),
+  z.literal(""),
+  z.null(),
+  z.undefined(),
+]);
 
 const monetaryRegex2 =
   /^(?!^[-+.]*$)[+-]?0*(?:\d{0,10}|(?=[\d.]{1,13}0*$)\d{0,10}\.\d{0,2}0*)$/;
@@ -124,9 +135,9 @@ export const createDocumentoSchema = (tiposDisponibles: TipoDocumento[]) =>
         .max(255, { error: "Máximo 255 caracteres." }),
       tipo_documento_id: requiredUuid("Debe seleccionar un tipo de documento."),
       descripcion: z.string().optional().nullable(),
-      equipo_id: z.string().pipe(z.guid()).optional().nullable(),
-      mantenimiento_id: z.string().pipe(z.guid()).optional().nullable(),
-      licencia_id: z.string().pipe(z.guid()).optional().nullable(),
+      equipo_id: z.string().uuid().optional().nullable(),
+      mantenimiento_id: z.string().uuid().optional().nullable(),
+      licencia_id: z.string().uuid().optional().nullable(),
       file: z
         .any()
         .refine(
@@ -189,7 +200,7 @@ export const documentacionUpdateSchema = z.object({
     .max(255, { error: "Máximo 255 caracteres." })
     .optional(),
   descripcion: z.string().optional().nullable(),
-  tipo_documento_id: z.string().pipe(z.guid()).optional(),
+  tipo_documento_id: z.string().uuid().optional(),
 });
 
 export const documentacionVerifySchema = z
@@ -232,8 +243,8 @@ const equipoBaseSchema = z.object({
     .optional()
     .nullable(),
   estado_id: requiredUuid("Debe seleccionar un estado."),
-  ubicacion_id: z.string().pipe(z.guid()).optional().nullable(),
-  proveedor_id: z.string().pipe(z.guid()).optional().nullable(),
+  ubicacion_id: z.string().uuid().optional().nullable(),
+  proveedor_id: z.string().uuid().optional().nullable(),
   marca: z
     .string()
     .max(100, { error: "Máximo 100 caracteres." })
@@ -351,7 +362,7 @@ export const mantenimientoUpdateSchema = z.object({
   fecha_finalizacion: optionalDate(),
   costo_estimado: optionalMonetary2(),
   costo_real: optionalMonetary2(),
-  tecnico_id: z.string().pipe(z.guid()).optional().nullable(),
+  tecnico_id: z.string().uuid().optional().nullable(),
   prioridad: z.coerce.number().int().min(0).max(2).optional(),
   estado: requiredEnum(Object.values(EstadoMantenimientoEnum)).optional(),
   observaciones: z.string().optional().nullable(),
@@ -384,7 +395,7 @@ export const createCierreMantenimientoSchema = (
           path: ["estado"],
         });
       }
-      
+
       if (
         data.fecha_inicio &&
         data.fecha_finalizacion &&
@@ -418,7 +429,8 @@ export const tipoItemSchema = z.object({
   sku: z.string().max(100).optional().nullable(),
   codigo_barras: z.string().max(100).optional().nullable(),
   stock_minimo: z.coerce.number().int().min(0).default(0),
-  proveedor_preferido_id: z.string().pipe(z.guid()).optional().nullable(),
+  proveedor_preferido_id: z.string().uuid().optional().nullable(),
+  is_active: z.boolean().optional(),
 });
 
 export const createInventarioMovimientoSchema = (
@@ -439,12 +451,13 @@ export const createInventarioMovimientoSchema = (
       costo_unitario: optionalMonetary4(),
       lote_origen: z.string().max(50).optional().default("N/A"),
       lote_destino: z.string().max(50).optional().default("N/A"),
-      ubicacion_origen_id: z.uuid().optional().nullable(),
-      ubicacion_destino_id: z.uuid().optional().nullable(),
+      ubicacion_origen_id: z.string().uuid().optional().nullable(),
+      ubicacion_destino_id: z.string().uuid().optional().nullable(),
       motivo_ajuste: z.string().optional().nullable(),
-      mantenimiento_id: z.uuid().optional().nullable(),
+      mantenimiento_id: z.string().uuid().optional().nullable(),
       referencia_externa: z.string().optional().nullable(),
-      referencia_transferencia: z.uuid().optional().nullable(),
+      referencia_transferencia: z.string().uuid().optional().nullable(),
+      equipo_asociado_id: z.string().uuid().optional().nullable(),
       notas: z.string().optional().nullable(),
     })
     .superRefine((data, ctx) => {
@@ -458,7 +471,7 @@ export const createInventarioMovimientoSchema = (
       if (salidas.includes(data.tipo_movimiento) && !data.ubicacion_origen_id) {
         ctx.addIssue({
           code: "custom",
-          message: "Origen requerido.",
+          message: "Ubicación de Origen requerida.",
           path: ["ubicacion_origen_id"],
         });
       }
@@ -475,7 +488,7 @@ export const createInventarioMovimientoSchema = (
       ) {
         ctx.addIssue({
           code: "custom",
-          message: "Destino requerido.",
+          message: "Ubicación de Destino requerida.",
           path: ["ubicacion_destino_id"],
         });
       }
@@ -512,7 +525,7 @@ export const createInventarioMovimientoSchema = (
         if (data.cantidad > disponible) {
           ctx.addIssue({
             code: "custom",
-            message: `Stock insuficiente. Máximo disponible: ${disponible}.`,
+            message: `Stock insuficiente en la ubicación seleccionada. Máximo disponible: ${disponible}.`,
             path: ["cantidad"],
           });
         }
@@ -538,6 +551,7 @@ export const softwareCatalogoSchema = z.object({
   ),
   descripcion: z.string().optional().nullable(),
   categoria: z.string().optional().nullable(),
+  is_active: z.boolean().optional(),
 });
 
 export const licenciaSoftwareSchema = z
@@ -546,7 +560,7 @@ export const licenciaSoftwareSchema = z
     clave_producto: z.string().optional().nullable(),
     fecha_adquisicion: requiredDate("La fecha de adquisición es requerida."),
     fecha_expiracion: optionalDate(),
-    proveedor_id: z.string().pipe(z.guid()).optional().nullable(),
+    proveedor_id: z.string().uuid().optional().nullable(),
     costo_adquisicion: optionalMonetary2(),
     cantidad_total: z.coerce
       .number()
@@ -571,8 +585,8 @@ export const asignarLicenciaSchema = z
     asignar_a: z.enum(["equipo", "usuario"], {
       error: "Seleccione un destino.",
     }),
-    equipo_id: z.string().pipe(z.guid()).optional().nullable(),
-    usuario_id: z.string().pipe(z.guid()).optional().nullable(),
+    equipo_id: z.string().uuid().optional().nullable(),
+    usuario_id: z.string().uuid().optional().nullable(),
     notas: z.string().optional().nullable(),
     instalado: z.boolean().optional(),
   })
@@ -596,7 +610,7 @@ export const asignarLicenciaSchema = z
 // ─── USUARIOS Y ROLES ─────────────────────────────────────
 
 const emailField = z.union([
-  z.email({ error: "Formato de correo inválido." }),
+  z.string().email({ error: "Formato de correo inválido." }),
   z.literal(""),
   z.null(),
   z.undefined(),
@@ -607,6 +621,7 @@ export const usuarioCreateSchema = z.object({
   email: emailField,
   password: z.string().min(8, { error: "Mínimo 8 caracteres" }),
   rol_id: requiredUuid("Rol requerido."),
+  requiere_cambio_contrasena: z.boolean().optional(),
 });
 
 export const usuarioUpdateSchema = z.object({
@@ -618,8 +633,10 @@ export const usuarioUpdateSchema = z.object({
     z.null(),
     z.undefined(),
   ]),
-  rol_id: z.string().pipe(z.guid()).optional(),
+  avatar_url: urlField,
+  rol_id: z.string().uuid().optional(),
   bloqueado: z.boolean().optional(),
+  is_active: z.boolean().optional(),
   requiere_cambio_contrasena: z.boolean().optional(),
 });
 
@@ -627,7 +644,7 @@ export const rolSchema = z.object({
   nombre: requiredString("Nombre requerido.").min(3).max(100),
   descripcion: z.string().optional().nullable(),
   permiso_ids: z
-    .array(z.string().pipe(z.guid()))
+    .array(z.string().uuid())
     .min(1, { error: "Mínimo un permiso." }),
 });
 
@@ -637,6 +654,7 @@ export const updateProfileSchema = z.object({
     .max(50)
     .optional(),
   email: emailField,
+  avatar_url: urlField,
 });
 
 // ─── PROVEEDORES Y CATÁLOGOS ──────────────────────────────
@@ -646,13 +664,9 @@ export const proveedorSchema = z.object({
   descripcion: z.string().optional().nullable(),
   contacto: z.string().optional().nullable(),
   direccion: z.string().optional().nullable(),
-  sitio_web: z.union([
-    z.url({ error: "URL inválida" }),
-    z.literal(""),
-    z.null(),
-    z.undefined(),
-  ]),
+  sitio_web: urlField,
   rnc: z.string().max(50).optional().nullable(),
+  is_active: z.boolean().optional(),
 });
 
 export const tecnicoSchema = z
@@ -661,14 +675,9 @@ export const tecnicoSchema = z
       .min(3, { error: "Mínimo 3 caracteres." })
       .max(255),
     es_externo: z.boolean().default(false),
-    proveedor_id: z.guid().optional().nullable(),
+    proveedor_id: z.string().uuid().optional().nullable(),
     telefono_contacto: z.string().max(50).optional().nullable(),
-    email_contacto: z.union([
-      z.email(),
-      z.literal(""),
-      z.null(),
-      z.undefined(),
-    ]),
+    email_contacto: emailField,
     is_active: z.boolean().default(true),
   })
   .superRefine((data, ctx) => {
@@ -715,7 +724,7 @@ export const tipoMantenimientoSchema = z.object({
   periodicidad_dias: z.coerce.number().int().min(0).optional().nullable(),
 });
 
-// ─── RESERVAS Y MOVIMIENTOS ───────────────────────────────
+// ─── RESERVAS Y MOVIMIENTOS (Handoffs) ────────────────────
 
 export const reservaSchema = z
   .object({
@@ -751,11 +760,11 @@ export const movimientoEquipoSchema = z
       Object.values(TipoMovimientoEquipoEnum),
       "Tipo inválido.",
     ),
-    ubicacion_destino_id: z.string().pipe(z.guid()).optional().nullable(),
+    ubicacion_origen_id: z.string().uuid().optional().nullable(),
+    ubicacion_destino_id: z.string().uuid().optional().nullable(),
     proposito: z.string().optional().nullable(),
     observaciones: z.string().optional().nullable(),
     fecha_prevista_retorno: optionalDate(),
-    ubicacion_origen_id: z.string().pipe(z.guid()).optional().nullable(),
     recibido_por: z.string().optional().nullable(),
   })
   .superRefine((data, ctx) => {
@@ -774,7 +783,7 @@ export const movimientoEquipoSchema = z
       if (!data.ubicacion_destino_id) {
         ctx.addIssue({
           code: "custom",
-          message: "Ubicación/Destino de la asignación requerido.",
+          message: "Ubicación destino de la asignación requerida.",
           path: ["ubicacion_destino_id"],
         });
       }
@@ -788,12 +797,11 @@ export const movimientoEquipoSchema = z
     }
 
     if (data.tipo_movimiento === TipoMovimientoEquipoEnum.Entrada) {
-      // Para una entrada, "origen" podría ser un proveedor (texto), 
-      // pero si ahora usamos ubicaciones obligatorias, podemos pedir que seleccionen la ubicación "Externa" o "Proveedor"
       if (!data.ubicacion_origen_id) {
         ctx.addIssue({
           code: "custom",
-          message: "Ubicación de origen requerida para registrar una entrada.",
+          message:
+            "Ubicación externa (origen) requerida para registrar una entrada.",
           path: ["ubicacion_origen_id"],
         });
       }
@@ -802,6 +810,7 @@ export const movimientoEquipoSchema = z
     const salidasConDestinoRequerido = [
       TipoMovimientoEquipoEnum.SalidaDefinitiva,
       TipoMovimientoEquipoEnum.TransferenciaBodega,
+      TipoMovimientoEquipoEnum.SalidaTemporal,
     ] as TipoMovimientoEquipo[];
 
     if (
@@ -810,7 +819,7 @@ export const movimientoEquipoSchema = z
     ) {
       ctx.addIssue({
         code: "custom",
-        message: "Destino físico requerido.",
+        message: "Ubicación de destino requerida.",
         path: ["ubicacion_destino_id"],
       });
     }
@@ -824,7 +833,6 @@ export const accionMovimientoSchema = z.object({
     .nullable(),
 });
 
-// Modal específico de Aprobar/Rechazar
 export const modalAutorizacionSchema = z
   .object({
     accion: z.enum(["Aprobar", "Rechazar"], {
@@ -833,7 +841,6 @@ export const modalAutorizacionSchema = z
     observaciones: z.string().optional(),
   })
   .superRefine((data, ctx) => {
-    // Si rechaza, la observación es OBLIGATORIA
     if (
       data.accion === "Rechazar" &&
       (!data.observaciones || data.observaciones.length < 5)
@@ -841,6 +848,35 @@ export const modalAutorizacionSchema = z
       ctx.addIssue({
         code: "custom",
         message: "Debe justificar el rechazo (mín. 5 caracteres).",
+        path: ["observaciones"],
+      });
+    }
+  });
+
+// NUEVO: Flujo de Acuse de Recibo (Handoff)
+export const recibirMovimientoSchema = z
+  .object({
+    estado: requiredEnum(
+      [
+        EstadoMovimientoEquipoEnum.Completado,
+        EstadoMovimientoEquipoEnum.Rechazado,
+      ],
+      "Debe seleccionar el estado de recepción.",
+    ),
+    recibido_por: requiredString(
+      "Debe indicar el nombre o usuario que recibe.",
+    ),
+    observaciones: z.string().optional().nullable(),
+  })
+  .superRefine((data, ctx) => {
+    if (
+      data.estado === EstadoMovimientoEquipoEnum.Rechazado &&
+      (!data.observaciones || data.observaciones.trim().length < 5)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "Debe justificar el rechazo del equipo en destino (mín. 5 caracteres).",
         path: ["observaciones"],
       });
     }
@@ -891,6 +927,7 @@ export const ubicacionSchema = z.object({
   nombre: requiredString("Nombre de ubicación requerido.").min(2).max(255),
   edificio: z.string().optional().nullable(),
   departamento: z.string().optional().nullable(),
+  is_active: z.boolean().optional(),
 });
 
 // ─── OTROS ────────────────────────────────────────────────

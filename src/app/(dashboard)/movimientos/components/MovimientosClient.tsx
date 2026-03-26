@@ -43,6 +43,7 @@ import { EstadoMovimientoEquipoEnum } from "@/types/api";
 import { MovimientoForm } from "@/components/features/movimientos/MovimientoForm";
 import { movimientosService } from "@/app/services/movimientosService";
 import { AutorizarMovimientoModal } from "@/components/features/movimientos/AutorizarMovimientoModal";
+import { RecibirMovimientoModal } from "@/components/features/movimientos/RecibirMovimientoModal";
 
 interface MovimientosClientProps {
    initialData: Movimiento[];
@@ -59,8 +60,11 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
 }) => {
    const [movimientos, setMovimientos] = useState<Movimiento[]>(initialData);
    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-   const [movimientoToAuthorize, setMovimientoToAuthorize] =
-      useState<Movimiento | null>(null);
+
+   // Estados para Modales
+   const [movimientoToAuthorize, setMovimientoToAuthorize] = useState<Movimiento | null>(null);
+   const [movimientoToRecibir, setMovimientoToRecibir] = useState<Movimiento | null>(null); // <-- NUEVO ESTADO
+
    const { toast } = useToast();
    const router = useRouter();
 
@@ -94,29 +98,6 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
             variant: "destructive",
             title: "Error",
             description: error.message || "No se pudo cancelar.",
-         });
-      }
-   };
-
-   const handleRecibir = async (id: string) => {
-      if (
-         !confirm(
-            "Al confirmar, asumes la responsabilidad y custodia de este equipo. ¿Continuar?",
-         )
-      )
-         return;
-      try {
-         await movimientosService.recibir(id);
-         toast({
-            title: "Equipo Recibido",
-            description: "La cadena de custodia ha sido actualizada.",
-         });
-         refreshData();
-      } catch (error: any) {
-         toast({
-            variant: "destructive",
-            title: "Error al recibir",
-            description: error.message || "No se pudo completar la entrega.",
          });
       }
    };
@@ -190,7 +171,8 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
                         </DropdownMenuItem>
                      )}
                      {isEnProceso && (
-                        <DropdownMenuItem onClick={() => handleRecibir(mov.id)}>
+                        // <-- LLAMADA AL NUEVO MODAL
+                        <DropdownMenuItem onClick={() => setMovimientoToRecibir(mov)}>
                            <PackageCheck className="mr-2 h-4 w-4 text-blue-600" />
                            <span className="font-semibold text-blue-600">
                               Recibir Equipo
@@ -226,8 +208,7 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
                <DialogHeader>
                   <DialogTitle>Registrar Nuevo Movimiento</DialogTitle>
                   <DialogDescription>
-                     Completa el formulario para registrar una nueva asignación o
-                     salida.
+                     Completa el formulario para registrar una nueva asignación o salida.
                   </DialogDescription>
                </DialogHeader>
                <MovimientoForm
@@ -240,11 +221,21 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
             </DialogContent>
          </Dialog>
 
+         {/* Modales de Flujo de Trabajo */}
          <AutorizarMovimientoModal
             movimiento={movimientoToAuthorize}
             isOpen={!!movimientoToAuthorize}
             onClose={() => {
                setMovimientoToAuthorize(null);
+               refreshData();
+            }}
+         />
+
+         <RecibirMovimientoModal
+            movimiento={movimientoToRecibir}
+            isOpen={!!movimientoToRecibir}
+            onClose={() => {
+               setMovimientoToRecibir(null);
                refreshData();
             }}
          />

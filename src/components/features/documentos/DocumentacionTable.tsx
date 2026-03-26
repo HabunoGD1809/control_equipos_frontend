@@ -4,20 +4,22 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
-import { PlusCircle, Download, Trash2, CheckCircle, XCircle, Clock, ShieldCheck } from "lucide-react";
+import { PlusCircle, Download, Trash2, CheckCircle, XCircle, Clock, ShieldCheck, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/Dialog";
 import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
+import { useToast } from "@/components/ui/use-toast";
 
 import { Documentacion, TipoDocumento, EstadoDocumentoEnum } from "@/types/api";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { useHasPermission } from "@/hooks/useHasPermission";
 import { api } from "@/lib/http";
+import { documentosService } from "@/app/services/documentosService";
 
 import { VerifyDocumentoForm } from "./VerifyDocumentoForm";
 import { UploadDocumentoForm } from "./UploadDocumentoForm";
@@ -37,13 +39,6 @@ const EstadoIcon = ({ estado }: { estado: string }) => {
    }
 };
 
-const formatFileUrl = (enlace?: string | null) => {
-   if (!enlace) return "#";
-   if (enlace.startsWith("http")) return enlace;
-   const cleanPath = enlace.startsWith("/") ? enlace : `/${enlace}`;
-   return `/api/proxy${cleanPath}`;
-};
-
 export function DocumentacionTable({
    documentos,
    tiposDocumento,
@@ -56,8 +51,9 @@ export function DocumentacionTable({
 
    const router = useRouter();
    const queryClient = useQueryClient();
-   const canVerify = useHasPermission(["verificar_documentacion"]);
-   const canUpload = useHasPermission(["gestionar_documentacion"]);
+   const { toast } = useToast();
+   const canVerify = useHasPermission(["verificar_documentos"]);
+   const canUpload = useHasPermission(["subir_documentos"]);
 
    const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } = useDeleteConfirmation({
       onDelete: (id) => api.delete(`/documentacion/${id}`),
@@ -67,6 +63,28 @@ export function DocumentacionTable({
          router.refresh();
       },
       successMessage: "Documento eliminado permanentemente.",
+   });
+
+   // ─── LÓGICA DE DESCARGA SEGURA ───
+   const downloadMutation = useMutation({
+      mutationFn: async (doc: Documentacion) => {
+         const blob = await documentosService.download(doc.id);
+         return { blob, filename: doc.nombre_archivo || `Documento_${doc.id}.pdf` };
+      },
+      onSuccess: ({ blob, filename }) => {
+         const url = window.URL.createObjectURL(blob);
+         const a = document.createElement("a");
+         a.href = url;
+         a.download = filename;
+         document.body.appendChild(a);
+         a.click();
+         window.URL.revokeObjectURL(url);
+         a.remove();
+         toast({ title: "Descarga exitosa", description: `El archivo ${filename} se ha descargado.` });
+      },
+      onError: () => {
+         toast({ variant: "destructive", title: "Error al descargar", description: "El archivo físico no fue encontrado en el servidor." });
+      },
    });
 
    const columns: ColumnDef<Documentacion>[] = [
@@ -104,37 +122,53 @@ export function DocumentacionTable({
       },
       {
          id: "actions",
-         cell: ({ row }) => (
-            <div className="flex gap-2 justify-end">
-               <Button variant="outline" size="icon" title="Descargar / Ver" asChild>
-                  <a href={formatFileUrl(row.original.enlace)} target="_blank" rel="noopener noreferrer">
-                     <Download className="h-4 w-4 text-blue-600" />
-                  </a>
-               </Button>
-               {canVerify && row.original.estado === EstadoDocumentoEnum.Pendiente && (
-                  <Button variant="outline" size="icon" title="Verificar Documento" onClick={() => { setSelectedDocumento(row.original); setIsVerifyModalOpen(true); }}>
-                     <ShieldCheck className="h-4 w-4 text-emerald-600" />
+         cell: ({ row }) => {
+            const isDownloading = downloadMutation.isPending && downloadMutation.variables?.id === row.original.id;
+
+            return (
+               <div className="flex gap-2 justify-end">
+                  <Button
+                     variant="outline"
+                     size="icon"
+                     title="Descargar"
+                     onClick={() => downloadMutation.mutate(row.original)}
+                     disabled={isDownloading}
+                  >
+                     {isDownloading ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <Download className="h-4 w-4 text-blue-600" />}
                   </Button>
-               )}
-               <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" title="Eliminar" onClick={() => openAlert(row.original.id)}>
-                  <Trash2 className="h-4 w-4" />
-               </Button>
-            </div>
-         ),
+                  {canVerify && row.original.estado === EstadoDocumentoEnum.Pendiente && (
+                     <Button variant="outline" size="icon" title="Verificar Documento" onClick={() => { setSelectedDocumento(row.original); setIsVerifyModalOpen(true); }}>
+                        <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                     </Button>
+                  )}
+                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" title="Eliminar" onClick={() => openAlert(row.original.id)}>
+                     <Trash2 className="h-4 w-4" />
+                  </Button>
+               </div>
+            )
+         },
       },
    ];
 
    return (
       <div className="space-y-4 animate-in fade-in duration-300">
-         <ConfirmDeleteDialog
-            isOpen={isAlertOpen}
-            isDeleting={isDeleting}
-            onClose={closeAlert}
-            onConfirm={confirmDelete}
-            title="¿Eliminar Documento?"
-            description="Esta acción no se puede deshacer. Se eliminará permanentemente el documento y su archivo físico del almacenamiento."
+         {/* BOTÓN DE SUBIDA - Movido arriba para mejor UX */}
+         {canUpload && (
+            <div className="flex justify-end mb-4">
+               <Button onClick={() => setIsUploadModalOpen(true)} className="shadow-sm">
+                  <PlusCircle className="mr-2 h-4 w-4" /> Subir Documento
+               </Button>
+            </div>
+         )}
+
+         <DataTable
+            columns={columns}
+            data={documentos}
+            filterColumn="titulo"
+            tableContainerClassName="shadow-sm"
          />
 
+         {/* MODALES BIEN ESTRUCTURADOS */}
          <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
             <DialogContent>
                <DialogHeader>
@@ -164,19 +198,13 @@ export function DocumentacionTable({
             </Dialog>
          )}
 
-         {canUpload && (
-            <div className="flex justify-end mb-4">
-               <Button onClick={() => setIsUploadModalOpen(true)} className="shadow-sm">
-                  <PlusCircle className="mr-2 h-4 w-4" /> Subir Documento
-               </Button>
-            </div>
-         )}
-
-         <DataTable
-            columns={columns}
-            data={documentos}
-            filterColumn="titulo"
-            tableContainerClassName="shadow-sm"
+         <ConfirmDeleteDialog
+            isOpen={isAlertOpen}
+            isDeleting={isDeleting}
+            onClose={closeAlert}
+            onConfirm={confirmDelete}
+            title="¿Eliminar Documento?"
+            description="Esta acción no se puede deshacer. Se eliminará permanentemente el documento y su archivo físico del almacenamiento."
          />
       </div>
    );

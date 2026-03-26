@@ -33,7 +33,7 @@ export function Notifications() {
    const prevCountRef = useRef<number | null>(null);
    const eventSourceRef = useRef<EventSource | null>(null);
 
-   // 1. Polling del contador cada 3 segundos
+   // 1. Polling del contador cada 3 segundos (Actúa como safety-net del SSE)
    const { data: polledCount = 0 } = useQuery({
       queryKey: ["notificaciones", "unreadCount"],
       queryFn: () => notificacionesService.getUnreadCount(),
@@ -43,6 +43,7 @@ export function Notifications() {
       refetchIntervalInBackground: false,
    });
 
+   // Toast Automático al detectar incremento de notificaciones
    useEffect(() => {
       if (!enabled) return;
 
@@ -54,6 +55,7 @@ export function Notifications() {
             description: "Tienes una nueva alerta o reporte generado.",
             duration: 4000,
          });
+         // Si la cuenta subió, forzamos traer el último listado
          qc.invalidateQueries({ queryKey: ["notificaciones", "latest"] });
       }
 
@@ -61,7 +63,7 @@ export function Notifications() {
       setRealtimeUnreadCount(polledCount);
    }, [polledCount, enabled, toast, qc]);
 
-   // 2. Conexión SSE — ahora solo como disparador adicional para invalidar la lista
+   // 2. Conexión SSE — Disparador reactivo principal (Compatibilidad JSON)
    useEffect(() => {
       if (!enabled) return;
 
@@ -69,17 +71,21 @@ export function Notifications() {
       const source = new EventSource("/api/sse/notificaciones");
       eventSourceRef.current = source;
 
-      source.addEventListener("update", (event) => {
-         const newCount = parseInt(event.data, 10);
-         if (!isNaN(newCount)) {
-            // Invalidar el query para que el polling tome el valor fresco de inmediato
-            qc.invalidateQueries({ queryKey: ["notificaciones", "unreadCount"] });
-            qc.invalidateQueries({ queryKey: ["notificaciones", "latest"] });
-         }
+      // Usamos onmessage para atrapar envíos estándar JSON del backend
+      source.onmessage = (event) => {
+         // Sin importar si es JSON o un contador plano, invalidamos para buscar la info fresca
+         qc.invalidateQueries({ queryKey: ["notificaciones", "unreadCount"] });
+         qc.invalidateQueries({ queryKey: ["notificaciones", "latest"] });
+      };
+
+      // Mantenemos soporte por si el backend emite un evento custom "update"
+      source.addEventListener("update", () => {
+         qc.invalidateQueries({ queryKey: ["notificaciones", "unreadCount"] });
+         qc.invalidateQueries({ queryKey: ["notificaciones", "latest"] });
       });
 
       source.onerror = () => {
-         console.warn("[SSE] Conexión perdida, el navegador reintentará...");
+         console.warn("[SSE] Conexión perdida, el navegador reintentará de forma nativa...");
       };
 
       return () => {
@@ -179,7 +185,8 @@ export function Notifications() {
             {notifications.length > 0 ? (
                <div className="max-h-87.5 overflow-y-auto no-scrollbar flex flex-col">
                   {notifications.map((notif) => {
-                     const isReport = notif.referencia_tabla === "reporte_generado";
+                     // CORRECCIÓN: Alineado con la tabla "reportes" creada en Alembic 2c65ae33746e
+                     const isReport = notif.referencia_tabla === "reportes" || notif.referencia_tabla === "reporte_generado";
                      const url = getUrlReferencia(notif);
                      const isDownloading = downloadReportMutation.isPending && downloadReportMutation.variables === notif.referencia_id;
 

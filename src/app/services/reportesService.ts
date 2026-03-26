@@ -1,5 +1,5 @@
 import { api } from "@/lib/http";
-import type { ReporteParams } from "@/types/api";
+import type { ReporteParams, Reporte } from "@/types/api";
 
 export const reportesService = {
    generarReporte: async (params: ReporteParams): Promise<{ status: string; msg: string; task_id: string }> => {
@@ -12,7 +12,7 @@ export const reportesService = {
       });
    },
 
-   async getHistorial(): Promise<any[]> {
+   getHistorial: async (): Promise<Reporte[]> => {
       return api.get("/reportes/historial");
    },
 };

@@ -3,6 +3,8 @@ import type {
    EstadoEquipo,
    TipoDocumento,
    TipoMantenimiento,
+   Departamento,
+   Marca,
 } from "@/types/api";
 
 export interface CatalogoCreatePayload {
@@ -78,5 +80,45 @@ export const catalogosService = {
 
    deleteTipoMantenimiento(id: string): Promise<void> {
       return api.delete<void>(`/catalogos/tipos-mantenimiento/${id}`);
+   },
+
+   // --- Departamentos ---
+   async getDepartamentos(params?: { include_inactive?: boolean; limit?: number }): Promise<Departamento[]> {
+      return api.get<Departamento[]>("/catalogos/departamentos/", { params });
+   },
+
+   createDepartamento(payload: CatalogoCreatePayload): Promise<Departamento> {
+      return api.post<Departamento>("/catalogos/departamentos/", payload);
+   },
+
+   updateDepartamento(
+      id: string,
+      payload: Partial<CatalogoCreatePayload>,
+   ): Promise<Departamento> {
+      return api.put<Departamento>(`/catalogos/departamentos/${id}`, payload);
+   },
+
+   deleteDepartamento(id: string): Promise<void> {
+      return api.delete<void>(`/catalogos/departamentos/${id}`);
+   },
+
+   // --- Marcas ---
+   async getMarcas(params?: { include_inactive?: boolean; limit?: number }): Promise<Marca[]> {
+      return api.get<Marca[]>("/catalogos/marcas/", { params });
+   },
+
+   createMarca(payload: CatalogoCreatePayload): Promise<Marca> {
+      return api.post<Marca>("/catalogos/marcas/", payload);
+   },
+
+   updateMarca(
+      id: string,
+      payload: Partial<CatalogoCreatePayload>,
+   ): Promise<Marca> {
+      return api.put<Marca>(`/catalogos/marcas/${id}`, payload);
+   },
+
+   deleteMarca(id: string): Promise<void> {
+      return api.delete<void>(`/catalogos/marcas/${id}`);
    },
 };

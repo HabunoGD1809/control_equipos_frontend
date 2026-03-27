@@ -21,6 +21,7 @@ import { AsyncCombobox, type Option } from "@/components/ui/AsyncCombobox";
 import { equipoSchema } from "@/lib/zod";
 import { equiposService } from "@/app/services/equiposService";
 import { ubicacionesService } from "@/app/services/ubicacionesService";
+import { catalogosService } from "@/app/services/catalogosService";
 import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import type { EquipoCreate, EquipoRead, EstadoEquipo, ProveedorSimple } from "@/types/api";
 
@@ -52,7 +53,7 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
          estado_id: initialData?.estado_id ?? "",
          proveedor_id: initialData?.proveedor_id ?? null,
          ubicacion_id: initialData?.ubicacion_id ?? null,
-         marca: initialData?.marca ?? "",
+         marca_id: initialData?.marca_id ?? null,
          modelo: initialData?.modelo ?? "",
          fecha_adquisicion: initialData?.fecha_adquisicion ? new Date(initialData.fecha_adquisicion) : null,
          fecha_puesta_marcha: initialData?.fecha_puesta_marcha ? new Date(initialData.fecha_puesta_marcha) : null,
@@ -71,7 +72,7 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
       fieldChange(value);
    };
 
-   // ─── FETCHER SEGURO PARA TYPESCRIPT ───
+   // ─── FETCHER DE UBICACIONES ───
    const fetchUbicaciones = useCallback(async (search: string): Promise<Option[]> => {
       try {
          const data = await ubicacionesService.getAll({ include_inactive: false });
@@ -101,13 +102,42 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
       return [];
    }, [initialData]);
 
+   // ─── FETCHER DE MARCAS ───
+   const fetchMarcas = useCallback(async (search: string): Promise<Option[]> => {
+      try {
+         const data = await catalogosService.getMarcas({ include_inactive: false });
+         const searchLower = search.toLowerCase();
+         const filtered = search
+            ? data.filter(m => m.nombre.toLowerCase().includes(searchLower))
+            : data;
+
+         return filtered.slice(0, 50).map((m) => ({
+            value: m.id,
+            label: m.nombre
+         }));
+      } catch (error) {
+         console.error("Error al buscar marcas:", error);
+         return [];
+      }
+   }, []);
+
+   const defaultMarcaOptions = useMemo<Option[]>(() => {
+      if (initialData?.marca_rel) {
+         return [{
+            value: initialData.marca_rel.id,
+            label: initialData.marca_rel.nombre
+         }];
+      }
+      return [];
+   }, [initialData]);
+
    const onSubmit: SubmitHandler<EquipoFormValues> = async (data) => {
       setIsLoading(true);
       try {
          const payload: EquipoCreate = {
             ...data,
             codigo_interno: cleanString(data.codigo_interno),
-            marca: cleanString(data.marca),
+            marca_id: data.marca_id || null,
             modelo: cleanString(data.modelo),
             ubicacion_id: data.ubicacion_id || null,
             centro_costo: cleanString(data.centro_costo),
@@ -183,10 +213,19 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
                         <FormMessage />
                      </FormItem>
                   )} />
-                  <FormField control={form.control} name="marca" render={({ field }) => (
+                  <FormField control={form.control} name="marca_id" render={({ field }) => (
                      <FormItem>
                         <FormLabel>Marca <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
-                        <FormControl><Input placeholder="Ej: Dell" {...field} value={field.value ?? ""} /></FormControl>
+                        <FormControl>
+                           <AsyncCombobox
+                              value={field.value}
+                              onChange={field.onChange}
+                              fetcher={fetchMarcas}
+                              defaultOptions={defaultMarcaOptions}
+                              placeholder="Buscar marca..."
+                              emptyMessage="No se encontraron marcas."
+                           />
+                        </FormControl>
                         <FormMessage />
                      </FormItem>
                   )} />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { Loader2, Eraser } from "lucide-react";
@@ -8,6 +8,7 @@ import { Loader2, Eraser } from "lucide-react";
 import { usuarioCreateSchema, usuarioUpdateSchema } from "@/lib/zod";
 import { usuariosService } from "@/app/services/usuariosService";
 import { rolesService } from "@/app/services/rolesService";
+import { catalogosService } from "@/app/services/catalogosService";
 import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -16,6 +17,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/Input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
+import { AsyncCombobox, type Option } from "@/components/ui/AsyncCombobox";
 import type { Usuario, Rol } from "@/types/api";
 
 interface FormValues {
@@ -23,6 +25,7 @@ interface FormValues {
    email?: string | null;
    password?: string;
    rol_id: string;
+   departamento_id?: string | null;
    bloqueado?: boolean;
    is_active?: boolean;
    requiere_cambio_contrasena?: boolean;
@@ -54,6 +57,7 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
          email: initialData?.email ?? "",
          password: "",
          rol_id: initialData?.rol_id ?? "",
+         departamento_id: initialData?.departamento_id ?? null,
          bloqueado: initialData?.bloqueado ?? false,
          is_active: initialData?.is_active ?? true,
          requiere_cambio_contrasena: initialData?.requiere_cambio_contrasena ?? false,
@@ -69,6 +73,36 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
          })
          .finally(() => setLoadingRoles(false));
    }, [toast]);
+
+   // --- Fetcher de Departamentos ---
+   const fetchDepartamentos = useCallback(async (search: string): Promise<Option[]> => {
+      try {
+         const data = await catalogosService.getDepartamentos({ include_inactive: false });
+         const searchLower = search.toLowerCase();
+         const filtered = search
+            ? data.filter(d => d.nombre.toLowerCase().includes(searchLower))
+            : data;
+
+         return filtered.slice(0, 50).map((d) => ({
+            value: d.id,
+            label: d.nombre
+         }));
+      } catch (error) {
+         console.error("Error al buscar departamentos:", error);
+         return [];
+      }
+   }, []);
+
+   const defaultDepartamentoOptions = useMemo<Option[]>(() => {
+      if (initialData?.departamento_rel) {
+         return [{
+            value: initialData.departamento_rel.id,
+            label: initialData.departamento_rel.nombre
+         }];
+      }
+      return [];
+   }, [initialData]);
+   // ---------------------------------
 
    const handleApiError = (error: any) => {
       const { message, field } = getFriendlyErrorMessage(error);
@@ -87,6 +121,7 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
                nombre_usuario: data.nombre_usuario?.trim() || undefined,
                email: cleanString(data.email),
                rol_id: data.rol_id,
+               departamento_id: data.departamento_id || null,
                bloqueado: data.bloqueado,
                is_active: data.is_active,
                requiere_cambio_contrasena: data.requiere_cambio_contrasena,
@@ -101,6 +136,7 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
                email: cleanString(data.email),
                password: data.password!,
                rol_id: data.rol_id,
+               departamento_id: data.departamento_id || null,
                requiere_cambio_contrasena: data.requiere_cambio_contrasena,
             });
             toast({ title: "Éxito", description: "Usuario creado correctamente." });
@@ -183,6 +219,26 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
                            ))}
                         </SelectContent>
                      </Select>
+                     <FormMessage />
+                  </FormItem>
+               )}
+            />
+            <FormField
+               control={form.control}
+               name="departamento_id"
+               render={({ field }) => (
+                  <FormItem>
+                     <FormLabel>Departamento <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
+                     <FormControl>
+                        <AsyncCombobox
+                           value={field.value}
+                           onChange={field.onChange}
+                           fetcher={fetchDepartamentos}
+                           defaultOptions={defaultDepartamentoOptions}
+                           placeholder="Buscar departamento..."
+                           emptyMessage="No se encontraron departamentos."
+                        />
+                     </FormControl>
                      <FormMessage />
                   </FormItem>
                )}

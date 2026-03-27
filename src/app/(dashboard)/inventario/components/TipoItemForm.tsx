@@ -1,10 +1,10 @@
 "use client";
 
+import { useState, useCallback, useMemo } from "react";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
@@ -12,9 +12,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
+import { AsyncCombobox, type Option } from "@/components/ui/AsyncCombobox";
 import { useToast } from "@/components/ui/use-toast";
+
 import { tipoItemSchema } from "@/lib/zod";
 import { api } from "@/lib/http";
+import { catalogosService } from "@/app/services/catalogosService";
 import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import type { TipoItemInventario, Proveedor } from "@/types/api";
 
@@ -34,19 +37,51 @@ export function TipoItemForm({ initialData, proveedores, onSuccess }: TipoItemFo
 
    const form = useForm<FormValues>({
       resolver: standardSchemaResolver(tipoItemSchema),
-      defaultValues: initialData || {
+      defaultValues: initialData ? {
+         ...initialData,
+         marca_id: initialData.marca_id || null, // Asegurar que sea null y no undefined
+      } : {
          nombre: "",
          categoria: "Consumible",
          unidad_medida: "Unidad",
          stock_minimo: 0,
          proveedor_preferido_id: null,
          sku: null,
-         marca: null,
+         marca_id: null,
          modelo: null,
          codigo_barras: null,
          descripcion: null,
       },
    });
+
+   // ─── FETCHER DE MARCAS ───
+   const fetchMarcas = useCallback(async (search: string): Promise<Option[]> => {
+      try {
+         const data = await catalogosService.getMarcas({ include_inactive: false });
+         const searchLower = search.toLowerCase();
+         const filtered = search
+            ? data.filter(m => m.nombre.toLowerCase().includes(searchLower))
+            : data;
+
+         return filtered.slice(0, 50).map((m) => ({
+            value: m.id,
+            label: m.nombre
+         }));
+      } catch (error) {
+         console.error("Error al buscar marcas:", error);
+         return [];
+      }
+   }, []);
+
+   const defaultMarcaOptions = useMemo<Option[]>(() => {
+      if (initialData?.marca_rel) {
+         return [{
+            value: initialData.marca_rel.id,
+            label: initialData.marca_rel.nombre
+         }];
+      }
+      return [];
+   }, [initialData]);
 
    const onSubmit = async (data: FormValues) => {
       setIsLoading(true);
@@ -56,7 +91,7 @@ export function TipoItemForm({ initialData, proveedores, onSuccess }: TipoItemFo
          const payload = {
             ...data,
             sku: emptyToNull(data.sku),
-            marca: emptyToNull(data.marca),
+            marca_id: data.marca_id || null,
             modelo: emptyToNull(data.modelo),
             codigo_barras: emptyToNull(data.codigo_barras),
             descripcion: emptyToNull(data.descripcion),
@@ -187,12 +222,19 @@ export function TipoItemForm({ initialData, proveedores, onSuccess }: TipoItemFo
 
                <FormField
                   control={form.control}
-                  name="marca"
+                  name="marca_id"
                   render={({ field }) => (
                      <FormItem>
-                        <FormLabel>Marca (Opcional)</FormLabel>
+                        <FormLabel>Marca <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                         <FormControl>
-                           <Input placeholder="Ej. HP" {...field} value={field.value ?? ""} />
+                           <AsyncCombobox
+                              value={field.value}
+                              onChange={field.onChange}
+                              fetcher={fetchMarcas}
+                              defaultOptions={defaultMarcaOptions}
+                              placeholder="Buscar marca..."
+                              emptyMessage="No se encontraron marcas activas."
+                           />
                         </FormControl>
                         <FormMessage />
                      </FormItem>

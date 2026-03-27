@@ -35,7 +35,9 @@ export const EstadoMovimientoEquipoEnum = {
   Rechazado: "Rechazado",
 } as const satisfies Record<string, string>;
 
-export type EstadoMovimientoEquipo = ValuesOf<typeof EstadoMovimientoEquipoEnum>;
+export type EstadoMovimientoEquipo = ValuesOf<
+  typeof EstadoMovimientoEquipoEnum
+>;
 
 // ---
 
@@ -73,7 +75,9 @@ export const TipoRelacionComponenteEnum = {
   Accesorio: "accesorio",
 } as const satisfies Record<string, string>;
 
-export type TipoRelacionComponente = ValuesOf<typeof TipoRelacionComponenteEnum>;
+export type TipoRelacionComponente = ValuesOf<
+  typeof TipoRelacionComponenteEnum
+>;
 
 // ---
 
@@ -199,6 +203,46 @@ export interface Rol {
   permisos: Permiso[];
 }
 
+// ─── DEPARTAMENTOS ───────────────────────────────────────────────────────────
+
+export interface DepartamentoSimple {
+  id: string;
+  nombre: string;
+}
+
+export interface Departamento extends DepartamentoSimple {
+  descripcion?: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface DepartamentoCreate {
+  nombre: string;
+  descripcion?: string | null;
+}
+
+export type DepartamentoUpdate = Partial<DepartamentoCreate> & {
+  is_active?: boolean;
+};
+
+// ─── MARCAS ──────────────────────────────────────────────────────────────────
+
+export interface MarcaSimple {
+  id: string;
+  nombre: string;
+}
+
+export interface Marca extends MarcaSimple {
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface MarcaCreate {
+  nombre: string;
+}
+
+export type MarcaUpdate = Partial<MarcaCreate> & { is_active?: boolean };
+
 // ─── USUARIOS ────────────────────────────────────────────────────────────────
 
 export interface UsuarioSimple {
@@ -221,13 +265,15 @@ export interface Usuario {
   email?: string | null;
   avatar_url?: string | null;
   rol_id: string;
+  departamento_id?: string | null;
   bloqueado: boolean;
-  is_active: boolean; // Agregado Soft Delete
+  is_active: boolean;
   ultimo_login?: string | null;
   created_at: string;
   updated_at: string;
   requiere_cambio_contrasena: boolean;
   rol: RolResumen;
+  departamento_rel?: DepartamentoSimple | null;
 }
 
 // ─── PROVEEDORES ─────────────────────────────────────────────────────────────
@@ -245,7 +291,7 @@ export interface Proveedor {
   direccion?: string | null;
   sitio_web?: string | null;
   rnc?: string | null;
-  is_active: boolean; // Agregado Soft Delete
+  is_active: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -285,18 +331,21 @@ export interface Ubicacion {
   id: string;
   nombre: string;
   edificio?: string | null;
-  departamento?: string | null;
+  departamento_id?: string | null;
   is_active: boolean;
   created_at: string;
+  departamento_rel?: DepartamentoSimple | null;
 }
 
 export interface UbicacionCreate {
   nombre: string;
   edificio?: string | null;
-  departamento?: string | null;
+  departamento_id?: string | null;
 }
 
-export type UbicacionUpdate = Partial<UbicacionCreate> & { is_active?: boolean };
+export type UbicacionUpdate = Partial<UbicacionCreate> & {
+  is_active?: boolean;
+};
 
 // ─── CARGA MASIVA (BULK UPLOAD) ─────────────────────────────────────────────
 
@@ -338,7 +387,7 @@ export interface EquipoSimple {
   id: string;
   nombre: string;
   numero_serie: string;
-  marca?: string | null;
+  marca_id?: string | null;
   modelo?: string | null;
 }
 
@@ -350,7 +399,7 @@ export interface EquipoRead {
   estado_id: string;
   ubicacion_id?: string | null;
   ubicacion_actual?: string | null; // Mantenido por retrocompatibilidad temporal
-  marca?: string | null;
+  marca_id?: string | null;
   modelo?: string | null;
   fecha_adquisicion?: string | null;
   fecha_puesta_marcha?: string | null;
@@ -364,13 +413,14 @@ export interface EquipoRead {
   estado?: EstadoEquipoSimple | null;
   proveedor?: ProveedorSimple | null;
   ubicacion?: Ubicacion | null;
+  marca_rel?: MarcaSimple | null;
 }
 
 export interface EquipoSearchResult {
   id: string;
   nombre: string;
   numero_serie: string;
-  marca?: string | null;
+  marca_id?: string | null;
   modelo?: string | null;
   ubicacion_actual?: string | null;
   estado_nombre?: string | null;
@@ -562,7 +612,7 @@ export interface SoftwareCatalogoSimple {
   id: string;
   nombre: string;
   version?: string | null;
-  fabricante?: string | null;
+  marca_id?: string | null;
 }
 
 export interface SoftwareCatalogo extends SoftwareCatalogoSimple {
@@ -573,6 +623,7 @@ export interface SoftwareCatalogo extends SoftwareCatalogoSimple {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  marca_rel?: MarcaSimple | null;
 }
 
 export interface LicenciaSoftwareSimple {
@@ -645,7 +696,7 @@ export interface TipoItemInventarioSimple {
   nombre: string;
   unidad_medida: UnidadMedida;
   sku?: string | null;
-  marca?: string | null;
+  marca_id?: string | null;
   modelo?: string | null;
 }
 
@@ -657,6 +708,7 @@ export interface TipoItemInventario extends TipoItemInventarioSimple {
   proveedor_preferido_id?: string | null;
   proveedor_preferido?: ProveedorSimple | null;
   is_active: boolean;
+  marca_rel?: MarcaSimple | null;
 }
 
 export interface TipoItemInventarioConStock extends TipoItemInventario {
@@ -783,13 +835,16 @@ export interface ProveedorCreate {
   rnc?: string | null;
 }
 
-export type ProveedorUpdate = Partial<ProveedorCreate> & { is_active?: boolean };
+export type ProveedorUpdate = Partial<ProveedorCreate> & {
+  is_active?: boolean;
+};
 
 export interface UsuarioCreate {
   nombre_usuario: string;
   email?: string | null;
   password: string;
   rol_id: string;
+  departamento_id?: string | null;
   requiere_cambio_contrasena?: boolean;
 }
 
@@ -798,6 +853,7 @@ export interface UsuarioUpdate {
   email?: string | null;
   password?: string | null;
   rol_id?: string | null;
+  departamento_id?: string | null;
   avatar_url?: string | null;
   intentos_fallidos?: number | null;
   bloqueado?: boolean | null;
@@ -837,13 +893,15 @@ export type TipoMantenimientoUpdate = Partial<TipoMantenimientoCreate>;
 export interface SoftwareCatalogoCreate {
   nombre: string;
   version?: string | null;
-  fabricante?: string | null;
+  marca_id?: string | null;
   descripcion?: string | null;
   categoria?: string | null;
   tipo_licencia: TipoLicenciaSoftware;
   metrica_licenciamiento: MetricaLicenciamiento;
 }
-export type SoftwareCatalogoUpdate = Partial<SoftwareCatalogoCreate> & { is_active?: boolean };
+export type SoftwareCatalogoUpdate = Partial<SoftwareCatalogoCreate> & {
+  is_active?: boolean;
+};
 
 export interface EquipoCreate {
   nombre: string;
@@ -851,7 +909,7 @@ export interface EquipoCreate {
   codigo_interno?: string | null;
   estado_id: string;
   ubicacion_id?: string | null; // Obliga a usar UUID
-  marca?: string | null;
+  marca_id?: string | null;
   modelo?: string | null;
   fecha_adquisicion?: string | null;
   fecha_puesta_marcha?: string | null;
@@ -948,7 +1006,9 @@ export interface ReservaEquipoCheckInOut {
 }
 
 export interface DocumentacionVerify {
-  estado: typeof EstadoDocumentoEnum.Verificado | typeof EstadoDocumentoEnum.Rechazado;
+  estado:
+    | typeof EstadoDocumentoEnum.Verificado
+    | typeof EstadoDocumentoEnum.Rechazado;
   notas_verificacion?: string | null;
 }
 
@@ -964,14 +1024,16 @@ export interface TipoItemInventarioCreate {
   unidad_medida: UnidadMedida;
   descripcion?: string | null;
   stock_minimo?: number;
-  marca?: string | null;
+  marca_id?: string | null;
   modelo?: string | null;
   sku?: string | null;
   codigo_barras?: string | null;
   proveedor_preferido_id?: string | null;
 }
 
-export type TipoItemInventarioUpdate = Partial<TipoItemInventarioCreate> & { is_active?: boolean };
+export type TipoItemInventarioUpdate = Partial<TipoItemInventarioCreate> & {
+  is_active?: boolean;
+};
 
 export interface InventarioMovimientoCreate {
   tipo_item_id: string;
@@ -1033,7 +1095,12 @@ export interface AsignacionLicenciaUpdate {
 }
 
 export type ReporteParams = {
-  tipo_reporte: "equipos" | "mantenimientos" | "kardex" | "movimientos" | "auditoria";
+  tipo_reporte:
+    | "equipos"
+    | "mantenimientos"
+    | "kardex"
+    | "movimientos"
+    | "auditoria";
   formato: "pdf" | "excel" | "csv";
   fecha_inicio: string;
   fecha_fin: string;

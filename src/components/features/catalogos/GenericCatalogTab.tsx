@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { MoreHorizontal, PlusCircle, Trash2, Pencil } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Trash2, Pencil, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
@@ -10,14 +10,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/DropdownMenu";
 import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
 import { Badge } from "@/components/ui/Badge";
+import { Switch } from "@/components/ui/Switch";
+import { Label } from "@/components/ui/Label";
 
 import { GenericCatalogForm } from "./GenericCatalogForm";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { api } from "@/lib/http";
+import { useToast } from "@/components/ui/use-toast";
 
 type GenericItem = {
    id: string;
    nombre: string;
+   is_active?: boolean;
    [key: string]: any;
 };
 
@@ -26,14 +30,15 @@ interface GenericCatalogTabProps {
    title: string;
    apiEndpoint: string;
    formFields: string[];
+   isUbicacion?: boolean;
 }
 
-// Reutilizamos la lógica de humanizar nombres para las cabeceras de la tabla
 const humanizeFieldName = (field: string) => {
    if (field === "color_hex") return "Color";
    if (field === "periodicidad_dias") return "Periodicidad";
    if (field === "requiere_documentacion") return "Req. Doc.";
    if (field === "es_preventivo") return "Preventivo";
+   if (field === "departamento_id") return "Departamento";
 
    return field.charAt(0).toUpperCase() + field.slice(1).replace(/_/g, ' ');
 };
@@ -42,18 +47,50 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
    data = [],
    title,
    apiEndpoint,
-   formFields
+   formFields,
+   isUbicacion = false
 }) => {
-   const [items, setItems] = useState(data || []);
+   const { toast } = useToast();
+   const [items, setItems] = useState<GenericItem[]>(data || []);
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [selectedItem, setSelectedItem] = useState<GenericItem | null>(null);
 
+   // --- NUEVO ESTADO PARA EL SWITCH ---
+   const [showInactive, setShowInactive] = useState(false);
+   const [isLoading, setIsLoading] = useState(false);
+
+   // Sincroniza el estado local cuando cambian los props Iniciales
+   useEffect(() => {
+      setItems(data || []);
+   }, [JSON.stringify(data)]);
+
+   // --- NUEVA FUNCIÓN PARA REFRESCAR LOS DATOS (con filtro) ---
+   const fetchItems = useCallback(async () => {
+      setIsLoading(true);
+      try {
+         const freshData = await api.get<GenericItem[]>(apiEndpoint, {
+            params: { include_inactive: showInactive }
+         });
+         setItems(freshData);
+      } catch (error) {
+         toast({ variant: "destructive", title: "Error", description: "No se pudieron actualizar los datos." });
+      } finally {
+         setIsLoading(false);
+      }
+   }, [apiEndpoint, showInactive, toast]);
+
+   // Re-fetch cuando el switch cambie
+   useEffect(() => {
+      // Evitamos hacer el fetch en el primer render, ya que usamos el prop `data`
+      if (items.length > 0 || showInactive) {
+         fetchItems();
+      }
+   }, [showInactive, fetchItems]);
+   // -----------------------------------------------------------
+
    const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } = useDeleteConfirmation({
       onDelete: (id) => api.delete(`${apiEndpoint}/${id}`),
-      onSuccess: async () => {
-         const fresh = await api.get<GenericItem[]>(apiEndpoint);
-         setItems(fresh);
-      },
+      onSuccess: fetchItems, // Usamos la nueva función para refrescar
       successMessage: `El ítem ha sido eliminado correctamente del catálogo.`,
    });
 
@@ -110,7 +147,19 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
          };
       }
 
-      // Caso por defecto (Textos: Nombre, Descripción, Edificio, Departamento)
+      // Caso Especial 4: Relaciones Foráneas (Departamento)
+      if (field === "departamento_id") {
+         return {
+            accessorKey: "departamento_rel.nombre",
+            header: humanizeFieldName(field),
+            cell: ({ row }) => {
+               const depRel = row.original.departamento_rel;
+               return <span className="text-muted-foreground">{depRel?.nombre || "-"}</span>;
+            }
+         };
+      }
+
+      // Caso por defecto (Textos: Nombre, Descripción, Edificio)
       return {
          accessorKey: field,
          header: humanizeFieldName(field),
@@ -118,9 +167,14 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
             const val = row.getValue(field) as string;
             const isNombre = field === "nombre";
             return (
-               <span className={isNombre ? "font-semibold text-foreground" : "text-muted-foreground"}>
-                  {val || "-"}
-               </span>
+               <div className="flex items-center gap-2">
+                  <span className={isNombre ? "font-semibold text-foreground" : "text-muted-foreground"}>
+                     {val || "-"}
+                  </span>
+                  {isNombre && row.original.is_active === false && (
+                     <Badge variant="outline" className="text-[10px] text-destructive border-destructive px-1 py-0 h-4">Inactivo</Badge>
+                  )}
+               </div>
             );
          }
       };
@@ -175,19 +229,36 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
                   initialData={selectedItem ?? undefined}
                   apiEndpoint={apiEndpoint}
                   formFields={formFields}
+                  isUbicacion={isUbicacion}
                   onSuccess={async () => {
                      setIsModalOpen(false);
-                     const fresh = await api.get<GenericItem[]>(apiEndpoint);
-                     setItems(fresh);
+                     await fetchItems(); // Usamos la nueva función
                   }}
                />
             </DialogContent>
          </Dialog>
 
-         <div className="flex justify-end mb-4">
-            <Button onClick={handleNew} className="shadow-sm">
-               <PlusCircle className="mr-2 h-4 w-4" /> Crear Nuevo {title}
-            </Button>
+         <div className="flex justify-between items-center mb-4">
+            {/* EL SWITCH DE INACTIVOS */}
+            <div className="flex items-center space-x-2">
+               <Switch
+                  id={`show-inactive-${title}`}
+                  checked={showInactive}
+                  onCheckedChange={setShowInactive}
+               />
+               <Label htmlFor={`show-inactive-${title}`} className="text-sm text-muted-foreground cursor-pointer">
+                  Mostrar inactivos
+               </Label>
+            </div>
+
+            <div className="flex gap-2">
+               <Button variant="outline" onClick={fetchItems} disabled={isLoading} title="Actualizar lista">
+                  <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+               </Button>
+               <Button onClick={handleNew} className="shadow-sm">
+                  <PlusCircle className="mr-2 h-4 w-4" /> Crear Nuevo {title}
+               </Button>
+            </div>
          </div>
 
          <DataTable

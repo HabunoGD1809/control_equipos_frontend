@@ -1,21 +1,24 @@
 "use client";
 
+import { useState, useCallback, useMemo } from "react";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
 import { Input } from "@/components/ui/Input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
+import { AsyncCombobox, type Option } from "@/components/ui/AsyncCombobox";
 import { useToast } from "@/components/ui/use-toast";
+
 import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import { softwareCatalogoSchema } from "@/lib/zod";
 import { SoftwareCatalogo, TipoLicenciaSoftwareEnum, MetricaLicenciamientoEnum } from "@/types/api";
 import { licenciasService } from "@/app/services/licenciasService";
+import { catalogosService } from "@/app/services/catalogosService";
 
 interface SoftwareCatalogoFormProps {
    initialData?: SoftwareCatalogo | null;
@@ -35,21 +38,55 @@ export function SoftwareCatalogoForm({ initialData, onSuccess }: SoftwareCatalog
       defaultValues: {
          nombre: initialData?.nombre ?? "",
          version: initialData?.version ?? "",
-         fabricante: initialData?.fabricante ?? "",
+         marca_id: initialData?.marca_id ?? null,
          tipo_licencia: initialData?.tipo_licencia ?? undefined,
          metrica_licenciamiento: initialData?.metrica_licenciamiento ?? undefined,
          descripcion: initialData?.descripcion ?? "",
       },
    });
 
+   // ─── FETCHER DE MARCAS (FABRICANTES) ───
+   const fetchMarcas = useCallback(async (search: string): Promise<Option[]> => {
+      try {
+         const data = await catalogosService.getMarcas({ include_inactive: false });
+         const searchLower = search.toLowerCase();
+         const filtered = search
+            ? data.filter(m => m.nombre.toLowerCase().includes(searchLower))
+            : data;
+
+         return filtered.slice(0, 50).map((m) => ({
+            value: m.id,
+            label: m.nombre
+         }));
+      } catch (error) {
+         console.error("Error al buscar marcas:", error);
+         return [];
+      }
+   }, []);
+
+   const defaultMarcaOptions = useMemo<Option[]>(() => {
+      if (initialData?.marca_rel) {
+         return [{
+            value: initialData.marca_rel.id,
+            label: initialData.marca_rel.nombre
+         }];
+      }
+      return [];
+   }, [initialData]);
+
    const onSubmit = async (data: FormValues) => {
       setIsLoading(true);
       try {
+         const payload = {
+            ...data,
+            marca_id: data.marca_id || null,
+         };
+
          if (isEditing) {
-            await licenciasService.updateSoftware(initialData!.id, data as any);
+            await licenciasService.updateSoftware(initialData!.id, payload as any);
             toast({ title: "Éxito", description: "Software actualizado en el catálogo." });
          } else {
-            await licenciasService.createSoftware(data as any);
+            await licenciasService.createSoftware(payload as any);
             toast({ title: "Éxito", description: "Software añadido al catálogo." });
          }
 
@@ -73,7 +110,7 @@ export function SoftwareCatalogoForm({ initialData, onSuccess }: SoftwareCatalog
             <div className="grid grid-cols-2 gap-4">
                <FormField control={form.control} name="nombre" render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Nombre del Software</FormLabel>
+                     <FormLabel>Nombre del Software <span className="text-destructive">*</span></FormLabel>
                      <FormControl><Input {...field} value={field.value ?? ""} /></FormControl>
                      <FormMessage />
                   </FormItem>
@@ -88,10 +125,19 @@ export function SoftwareCatalogoForm({ initialData, onSuccess }: SoftwareCatalog
                )} />
             </div>
 
-            <FormField control={form.control} name="fabricante" render={({ field }) => (
+            <FormField control={form.control} name="marca_id" render={({ field }) => (
                <FormItem>
-                  <FormLabel>Fabricante</FormLabel>
-                  <FormControl><Input {...field} value={field.value ?? ""} /></FormControl>
+                  <FormLabel>Fabricante / Marca <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
+                  <FormControl>
+                     <AsyncCombobox
+                        value={field.value}
+                        onChange={field.onChange}
+                        fetcher={fetchMarcas}
+                        defaultOptions={defaultMarcaOptions}
+                        placeholder="Buscar fabricante..."
+                        emptyMessage="No se encontraron fabricantes activos."
+                     />
+                  </FormControl>
                   <FormMessage />
                </FormItem>
             )} />
@@ -99,7 +145,7 @@ export function SoftwareCatalogoForm({ initialData, onSuccess }: SoftwareCatalog
             <div className="grid grid-cols-2 gap-4">
                <FormField control={form.control} name="tipo_licencia" render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Tipo de Licencia</FormLabel>
+                     <FormLabel>Tipo de Licencia <span className="text-destructive">*</span></FormLabel>
                      <Select value={field.value ?? undefined} onValueChange={field.onChange}>
                         <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un tipo..." /></SelectTrigger></FormControl>
                         <SelectContent>
@@ -114,7 +160,7 @@ export function SoftwareCatalogoForm({ initialData, onSuccess }: SoftwareCatalog
 
                <FormField control={form.control} name="metrica_licenciamiento" render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Métrica</FormLabel>
+                     <FormLabel>Métrica <span className="text-destructive">*</span></FormLabel>
                      <Select value={field.value ?? undefined} onValueChange={field.onChange}>
                         <FormControl><SelectTrigger><SelectValue placeholder="Seleccione una métrica..." /></SelectTrigger></FormControl>
                         <SelectContent>

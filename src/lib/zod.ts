@@ -245,11 +245,7 @@ const equipoBaseSchema = z.object({
   estado_id: requiredUuid("Debe seleccionar un estado."),
   ubicacion_id: z.string().uuid().optional().nullable(),
   proveedor_id: z.string().uuid().optional().nullable(),
-  marca: z
-    .string()
-    .max(100, { error: "Máximo 100 caracteres." })
-    .optional()
-    .nullable(),
+  marca_id: z.string().uuid("ID de marca inválido").optional().nullable(),
   modelo: z
     .string()
     .max(100, { error: "Máximo 100 caracteres." })
@@ -424,7 +420,7 @@ export const tipoItemSchema = z.object({
     "Unidad de medida inválida.",
   ),
   descripcion: z.string().optional().nullable(),
-  marca: z.string().max(100).optional().nullable(),
+  marca_id: z.string().uuid("ID de marca inválido").optional().nullable(),
   modelo: z.string().max(100).optional().nullable(),
   sku: z.string().max(100).optional().nullable(),
   codigo_barras: z.string().max(100).optional().nullable(),
@@ -544,7 +540,7 @@ export const editStockSchema = inventarioStockUpdateSchema;
 export const softwareCatalogoSchema = z.object({
   nombre: requiredString("El nombre es requerido.").min(2).max(255),
   version: z.string().max(50).optional().nullable(),
-  fabricante: z.string().max(100).optional().nullable(),
+  marca_id: z.string().uuid("ID de marca inválido").optional().nullable(),
   tipo_licencia: requiredEnum(Object.values(TipoLicenciaSoftwareEnum)),
   metrica_licenciamiento: requiredEnum(
     Object.values(MetricaLicenciamientoEnum),
@@ -621,6 +617,7 @@ export const usuarioCreateSchema = z.object({
   email: emailField,
   password: z.string().min(8, { error: "Mínimo 8 caracteres" }),
   rol_id: requiredUuid("Rol requerido."),
+  departamento_id: z.string().uuid().optional().nullable(),
   requiere_cambio_contrasena: z.boolean().optional(),
 });
 
@@ -635,6 +632,7 @@ export const usuarioUpdateSchema = z.object({
   ]),
   avatar_url: urlField,
   rol_id: z.string().uuid().optional(),
+  departamento_id: z.string().uuid().optional().nullable(),
   bloqueado: z.boolean().optional(),
   is_active: z.boolean().optional(),
   requiere_cambio_contrasena: z.boolean().optional(),
@@ -657,7 +655,7 @@ export const updateProfileSchema = z.object({
   avatar_url: urlField,
 });
 
-// ─── PROVEEDORES Y CATÁLOGOS ──────────────────────────────
+// ─── PROVEEDORES Y CATÁLOGOS NUEVOS ───────────────────────
 
 export const proveedorSchema = z.object({
   nombre: requiredString("Nombre requerido.").min(2).max(255),
@@ -722,6 +720,17 @@ export const tipoMantenimientoSchema = z.object({
   es_preventivo: z.boolean().optional(),
   requiere_documentacion: z.boolean().optional(),
   periodicidad_dias: z.coerce.number().int().min(0).optional().nullable(),
+});
+
+export const departamentoSchema = z.object({
+  nombre: requiredString("El nombre es requerido.").min(2).max(150),
+  descripcion: z.string().optional().nullable(),
+  is_active: z.boolean().optional(),
+});
+
+export const marcaSchema = z.object({
+  nombre: requiredString("El nombre es requerido.").min(2).max(100),
+  is_active: z.boolean().optional(),
 });
 
 // ─── RESERVAS Y MOVIMIENTOS (Handoffs) ────────────────────
@@ -926,7 +935,7 @@ export const resetPasswordConfirmSchema = z
 export const ubicacionSchema = z.object({
   nombre: requiredString("Nombre de ubicación requerido.").min(2).max(255),
   edificio: z.string().optional().nullable(),
-  departamento: z.string().optional().nullable(),
+  departamento_id: z.string().uuid("ID de departamento inválido").optional().nullable(),
   is_active: z.boolean().optional(),
 });
 

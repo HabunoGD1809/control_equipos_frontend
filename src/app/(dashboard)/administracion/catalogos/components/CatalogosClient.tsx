@@ -1,7 +1,7 @@
 "use client"
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
-import { EstadoEquipo, TipoDocumento, TipoMantenimiento, Proveedor, Ubicacion, Tecnico } from "@/types/api";
+import { EstadoEquipo, TipoDocumento, TipoMantenimiento, Proveedor, Ubicacion, Tecnico, Departamento, Marca } from "@/types/api";
 import { GenericCatalogTab } from "@/components/features/catalogos/GenericCatalogTab";
 import { ProveedoresTab } from "@/components/features/proveedores/ProveedoresTab";
 import { TecnicosTab } from "@/components/features/catalogos/TecnicosTab";
@@ -13,6 +13,8 @@ interface CatalogosClientProps {
    initialProveedores: Proveedor[];
    initialUbicaciones: Ubicacion[];
    initialTecnicos: Tecnico[];
+   initialDepartamentos: Departamento[];
+   initialMarcas: Marca[];
 }
 
 export const CatalogosClient: React.FC<CatalogosClientProps> = ({
@@ -21,24 +23,47 @@ export const CatalogosClient: React.FC<CatalogosClientProps> = ({
    initialTiposMantenimiento,
    initialProveedores,
    initialUbicaciones,
-   initialTecnicos
+   initialTecnicos,
+   initialDepartamentos,
+   initialMarcas
 }) => {
    return (
       <Tabs defaultValue="estados" className="w-full">
          <TabsList className="mb-4 flex flex-wrap h-auto gap-2">
             <TabsTrigger value="estados">Estados de Equipo</TabsTrigger>
-            <TabsTrigger value="tipos-documento">Tipos de Documento</TabsTrigger>
-            <TabsTrigger value="tipos-mantenimiento">Tipos de Mantenimiento</TabsTrigger>
+            <TabsTrigger value="departamentos">Departamentos</TabsTrigger>
+            <TabsTrigger value="ubicaciones">Ubicaciones Físicas</TabsTrigger>
+            <TabsTrigger value="marcas">Marcas</TabsTrigger>
+            <TabsTrigger value="tipos-documento">Tipos de Doc.</TabsTrigger>
+            <TabsTrigger value="tipos-mantenimiento">Tipos de Mant.</TabsTrigger>
             <TabsTrigger value="proveedores">Proveedores</TabsTrigger>
             <TabsTrigger value="tecnicos">Técnicos</TabsTrigger>
-            <TabsTrigger value="ubicaciones">Ubicaciones Físicas</TabsTrigger>
          </TabsList>
+
          <TabsContent value="estados" className="mt-0 animate-in fade-in duration-300">
             <GenericCatalogTab
                data={initialEstados as any[]}
                title="Estado de Equipo"
                apiEndpoint="/catalogos/estados-equipo"
                formFields={['nombre', 'descripcion', 'color_hex']}
+            />
+         </TabsContent>
+
+         <TabsContent value="departamentos" className="mt-0 animate-in fade-in duration-300">
+            <GenericCatalogTab
+               data={initialDepartamentos as any[]}
+               title="Departamento"
+               apiEndpoint="/catalogos/departamentos"
+               formFields={['nombre', 'descripcion']}
+            />
+         </TabsContent>
+
+         <TabsContent value="marcas" className="mt-0 animate-in fade-in duration-300">
+            <GenericCatalogTab
+               data={initialMarcas as any[]}
+               title="Marca"
+               apiEndpoint="/catalogos/marcas"
+               formFields={['nombre']}
             />
          </TabsContent>
 
@@ -64,7 +89,6 @@ export const CatalogosClient: React.FC<CatalogosClientProps> = ({
             <ProveedoresTab data={initialProveedores} />
          </TabsContent>
 
-         {/* --- PESTAÑA DE TÉCNICOS --- */}
          <TabsContent value="tecnicos" className="mt-0 animate-in fade-in duration-300">
             <TecnicosTab initialData={initialTecnicos} proveedores={initialProveedores} />
          </TabsContent>
@@ -74,7 +98,8 @@ export const CatalogosClient: React.FC<CatalogosClientProps> = ({
                data={initialUbicaciones as any[]}
                title="Ubicación Física"
                apiEndpoint="/ubicaciones"
-               formFields={['nombre', 'edificio', 'departamento']}
+               formFields={['nombre', 'edificio', 'departamento_id']}
+               isUbicacion={true}
             />
          </TabsContent>
       </Tabs>

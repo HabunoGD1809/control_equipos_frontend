@@ -2,16 +2,18 @@
 
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
 import { Input } from "@/components/ui/Input";
 import { Switch } from "@/components/ui/Switch";
+import { AsyncCombobox, type Option } from "@/components/ui/AsyncCombobox";
 import { useToast } from "@/components/ui/use-toast";
 import { api } from "@/lib/http";
 import { getFriendlyErrorMessage } from "@/lib/error-handling";
+import { catalogosService } from "@/app/services/catalogosService";
 
 type FormValues = {
    nombre: string;
@@ -22,21 +24,23 @@ interface GenericCatalogFormProps {
    initialData?: any;
    apiEndpoint: string;
    formFields: string[];
+   isUbicacion?: boolean; // <-- PROPIEDAD AÑADIDA
    onSuccess: () => void;
 }
 
-// Función auxiliar para humanizar los nombres de los campos (ej: "color_hex" -> "Color Hex")
+// Función auxiliar para humanizar los nombres de los campos
 const humanizeFieldName = (field: string) => {
    if (field === "color_hex") return "Color (Hex)";
    if (field === "periodicidad_dias") return "Periodicidad (días)";
    if (field === "requiere_documentacion") return "Requiere Documentación";
    if (field === "es_preventivo") return "Es Preventivo";
+   if (field === "departamento_id") return "Departamento"; // <-- AÑADIDO
 
    // Capitalizar la primera letra y reemplazar guiones bajos por espacios
    return field.charAt(0).toUpperCase() + field.slice(1).replace(/_/g, ' ');
 };
 
-export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuccess }: GenericCatalogFormProps) {
+export function GenericCatalogForm({ initialData, apiEndpoint, formFields, isUbicacion = false, onSuccess }: GenericCatalogFormProps) {
    const router = useRouter();
    const { toast } = useToast();
    const [isLoading, setIsLoading] = useState(false);
@@ -54,6 +58,37 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuc
    const form = useForm<FormValues>({
       defaultValues,
    });
+
+   // ─── FETCHER DE DEPARTAMENTOS (Solo si es Ubicación) ───
+   const fetchDepartamentos = useCallback(async (search: string): Promise<Option[]> => {
+      if (!isUbicacion) return [];
+      try {
+         const data = await catalogosService.getDepartamentos({ include_inactive: false });
+         const searchLower = search.toLowerCase();
+         const filtered = search
+            ? data.filter(d => d.nombre.toLowerCase().includes(searchLower))
+            : data;
+
+         return filtered.slice(0, 50).map((d) => ({
+            value: d.id,
+            label: d.nombre
+         }));
+      } catch (error) {
+         console.error("Error al buscar departamentos:", error);
+         return [];
+      }
+   }, [isUbicacion]);
+
+   const defaultDepartamentoOptions = useMemo<Option[]>(() => {
+      if (isUbicacion && initialData?.departamento_rel) {
+         return [{
+            value: initialData.departamento_rel.id,
+            label: initialData.departamento_rel.nombre
+         }];
+      }
+      return [];
+   }, [initialData, isUbicacion]);
+   // ────────────────────────────────────────────────────────
 
    const onSubmit = async (data: FormValues) => {
       if (!data.nombre || data.nombre.trim().length < 2) {
@@ -160,6 +195,28 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuc
                         <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
                            <div className="space-y-0.5"><FormLabel className="text-base">{humanizeFieldName(field)}</FormLabel></div>
                            <FormControl><Switch checked={formField.value ?? false} onCheckedChange={formField.onChange} /></FormControl>
+                        </FormItem>
+                     )} />
+                  );
+               }
+
+               // 4. NUEVO CASO: Selector de Departamento (AsyncCombobox)
+               if (field === "departamento_id") {
+                  return (
+                     <FormField key={field} control={form.control} name={field} render={({ field: formField }) => (
+                        <FormItem>
+                           <FormLabel>{humanizeFieldName(field)} <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
+                           <FormControl>
+                              <AsyncCombobox
+                                 value={formField.value}
+                                 onChange={formField.onChange}
+                                 fetcher={fetchDepartamentos}
+                                 defaultOptions={defaultDepartamentoOptions}
+                                 placeholder="Buscar departamento..."
+                                 emptyMessage="No se encontraron departamentos."
+                              />
+                           </FormControl>
+                           <FormMessage />
                         </FormItem>
                      )} />
                   );

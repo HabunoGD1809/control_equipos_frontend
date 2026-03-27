@@ -76,19 +76,23 @@ export function UsuariosClient() {
          accessorKey: "nombre_usuario",
          header: "Usuario",
          cell: ({ row }) => (
-            <div className="flex items-center gap-2">
-               <span className="font-medium">{row.original.nombre_usuario}</span>
-               {row.original.is_active === false && (
-                  <Badge variant="outline" className="text-[10px] text-destructive border-destructive">Inactivo</Badge>
-               )}
+            <div className="flex flex-col gap-0.5">
+               <div className="flex items-center gap-2">
+                  <span className="font-medium">{row.original.nombre_usuario}</span>
+                  {row.original.is_active === false && (
+                     <Badge variant="outline" className="text-[10px] text-destructive border-destructive">Inactivo</Badge>
+                  )}
+               </div>
+               {row.original.email && <span className="text-xs text-muted-foreground">{row.original.email}</span>}
             </div>
          ),
       },
       {
-         accessorKey: "email",
-         header: "Email",
+         // Mostramos el Departamento aquí
+         accessorKey: "departamento_rel.nombre",
+         header: "Departamento",
          cell: ({ row }) => (
-            <span className="text-muted-foreground">{row.original.email || "--"}</span>
+            <span className="text-muted-foreground">{row.original.departamento_rel?.nombre || "--"}</span>
          ),
       },
       {

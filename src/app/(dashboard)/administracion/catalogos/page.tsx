@@ -6,7 +6,9 @@ import {
    TipoMantenimiento,
    Proveedor,
    Ubicacion,
-   Tecnico
+   Tecnico,
+   Departamento,
+   Marca
 } from "@/types/api";
 
 async function getCatalogosData() {
@@ -17,13 +19,24 @@ async function getCatalogosData() {
    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
    try {
-      const [estadosRes, tiposDocRes, tiposMantRes, proveedoresRes, ubicacionesRes, tecnicosRes] = await Promise.all([
+      const [
+         estadosRes,
+         tiposDocRes,
+         tiposMantRes,
+         proveedoresRes,
+         ubicacionesRes,
+         tecnicosRes,
+         departamentosRes,
+         marcasRes
+      ] = await Promise.all([
          fetch(`${baseUrl}/catalogos/estados-equipo/`, { headers, cache: 'no-store' }),
          fetch(`${baseUrl}/catalogos/tipos-documento/`, { headers, cache: 'no-store' }),
          fetch(`${baseUrl}/catalogos/tipos-mantenimiento/`, { headers, cache: 'no-store' }),
          fetch(`${baseUrl}/proveedores/`, { headers, cache: 'no-store' }),
          fetch(`${baseUrl}/ubicaciones/`, { headers, cache: 'no-store' }),
          fetch(`${baseUrl}/tecnicos/`, { headers, cache: 'no-store' }),
+         fetch(`${baseUrl}/catalogos/departamentos/`, { headers, cache: 'no-store' }),
+         fetch(`${baseUrl}/catalogos/marcas/`, { headers, cache: 'no-store' }),
       ]);
 
       return {
@@ -33,6 +46,8 @@ async function getCatalogosData() {
          proveedores: proveedoresRes.ok ? await proveedoresRes.json() as Proveedor[] : [],
          ubicaciones: ubicacionesRes.ok ? await ubicacionesRes.json() as Ubicacion[] : [],
          tecnicos: tecnicosRes.ok ? await tecnicosRes.json() as Tecnico[] : [],
+         departamentos: departamentosRes.ok ? await departamentosRes.json() as Departamento[] : [],
+         marcas: marcasRes.ok ? await marcasRes.json() as Marca[] : [], 
       };
    } catch (error) {
       console.error("[GET_CATALOGOS_DATA_ERROR]", error);
@@ -62,6 +77,8 @@ export default async function CatalogosPage() {
             initialProveedores={data.proveedores}
             initialUbicaciones={data.ubicaciones}
             initialTecnicos={data.tecnicos}
+            initialDepartamentos={data.departamentos}
+            initialMarcas={data.marcas}
          />
       </div>
    );

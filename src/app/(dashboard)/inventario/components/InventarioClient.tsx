@@ -106,7 +106,7 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
          )
       },
       { accessorKey: "categoria", header: "Categoría", cell: ({ row }) => <span className="capitalize">{row.original.categoria}</span> },
-      { accessorKey: "marca", header: "Marca", cell: ({ row }) => <span className="text-muted-foreground">{row.original.marca || "--"}</span> },
+      { accessorKey: "marca", header: "Marca", cell: ({ row }) => <span className="text-muted-foreground">{row.original.marca_rel?.nombre || "--"}</span> },
       { accessorKey: "modelo", header: "Modelo", cell: ({ row }) => <span className="text-muted-foreground">{row.original.modelo || "--"}</span> },
       { accessorKey: "unidad_medida", header: "Unidad", cell: ({ row }) => <span className="bg-muted px-2 py-1 rounded-md text-xs font-medium">{row.original.unidad_medida}</span> },
       {

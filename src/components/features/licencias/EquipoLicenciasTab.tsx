@@ -50,7 +50,13 @@ export function EquipoLicenciasTab({ asignaciones, equipoId }: EquipoLicenciasTa
 
    const columns: ColumnDef<AsignacionLicencia>[] = [
       {
-         accessorFn: (row) => `${row.licencia.software_nombre} ${row.licencia.software_version || ''}`,
+         accessorFn: (row) => {
+            const sw = row.licencia?.software_info;
+            if (sw) {
+               return `${sw.nombre} ${sw.version ? `v${sw.version}` : ''}`.trim();
+            }
+            return 'N/A';
+         },
          id: "software",
          header: "Software",
       },
@@ -82,6 +88,11 @@ export function EquipoLicenciasTab({ asignaciones, equipoId }: EquipoLicenciasTa
       }
    ];
 
+   const getSoftwareName = (asignacion: AsignacionLicencia | null) => {
+      if (!asignacion || !asignacion.licencia.software_info) return 'este software';
+      return asignacion.licencia.software_info.nombre;
+   };
+
    return (
       <>
          <DataTable
@@ -91,7 +102,6 @@ export function EquipoLicenciasTab({ asignaciones, equipoId }: EquipoLicenciasTa
             className="mt-4"
          />
 
-         {/* COMPONENTE CONTROLADO */}
          <ConfirmDeleteDialog
             isOpen={!!asignacionToDelete}
             isDeleting={deleteMutation.isPending}
@@ -102,7 +112,7 @@ export function EquipoLicenciasTab({ asignaciones, equipoId }: EquipoLicenciasTa
                }
             }}
             title="Desasignar Licencia"
-            description={`¿Estás seguro de que deseas quitar ${asignacionToDelete?.licencia.software_nombre} de este equipo? Esta acción devolverá la licencia al inventario disponible.`}
+            description={`¿Estás seguro de que deseas quitar ${getSoftwareName(asignacionToDelete)} de este equipo? Esta acción devolverá la licencia al inventario disponible.`}
          />
       </>
    );

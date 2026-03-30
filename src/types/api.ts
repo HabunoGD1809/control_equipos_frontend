@@ -628,8 +628,7 @@ export interface SoftwareCatalogo extends SoftwareCatalogoSimple {
 
 export interface LicenciaSoftwareSimple {
   id: string;
-  software_nombre?: string | null;
-  software_version?: string | null;
+  software_info?: SoftwareCatalogoSimple | null;
   clave_producto?: string | null;
   fecha_expiracion?: string | null;
 }

@@ -32,12 +32,19 @@ export function AsignacionesClient({ data }: AsignacionesClientProps) {
 
    const columns: ColumnDef<AsignacionLicencia>[] = [
       {
-         accessorFn: (row) => row.licencia.software_nombre || 'N/A',
+         accessorFn: (row) => {
+            const sw = row.licencia?.software_info;
+            if (sw) {
+               return `${sw.nombre} ${sw.version ? `v${sw.version}` : ''}`.trim();
+            }
+            return 'N/A';
+         },
          id: "software",
          header: "Software",
       },
       {
          header: "Asignado a",
+         
          cell: ({ row }) => {
             const item = row.original;
             if (item.equipo) {

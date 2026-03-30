@@ -33,13 +33,13 @@ export function Notifications() {
    const prevCountRef = useRef<number | null>(null);
    const eventSourceRef = useRef<EventSource | null>(null);
 
-   // 1. Polling del contador cada 3 segundos (Actúa como safety-net del SSE)
+   // 1. Query Inicial (SIN Polling)
    const { data: polledCount = 0 } = useQuery({
       queryKey: ["notificaciones", "unreadCount"],
       queryFn: () => notificacionesService.getUnreadCount(),
       enabled,
       staleTime: 0,
-      refetchInterval: 3_000,
+      refetchInterval: false,
       refetchIntervalInBackground: false,
    });
 
@@ -55,7 +55,6 @@ export function Notifications() {
             description: "Tienes una nueva alerta o reporte generado.",
             duration: 4000,
          });
-         // Si la cuenta subió, forzamos traer el último listado
          qc.invalidateQueries({ queryKey: ["notificaciones", "latest"] });
       }
 
@@ -63,7 +62,7 @@ export function Notifications() {
       setRealtimeUnreadCount(polledCount);
    }, [polledCount, enabled, toast, qc]);
 
-   // 2. Conexión SSE — Disparador reactivo principal (Compatibilidad JSON)
+   // 2. Conexión SSE — Disparador reactivo principal 
    useEffect(() => {
       if (!enabled) return;
 
@@ -71,14 +70,13 @@ export function Notifications() {
       const source = new EventSource("/api/sse/notificaciones");
       eventSourceRef.current = source;
 
-      // Usamos onmessage para atrapar envíos estándar JSON del backend
+      // Atrapamos el evento estándar
       source.onmessage = (event) => {
-         // Sin importar si es JSON o un contador plano, invalidamos para buscar la info fresca
          qc.invalidateQueries({ queryKey: ["notificaciones", "unreadCount"] });
          qc.invalidateQueries({ queryKey: ["notificaciones", "latest"] });
       };
 
-      // Mantenemos soporte por si el backend emite un evento custom "update"
+      // Atrapamos el evento custom "update"
       source.addEventListener("update", () => {
          qc.invalidateQueries({ queryKey: ["notificaciones", "unreadCount"] });
          qc.invalidateQueries({ queryKey: ["notificaciones", "latest"] });
@@ -185,7 +183,6 @@ export function Notifications() {
             {notifications.length > 0 ? (
                <div className="max-h-87.5 overflow-y-auto no-scrollbar flex flex-col">
                   {notifications.map((notif) => {
-                     // CORRECCIÓN: Alineado con la tabla "reportes" creada en Alembic 2c65ae33746e
                      const isReport = notif.referencia_tabla === "reportes" || notif.referencia_tabla === "reporte_generado";
                      const url = getUrlReferencia(notif);
                      const isDownloading = downloadReportMutation.isPending && downloadReportMutation.variables === notif.referencia_id;

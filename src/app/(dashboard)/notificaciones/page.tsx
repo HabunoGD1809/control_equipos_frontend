@@ -35,12 +35,20 @@ export default function NotificacionesPage() {
    const [notifications, setNotifications] = useState<Notificacion[]>([]);
    const [isLoading, setIsLoading] = useState(true);
    const [page, setPage] = useState(0);
+   const [hasMore, setHasMore] = useState(true);
    const limit = 20;
 
    const fetchNotifications = async (pageNum: number) => {
       setIsLoading(true);
       try {
          const data = await notificacionesService.getAll({ limit, skip: pageNum * limit } as any);
+
+         if (data.length < limit) {
+            setHasMore(false);
+         } else {
+            setHasMore(true);
+         }
+
          setNotifications(prev => pageNum === 0 ? data : [...prev, ...data]);
       } catch (error) {
          toast({ variant: "destructive", title: "Error", description: "No se pudieron cargar las notificaciones." });
@@ -56,9 +64,7 @@ export default function NotificacionesPage() {
    const markAsReadMutation = useMutation({
       mutationFn: (id: string) => notificacionesService.marcarComoLeida(id),
       onSuccess: (_, id) => {
-         // Actualiza la lista local
          setNotifications(notifs => notifs.map(n => n.id === id ? { ...n, leido: true } : n));
-         // Avisa a la campanita que actualice su conteo
          qc.invalidateQueries({ queryKey: ["notificaciones", "unreadCount"] });
          qc.invalidateQueries({ queryKey: ["notificaciones", "latest"] });
       }
@@ -179,7 +185,8 @@ export default function NotificacionesPage() {
                )}
             </CardContent>
 
-            {notifications.length > 0 && (
+            {/* AHORA CONDICIONAMOS A 'hasMore' */}
+            {notifications.length > 0 && hasMore && (
                <CardFooter className="bg-muted/20 border-t p-4 flex justify-center">
                   <Button variant="outline" onClick={() => { setPage(p => p + 1); fetchNotifications(page + 1); }} disabled={isLoading}>
                      Cargar notificaciones anteriores

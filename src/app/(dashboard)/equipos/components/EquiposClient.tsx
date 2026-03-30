@@ -3,15 +3,37 @@
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { PlusCircle, MoreHorizontal, Eye, Edit, Trash2, Search, X, Inbox, RefreshCw, UploadCloud } from "lucide-react";
+import {
+   PlusCircle,
+   MoreHorizontal,
+   Eye,
+   Edit,
+   Trash2,
+   Search,
+   X,
+   Inbox,
+   RefreshCw,
+   UploadCloud,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { Input } from "@/components/ui/Input";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/DropdownMenu";
+import {
+   DropdownMenu,
+   DropdownMenuContent,
+   DropdownMenuItem,
+   DropdownMenuTrigger,
+} from "@/components/ui/DropdownMenu";
 import { Badge } from "@/components/ui/Badge";
 import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/Dialog";
+import {
+   Dialog,
+   DialogContent,
+   DialogHeader,
+   DialogTitle,
+   DialogDescription,
+} from "@/components/ui/Dialog";
 import { EquipoForm } from "@/components/features/equipos/EquipoForm";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -34,7 +56,10 @@ interface EquiposClientProps {
    };
 }
 
-export function EquiposClient({ initialData, initialParams }: EquiposClientProps) {
+export function EquiposClient({
+   initialData,
+   initialParams,
+}: EquiposClientProps) {
    const router = useRouter();
    const { toast } = useToast();
    const { setFilters } = useUrlFilters();
@@ -43,7 +68,9 @@ export function EquiposClient({ initialData, initialParams }: EquiposClientProps
 
    // Estados del Modal
    const [isModalOpen, setIsModalOpen] = useState(false);
-   const [selectedEquipo, setSelectedEquipo] = useState<EquipoRead | undefined>(undefined);
+   const [selectedEquipo, setSelectedEquipo] = useState<EquipoRead | undefined>(
+      undefined,
+   );
    const [estados, setEstados] = useState<EstadoEquipo[]>([]);
    const [proveedores, setProveedores] = useState<ProveedorSimple[]>([]);
    const [isUploadingCSV, setIsUploadingCSV] = useState(false);
@@ -51,22 +78,25 @@ export function EquiposClient({ initialData, initialParams }: EquiposClientProps
    useEffect(() => {
       Promise.all([
          catalogosService.getEstadosEquipo(),
-         proveedoresService.getOptions()
-      ]).then(([estadosData, proveedoresData]) => {
-         setEstados(estadosData);
-         setProveedores(proveedoresData);
-      }).catch(err => console.error("Error cargando catálogos del form:", err));
+         proveedoresService.getOptions(),
+      ])
+         .then(([estadosData, proveedoresData]) => {
+            setEstados(estadosData);
+            setProveedores(proveedoresData);
+         })
+         .catch((err) => console.error("Error cargando catálogos del form:", err));
    }, []);
 
-   const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } = useDeleteConfirmation({
-      onDelete: (id) => equiposService.delete(id),
-      onSuccess: () => router.refresh(),
-      successMessage: "El equipo ha sido eliminado permanentemente.",
-   });
+   const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } =
+      useDeleteConfirmation({
+         onDelete: (id) => equiposService.delete(id),
+         onSuccess: () => router.refresh(),
+         successMessage: "El equipo ha sido eliminado permanentemente.",
+      });
 
    const { searchTerm, setSearchTerm } = useDebouncedSearch(
       initialParams.q,
-      (term) => setFilters({ q: term, page: 1 })
+      (term) => setFilters({ q: term, page: 1 }),
    );
 
    const handleRefresh = () => {
@@ -86,12 +116,18 @@ export function EquiposClient({ initialData, initialParams }: EquiposClientProps
    };
 
    // --- NUEVA LÓGICA DE CARGA MASIVA CSV ---
-   const handleCsvUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+   const handleCsvUpload = async (
+      event: React.ChangeEvent<HTMLInputElement>,
+   ) => {
       const file = event.target.files?.[0];
       if (!file) return;
 
-      if (!file.name.endsWith('.csv')) {
-         toast({ variant: "destructive", title: "Archivo inválido", description: "Por favor sube un archivo con extensión .csv" });
+      if (!file.name.endsWith(".csv")) {
+         toast({
+            variant: "destructive",
+            title: "Archivo inválido",
+            description: "Por favor sube un archivo con extensión .csv",
+         });
          return;
       }
 
@@ -107,10 +143,14 @@ export function EquiposClient({ initialData, initialParams }: EquiposClientProps
          }
          router.refresh();
       } catch (error: any) {
-         toast({ variant: "destructive", title: "Error en la carga", description: error.message || "Fallo al procesar el archivo." });
+         toast({
+            variant: "destructive",
+            title: "Error en la carga",
+            description: error.message || "Fallo al procesar el archivo.",
+         });
       } finally {
          setIsUploadingCSV(false);
-         if (fileInputRef.current) fileInputRef.current.value = '';
+         if (fileInputRef.current) fileInputRef.current.value = "";
       }
    };
    // ----------------------------------------
@@ -119,16 +159,24 @@ export function EquiposClient({ initialData, initialParams }: EquiposClientProps
       {
          accessorKey: "nombre",
          header: "Nombre",
-         cell: ({ row }) => <span className="font-semibold text-foreground">{row.original.nombre}</span>,
+         cell: ({ row }) => (
+            <span className="font-semibold text-foreground">
+               {row.original.nombre}
+            </span>
+         ),
       },
       {
          accessorKey: "numero_serie",
          header: "Serie / Código",
          cell: ({ row }) => (
             <div className="flex flex-col text-sm">
-               <span className="font-mono font-medium uppercase">{row.original.numero_serie}</span>
+               <span className="font-mono font-medium uppercase">
+                  {row.original.numero_serie}
+               </span>
                {row.original.codigo_interno && (
-                  <span className="text-xs text-muted-foreground italic">{row.original.codigo_interno}</span>
+                  <span className="text-xs text-muted-foreground italic">
+                     {row.original.codigo_interno}
+                  </span>
                )}
             </div>
          ),
@@ -140,7 +188,10 @@ export function EquiposClient({ initialData, initialParams }: EquiposClientProps
             const estado = row.original.estado;
             return (
                <Badge
-                  style={{ backgroundColor: estado?.color_hex || "#6b7280", color: "#fff" }}
+                  style={{
+                     backgroundColor: estado?.color_hex || "#6b7280",
+                     color: "#fff",
+                  }}
                   className="border-none shadow-sm font-medium tracking-wide"
                >
                   {estado?.nombre || "Sin Estado"}
@@ -151,14 +202,19 @@ export function EquiposClient({ initialData, initialParams }: EquiposClientProps
       {
          accessorKey: "ubicacion_actual",
          header: "Ubicación",
-         cell: ({ row }) => <span className="text-muted-foreground">{row.original.ubicacion_actual || "No asignada"}</span>,
+         cell: ({ row }) => (
+            <span className="text-muted-foreground">
+               {row.original.ubicacion_actual || "No asignada"}
+            </span>
+         ),
       },
       {
-         accessorKey: "marca",
+         accessorFn: (row) => `${row.marca_rel?.nombre || ""} ${row.modelo || ""}`,
+         id: "marca_modelo",
          header: "Marca / Modelo",
          cell: ({ row }) => (
             <span className="text-sm">
-               {row.original.marca || "-"} {row.original.modelo ? `/ ${row.original.modelo}` : ""}
+               {row.original.marca_rel?.nombre || "-"} {row.original.modelo ? `/ ${row.original.modelo}` : ""}
             </span>
          ),
       },
@@ -173,10 +229,16 @@ export function EquiposClient({ initialData, initialParams }: EquiposClientProps
                   </Button>
                </DropdownMenuTrigger>
                <DropdownMenuContent align="end" className="w-40 shadow-md">
-                  <DropdownMenuItem onClick={() => router.push(`/equipos/${row.original.id}`)} className="cursor-pointer">
+                  <DropdownMenuItem
+                     onClick={() => router.push(`/equipos/${row.original.id}`)}
+                     className="cursor-pointer"
+                  >
                      <Eye className="mr-2 h-4 w-4 text-primary" /> Ver Detalles
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleEdit(row.original)} className="cursor-pointer">
+                  <DropdownMenuItem
+                     onClick={() => handleEdit(row.original)}
+                     className="cursor-pointer"
+                  >
                      <Edit className="mr-2 h-4 w-4 text-primary" /> Editar
                   </DropdownMenuItem>
                   <DropdownMenuItem
@@ -216,8 +278,16 @@ export function EquiposClient({ initialData, initialParams }: EquiposClientProps
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto">
-               <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing} title="Actualizar lista" className="shadow-sm">
-                  <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+               <Button
+                  variant="outline"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  title="Actualizar lista"
+                  className="shadow-sm"
+               >
+                  <RefreshCw
+                     className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+                  />
                </Button>
 
                {/* INPUT INVISIBLE PARA CSV */}
@@ -234,7 +304,11 @@ export function EquiposClient({ initialData, initialParams }: EquiposClientProps
                   disabled={isUploadingCSV}
                   onClick={() => fileInputRef.current?.click()}
                >
-                  {isUploadingCSV ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+                  {isUploadingCSV ? (
+                     <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                     <UploadCloud className="mr-2 h-4 w-4" />
+                  )}
                   Importar CSV
                </Button>
 
@@ -249,9 +323,13 @@ export function EquiposClient({ initialData, initialParams }: EquiposClientProps
                <div className="p-4 bg-muted/30 rounded-full mb-4">
                   <Inbox className="h-10 w-10 text-muted-foreground/50" />
                </div>
-               <h3 className="text-lg font-semibold text-foreground">No se encontraron equipos</h3>
+               <h3 className="text-lg font-semibold text-foreground">
+                  No se encontraron equipos
+               </h3>
                <p className="text-sm text-muted-foreground mb-6 max-w-sm">
-                  {searchTerm ? "No hay resultados para esta búsqueda. Intente con otros términos." : "Aún no hay equipos registrados en la base de datos."}
+                  {searchTerm
+                     ? "No hay resultados para esta búsqueda. Intente con otros términos."
+                     : "Aún no hay equipos registrados en la base de datos."}
                </p>
             </div>
          ) : (
@@ -266,7 +344,8 @@ export function EquiposClient({ initialData, initialParams }: EquiposClientProps
 
                <div className="flex items-center justify-end space-x-2 py-4">
                   <div className="flex-1 text-sm text-muted-foreground">
-                     Página {initialParams.page} — Mostrando {initialData.length} fila(s).
+                     Página {initialParams.page} — Mostrando {initialData.length}{" "}
+                     fila(s).
                   </div>
                   <div className="space-x-2">
                      <Button

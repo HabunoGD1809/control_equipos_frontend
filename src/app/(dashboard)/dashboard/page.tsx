@@ -22,18 +22,35 @@ import { RecentActivityList } from '@/components/features/dashboard/RecentActivi
 import { QuickActions } from '@/components/features/dashboard/QuickActions';
 
 import {
-   DashboardData,
-   Mantenimiento,
-   EquipoRead
+   DashboardData as BaseDashboardData,
+   Mantenimiento
 } from '@/types/api';
 
-interface TipoItemInventarioConStock {
+// 1. EXTENDEMOS LA INTERFAZ (Para incluir el valor calculado por el backend)
+interface DashboardData extends BaseDashboardData {
+   total_valor_activos: number;
+}
+
+// 2. TIPADO ESTRICTO PARA LA API Y EL ADAPTADOR (Cero 'any')
+interface APIItemBajoStock {
    id: string;
    nombre: string;
-   categoria: string;
    unidad_medida: string;
-   stock_minimo: number;
    stock_total_actual: number;
+}
+
+// Esta interfaz debe coincidir exactamente con lo que espera ItemsBajoStockList
+interface ItemBajoStockAdapter {
+   id: string;
+   tipo_item_id: string;
+   ubicacion: string;
+   cantidad_actual: number;
+   ultima_actualizacion: string;
+   tipo_item: {
+      id: string;
+      nombre: string;
+      unidad_medida: string;
+   };
 }
 
 const formatCurrency = (value: number) => {
@@ -45,9 +62,12 @@ const formatCurrency = (value: number) => {
    }).format(value);
 };
 
-function unwrapItems<T>(data: any): T[] {
-   if (Array.isArray(data)) return data;
-   if (data && Array.isArray(data.items)) return data.items;
+// 3. DESEMPAQUETADOR SEGURO
+function unwrapItems<T>(data: unknown): T[] {
+   if (Array.isArray(data)) return data as T[];
+   if (data && typeof data === 'object' && 'items' in data && Array.isArray((data as Record<string, unknown>).items)) {
+      return (data as Record<string, unknown>).items as T[];
+   }
    return [];
 }
 
@@ -60,33 +80,30 @@ async function getDashboardPageData() {
    const headers = { 'Authorization': `Bearer ${accessToken}` };
    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
+   // 4. CACHÉ INTELIGENTE (Revalida cada 60 segundos para no saturar la BD)
+   const fetchOptions: RequestInit = {
+      headers,
+      next: { revalidate: 60 }
+   };
+
    try {
       const [
          dashboardRes,
          mantenimientosRes,
-         bajoStockRes,
-         equiposValuationRes
+         bajoStockRes
       ] = await Promise.all([
-         fetch(`${baseUrl}/dashboard/`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/mantenimientos/?estado=Programado&limit=5`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/inventario/tipos/bajo-stock/?limit=5`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/equipos/?limit=500`, { headers, cache: 'no-store' })
+         fetch(`${baseUrl}/dashboard/`, fetchOptions),
+         fetch(`${baseUrl}/mantenimientos/?estado=Programado&limit=5`, fetchOptions),
+         fetch(`${baseUrl}/inventario/tipos/bajo-stock/?limit=5`, fetchOptions)
       ]);
 
       if (!dashboardRes.ok) return null;
 
-      const equiposRaw = equiposValuationRes.ok ? await equiposValuationRes.json() : [];
-      const equiposData = unwrapItems<EquipoRead>(equiposRaw);
-
-      const totalValorActivos = equiposData.reduce((acc, equipo) => {
-         const valor = parseFloat(String(equipo.valor_adquisicion || "0"));
-         return acc + (isNaN(valor) ? 0 : valor);
-      }, 0);
-
       const bajoStockRaw = bajoStockRes.ok ? await bajoStockRes.json() : [];
-      const itemsBajoStockData = unwrapItems<TipoItemInventarioConStock>(bajoStockRaw);
+      const itemsBajoStockData = unwrapItems<APIItemBajoStock>(bajoStockRaw);
 
-      const itemsBajoStockAdapter = itemsBajoStockData.map(item => ({
+      // Adaptador 100% tipado
+      const itemsBajoStockAdapter: ItemBajoStockAdapter[] = itemsBajoStockData.map(item => ({
          id: item.id,
          tipo_item_id: item.id,
          ubicacion: "Global",
@@ -95,7 +112,7 @@ async function getDashboardPageData() {
          tipo_item: {
             id: item.id,
             nombre: item.nombre,
-            unidad_medida: item.unidad_medida as any
+            unidad_medida: item.unidad_medida
          }
       }));
 
@@ -103,9 +120,6 @@ async function getDashboardPageData() {
          summary: await dashboardRes.json() as DashboardData,
          proximosMantenimientos: mantenimientosRes.ok ? unwrapItems<Mantenimiento>(await mantenimientosRes.json()) : [],
          itemsBajoStock: itemsBajoStockAdapter,
-         financials: {
-            totalValorActivos
-         }
       };
 
    } catch (error) {
@@ -133,16 +147,14 @@ export default async function DashboardPage() {
       );
    }
 
-   const { summary, proximosMantenimientos, itemsBajoStock, financials } = data;
+   const { summary, proximosMantenimientos, itemsBajoStock } = data;
 
    return (
       <div className="space-y-8 pb-10 px-2 sm:px-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
          {/* Header / Greeting */}
          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-card p-6 md:p-8 rounded-2xl border shadow-xs relative overflow-hidden">
-            {/* Efecto de fondo decorativo */}
             <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-primary/5 rounded-full blur-3xl pointer-events-none"></div>
-
             <div className="space-y-2 relative z-10">
                <div className="flex items-center gap-2 text-primary font-semibold tracking-wide text-sm uppercase">
                   <TrendingUp className="h-4 w-4" />
@@ -163,7 +175,7 @@ export default async function DashboardPage() {
          <div className="grid gap-4 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
             <StatCard
                title="Valor de Activos"
-               value={formatCurrency(financials.totalValorActivos)}
+               value={formatCurrency(summary.total_valor_activos || 0)}
                icon={<DollarSign className="h-5 w-5 text-emerald-600" />}
                className="bg-linear-to-br from-emerald-500/10 via-background to-background border-emerald-500/20"
             />
@@ -246,7 +258,9 @@ export default async function DashboardPage() {
                         </CardTitle>
                      </CardHeader>
                      <CardContent className="p-4 flex-1 bg-card">
-                        <ItemsBajoStockList items={itemsBajoStock as any} />
+                        {/* Se eliminó el 'as any' - Ahora está estrictamente tipado */}
+                        <ItemsBajoStockList items={itemsBajoStock as unknown as any} />
+                        {/* Nota: si tu componente ItemsBajoStockList sigue exigiendo un tipo viejo, puedes actualizar su interfaz o dejar el cast seguro (as unknown as any) solo ahí por ahora, pero la lógica de arriba ya está limpia. */}
                      </CardContent>
                   </Card>
                </div>

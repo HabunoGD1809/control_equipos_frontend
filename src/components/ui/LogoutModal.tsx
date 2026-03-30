@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { logoutAction } from "@/actions/auth-actions";
+import { useSession } from "@/contexts/SessionProvider";
 import {
    AlertDialog,
    AlertDialogAction,
@@ -21,13 +23,21 @@ interface LogoutModalProps {
 
 export function LogoutModal({ isOpen, onOpenChange }: LogoutModalProps) {
    const queryClient = useQueryClient();
+   const router = useRouter();
+   const { setUser } = useSession();
    const [isLoading, setIsLoading] = useState(false);
 
    const handleLogout = async () => {
       try {
          setIsLoading(true);
+
          queryClient.clear();
-         await logoutAction(); // revoca token + borra cookies + redirige
+         setUser(null);
+
+         await logoutAction();
+
+         router.refresh();
+
       } catch (error) {
          console.error("Error al cerrar sesión:", error);
          setIsLoading(false);

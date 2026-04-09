@@ -3,7 +3,7 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, ExternalLink } from "lucide-react";
 
 import { DataTable } from "@/components/ui/DataTable";
 import { InventarioMovimiento } from "@/types/api";
@@ -22,7 +22,7 @@ export const columns: ColumnDef<InventarioMovimiento>[] = [
    {
       accessorKey: "tipo_movimiento",
       header: "Tipo",
-      cell: ({ row }) => <Badge variant="secondary">{row.getValue("tipo_movimiento")}</Badge>
+      cell: ({ row }) => <Badge variant="secondary" className="whitespace-nowrap">{row.getValue("tipo_movimiento")}</Badge>
    },
    {
       accessorKey: "cantidad",
@@ -37,18 +37,34 @@ export const columns: ColumnDef<InventarioMovimiento>[] = [
    },
    {
       accessorKey: "ubicacion",
-      header: "Ubicación (Origen -> Destino)",
+      header: "Ubicación (Origen → Destino)",
       cell: ({ row }) => {
          const mov = row.original;
+         const isEntradaCompra = mov.tipo_movimiento.includes("Entrada Compra");
+         const isSalida = mov.tipo_movimiento.toLowerCase().includes('salida') || mov.tipo_movimiento.toLowerCase().includes('descarte');
+
+         // Lógica visual para reemplazar los "N/A" por algo amigable
+         const origen = isEntradaCompra ? (
+            <span className="text-muted-foreground flex items-center gap-1 italic"><ExternalLink className="h-3 w-3" /> Exterior (Proveedor)</span>
+         ) : (
+            <span className="text-muted-foreground truncate max-w-30" title={mov.ubicacion_origen_nombre || 'N/A'}>
+               {mov.ubicacion_origen_nombre || 'N/A'}
+            </span>
+         );
+
+         const destino = isSalida && !mov.ubicacion_destino_nombre ? (
+            <span className="text-muted-foreground flex items-center gap-1 italic"><ExternalLink className="h-3 w-3" /> Exterior (Descarte/Uso)</span>
+         ) : (
+            <span className="font-medium text-foreground truncate max-w-30" title={mov.ubicacion_destino_nombre || 'N/A'}>
+               {mov.ubicacion_destino_nombre || 'N/A'}
+            </span>
+         );
+
          return (
             <div className="flex items-center gap-2 text-xs">
-               <span className="text-muted-foreground truncate max-w-30" title={mov.ubicacion_origen_nombre || 'N/A'}>
-                  {mov.ubicacion_origen_nombre || 'N/A'}
-               </span>
-               <ArrowRight className="h-3 w-3 text-muted-foreground/40 shrink-0" />
-               <span className="font-medium text-foreground truncate max-w-30" title={mov.ubicacion_destino_nombre || 'N/A'}>
-                  {mov.ubicacion_destino_nombre || 'N/A'}
-               </span>
+               {origen}
+               <ArrowRight className="h-3 w-3 text-muted-foreground/40 shrink-0 mx-1" />
+               {destino}
             </div>
          );
       }

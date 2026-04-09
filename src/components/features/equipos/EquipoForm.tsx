@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { useRouter } from "next/navigation";
@@ -22,6 +22,7 @@ import { equipoSchema } from "@/lib/zod";
 import { equiposService } from "@/app/services/equiposService";
 import { ubicacionesService } from "@/app/services/ubicacionesService";
 import { catalogosService } from "@/app/services/catalogosService";
+import { empleadosService } from "@/app/services/empleadosService";
 import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import type { EquipoCreate, EquipoRead, EstadoEquipo, ProveedorSimple } from "@/types/api";
 
@@ -44,6 +45,11 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
    const { toast } = useToast();
    const [isLoading, setIsLoading] = useState(false);
 
+   // ESTADOS ROBUSTOS PARA PRECARGA
+   const [marcas, setMarcas] = useState<Option[]>([]);
+   const [ubicaciones, setUbicaciones] = useState<Option[]>([]);
+   const [empleados, setEmpleados] = useState<Option[]>([]);
+
    const form = useForm<EquipoFormValues>({
       resolver: standardSchemaResolver(equipoSchema),
       defaultValues: {
@@ -53,6 +59,7 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
          estado_id: initialData?.estado_id ?? "",
          proveedor_id: initialData?.proveedor_id ?? null,
          ubicacion_id: initialData?.ubicacion_id ?? null,
+         empleado_asignado_id: initialData?.empleado_asignado_id ?? null,
          marca_id: initialData?.marca_id ?? null,
          modelo: initialData?.modelo ?? "",
          fecha_adquisicion: initialData?.fecha_adquisicion ? new Date(initialData.fecha_adquisicion) : null,
@@ -64,6 +71,24 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
       },
    });
 
+   // DESCARGA INICIAL DE CATÁLOGOS
+   useEffect(() => {
+      let isMounted = true;
+      catalogosService.getMarcas({ include_inactive: false }).then(data => {
+         if (isMounted && Array.isArray(data)) setMarcas(data.map(m => ({ value: m.id, label: m.nombre })));
+      }).catch(console.error);
+
+      ubicacionesService.getAll({ include_inactive: false }).then(data => {
+         if (isMounted && Array.isArray(data)) setUbicaciones(data.map(u => ({ value: u.id, label: `${u.nombre} ${u.edificio ? `(${u.edificio})` : ''}`.trim() })));
+      }).catch(console.error);
+
+      empleadosService.getAll(0, 1000).then(data => {
+         if (isMounted && Array.isArray(data)) setEmpleados(data.map(e => ({ value: e.id, label: e.nombre_completo })));
+      }).catch(console.error);
+
+      return () => { isMounted = false; };
+   }, []);
+
    const fechaAdquisicion = form.watch("fecha_adquisicion");
    const today = startOfDay(new Date());
 
@@ -72,64 +97,40 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
       fieldChange(value);
    };
 
-   // ─── FETCHER DE UBICACIONES ───
-   const fetchUbicaciones = useCallback(async (search: string): Promise<Option[]> => {
-      try {
-         const data = await ubicacionesService.getAll({ include_inactive: false });
-         const searchLower = search.toLowerCase();
-         const filtered = search
-            ? data.filter(u => u.nombre.toLowerCase().includes(searchLower) || u.edificio?.toLowerCase().includes(searchLower))
-            : data;
-
-         return filtered.slice(0, 50).map((u) => ({
-            value: u.id,
-            label: `${u.nombre} ${u.edificio ? `(${u.edificio})` : ''}`.trim()
-         }));
-      } catch (error) {
-         console.error("Error al buscar ubicaciones:", error);
-         return [];
-      }
-   }, []);
-
+   // OPCIONES POR DEFECTO DINÁMICAS
    const defaultUbicacionOptions = useMemo<Option[]>(() => {
-      if (initialData?.ubicacion) {
-         const { id, nombre, edificio } = initialData.ubicacion;
-         return [{
-            value: id,
-            label: `${nombre} ${edificio ? `(${edificio})` : ''}`.trim()
-         }];
-      }
+      if (ubicaciones.length > 0) return ubicaciones;
+      if (initialData?.ubicacion) return [{ value: initialData.ubicacion.id, label: `${initialData.ubicacion.nombre} ${initialData.ubicacion.edificio ? `(${initialData.ubicacion.edificio})` : ''}`.trim() }];
       return [];
-   }, [initialData]);
-
-   // ─── FETCHER DE MARCAS ───
-   const fetchMarcas = useCallback(async (search: string): Promise<Option[]> => {
-      try {
-         const data = await catalogosService.getMarcas({ include_inactive: false });
-         const searchLower = search.toLowerCase();
-         const filtered = search
-            ? data.filter(m => m.nombre.toLowerCase().includes(searchLower))
-            : data;
-
-         return filtered.slice(0, 50).map((m) => ({
-            value: m.id,
-            label: m.nombre
-         }));
-      } catch (error) {
-         console.error("Error al buscar marcas:", error);
-         return [];
-      }
-   }, []);
+   }, [ubicaciones, initialData]);
 
    const defaultMarcaOptions = useMemo<Option[]>(() => {
-      if (initialData?.marca_rel) {
-         return [{
-            value: initialData.marca_rel.id,
-            label: initialData.marca_rel.nombre
-         }];
-      }
+      if (marcas.length > 0) return marcas;
+      if (initialData?.marca_rel) return [{ value: initialData.marca_rel.id, label: initialData.marca_rel.nombre }];
       return [];
-   }, [initialData]);
+   }, [marcas, initialData]);
+
+   const defaultEmpleadoOptions = useMemo<Option[]>(() => {
+      if (empleados.length > 0) return empleados;
+      if (initialData?.empleado_asignado) return [{ value: initialData.empleado_asignado.id, label: initialData.empleado_asignado.nombre_completo }];
+      return [];
+   }, [empleados, initialData]);
+
+   // FETCHERS LOCALES SÚPER RÁPIDOS
+   const fetchUbicaciones = useCallback(async (search: string): Promise<Option[]> => {
+      const lower = search.toLowerCase();
+      return ubicaciones.filter(u => u.label.toLowerCase().includes(lower));
+   }, [ubicaciones]);
+
+   const fetchMarcas = useCallback(async (search: string): Promise<Option[]> => {
+      const lower = search.toLowerCase();
+      return marcas.filter(m => m.label.toLowerCase().includes(lower));
+   }, [marcas]);
+
+   const fetchEmpleados = useCallback(async (search: string): Promise<Option[]> => {
+      const lower = search.toLowerCase();
+      return empleados.filter(e => e.label.toLowerCase().includes(lower));
+   }, [empleados]);
 
    const onSubmit: SubmitHandler<EquipoFormValues> = async (data) => {
       setIsLoading(true);
@@ -140,6 +141,7 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
             marca_id: data.marca_id || null,
             modelo: cleanString(data.modelo),
             ubicacion_id: data.ubicacion_id || null,
+            empleado_asignado_id: data.empleado_asignado_id || null,
             centro_costo: cleanString(data.centro_costo),
             notas: cleanString(data.notas),
             proveedor_id: data.proveedor_id || null,
@@ -161,7 +163,6 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
          if (onSuccess) onSuccess();
       } catch (error: unknown) {
          const { message, field } = getFriendlyErrorMessage(error);
-
          if (field) {
             form.setError(field as keyof EquipoFormValues, { type: "manual", message });
          } else {
@@ -223,7 +224,7 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
                               fetcher={fetchMarcas}
                               defaultOptions={defaultMarcaOptions}
                               placeholder="Buscar marca..."
-                              emptyMessage="No se encontraron marcas."
+                              emptyMessage="No se encontraron marcas activas."
                            />
                         </FormControl>
                         <FormMessage />
@@ -238,7 +239,7 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
                   )} />
 
                   <FormField control={form.control} name="ubicacion_id" render={({ field }) => (
-                     <FormItem className="md:col-span-2 lg:col-span-3">
+                     <FormItem className="md:col-span-2">
                         <FormLabel>Ubicación Física Asignada <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                         <FormControl>
                            <AsyncCombobox
@@ -248,6 +249,23 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
                               defaultOptions={defaultUbicacionOptions}
                               placeholder="Buscar ubicación..."
                               emptyMessage="No se encontraron ubicaciones activas."
+                           />
+                        </FormControl>
+                        <FormMessage />
+                     </FormItem>
+                  )} />
+
+                  <FormField control={form.control} name="empleado_asignado_id" render={({ field }) => (
+                     <FormItem>
+                        <FormLabel>Custodio (RRHH) <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
+                        <FormControl>
+                           <AsyncCombobox
+                              value={field.value}
+                              onChange={field.onChange}
+                              fetcher={fetchEmpleados}
+                              defaultOptions={defaultEmpleadoOptions}
+                              placeholder="Buscar empleado..."
+                              emptyMessage="No se encontraron empleados."
                            />
                         </FormControl>
                         <FormMessage />

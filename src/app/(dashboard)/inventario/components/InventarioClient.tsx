@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation"; // IMPORTANTE AÑADIR ESTO
 import { ColumnDef } from "@tanstack/react-table";
 import { PlusCircle, MoreHorizontal, Pencil, Trash2, RefreshCw } from "lucide-react";
 
@@ -44,7 +44,9 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
    ubicaciones,
 }) => {
    const router = useRouter();
+   const searchParams = useSearchParams(); // <-- ESTADO DE LA URL
    const [isMovimientoModalOpen, setIsMovimientoModalOpen] = useState(false);
+   const [preselectedItemId, setPreselectedItemId] = useState<string | undefined>(undefined); // <-- NUEVO ESTADO
    const [isTipoItemModalOpen, setIsTipoItemModalOpen] = useState(false);
    const [selectedTipoItem, setSelectedTipoItem] = useState<TipoItemInventario | null>(null);
    const [isRefreshing, setIsRefreshing] = useState(false);
@@ -53,9 +55,25 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
    const canManageTipos = useHasPermission(["administrar_inventario_tipos"]);
    const canRegisterMoves = useHasPermission(["administrar_inventario_stock"]);
 
-   // SOLUCIÓN: Estado local para Tipos
    const [localTipos, setLocalTipos] = useState<TipoItemInventario[]>(initialTiposData);
    const [hasFetchedAllTipos, setHasFetchedAllTipos] = useState(false);
+
+   // SOLUCIÓN: Escuchar la URL al cargar el componente
+   useEffect(() => {
+      const action = searchParams.get("action");
+      const itemId = searchParams.get("item_id");
+
+      if (action === "reponer" && itemId && canRegisterMoves) {
+         setPreselectedItemId(itemId);
+         setIsMovimientoModalOpen(true);
+
+         // Limpiar la URL para que no se reabra si el usuario recarga la página
+         const currentUrl = new URL(window.location.href);
+         currentUrl.searchParams.delete("action");
+         currentUrl.searchParams.delete("item_id");
+         window.history.replaceState({}, '', currentUrl.toString());
+      }
+   }, [searchParams, canRegisterMoves]);
 
    useEffect(() => {
       setLocalTipos(initialTiposData);
@@ -93,6 +111,11 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
       router.refresh();
       setTimeout(() => setIsRefreshing(false), 800);
    };
+
+   const handleOpenMovimientoModal = () => {
+      setPreselectedItemId(undefined); // Limpiamos selección previa si el usuario le da al botón general
+      setIsMovimientoModalOpen(true);
+   }
 
    const tiposColumns: ColumnDef<TipoItemInventario>[] = [
       {
@@ -139,7 +162,10 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
 
    return (
       <div className="space-y-6 animate-in fade-in duration-300">
-         <Dialog open={isMovimientoModalOpen} onOpenChange={setIsMovimientoModalOpen}>
+         <Dialog open={isMovimientoModalOpen} onOpenChange={(open) => {
+            setIsMovimientoModalOpen(open);
+            if (!open) setPreselectedItemId(undefined); // Limpiamos al cerrar
+         }}>
             <DialogContent className="sm:max-w-150">
                <DialogHeader>
                   <DialogTitle>Registrar Nuevo Movimiento</DialogTitle>
@@ -148,18 +174,21 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
                   </DialogDescription>
                </DialogHeader>
                <RegistrarMovimientoForm
-                  tiposItem={initialTiposData.filter(t => t.is_active !== false)} // Solo activos en el combo
+                  tiposItem={initialTiposData.filter(t => t.is_active !== false)}
                   equipos={equipos}
                   stockData={initialStockData}
                   ubicaciones={ubicaciones}
+                  initialTipoItemId={preselectedItemId} // <-- PASAMOS LA PROP
                   onSuccess={() => {
                      setIsMovimientoModalOpen(false);
+                     setPreselectedItemId(undefined);
                      router.refresh();
                   }}
                />
             </DialogContent>
          </Dialog>
 
+         {/* Resto del código se mantiene igual... */}
          <Dialog open={isTipoItemModalOpen} onOpenChange={setIsTipoItemModalOpen}>
             <DialogContent className="sm:max-w-150 max-h-[90vh] overflow-y-auto">
                <DialogHeader>
@@ -201,7 +230,7 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
                      <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                   </Button>
                   {canRegisterMoves && (
-                     <Button onClick={() => setIsMovimientoModalOpen(true)} className="flex-1 sm:flex-none shadow-sm">
+                     <Button onClick={handleOpenMovimientoModal} className="flex-1 sm:flex-none shadow-sm">
                         <PlusCircle className="mr-2 h-4 w-4" /> Movimiento
                      </Button>
                   )}

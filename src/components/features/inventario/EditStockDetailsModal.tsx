@@ -4,10 +4,9 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
-import { Loader2, CalendarIcon } from "lucide-react";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
+import { Loader2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { format } from "date-fns";
 
 import {
    Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -15,13 +14,11 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { Calendar } from "@/components/ui/Calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/Popover";
 import { useToast } from "@/components/ui/use-toast";
+import { DatePickerField } from "@/components/ui/DatePickerField";
 
 import { inventarioService } from "@/app/services/inventarioService";
 import { InventarioStock, InventarioStockUpdate } from "@/types/api";
-import { cn } from "@/lib/utils";
 import { inventarioStockUpdateSchema } from "@/lib/zod";
 
 type EditStockFormValues = z.infer<typeof inventarioStockUpdateSchema>;
@@ -71,7 +68,7 @@ export function EditStockDetailsModal({ stock, isOpen, onClose }: EditStockDetai
 
       mutation.mutate({
          lote: values.lote || undefined,
-         fecha_caducidad: values.fecha_caducidad ? values.fecha_caducidad.toISOString() : undefined,
+         fecha_caducidad: values.fecha_caducidad ? format(values.fecha_caducidad, "yyyy-MM-dd") : undefined,
       });
    };
 
@@ -95,29 +92,15 @@ export function EditStockDetailsModal({ stock, isOpen, onClose }: EditStockDetai
                         <FormControl><Input {...field} value={field.value ?? ""} placeholder="Ej: LOTE-2026-X" /></FormControl>
                         <FormMessage />
                      </FormItem>
-                  )}
-                  />
+                  )} />
 
                   <FormField control={form.control} name="fecha_caducidad" render={({ field }) => (
-                     <FormItem className="flex flex-col">
-                        <FormLabel>Fecha de Caducidad</FormLabel>
-                        <Popover>
-                           <PopoverTrigger asChild>
-                              <FormControl>
-                                 <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                                    {field.value ? format(field.value, "PPP", { locale: es }) : <span>Sin vencimiento</span>}
-                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                 </Button>
-                              </FormControl>
-                           </PopoverTrigger>
-                           <PopoverContent className="w-auto p-0" align="start">
-                              <Calendar mode="single" selected={field.value || undefined} onSelect={field.onChange} autoFocus />
-                           </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                     </FormItem>
-                  )}
-                  />
+                     <DatePickerField
+                        label="Fecha de Caducidad"
+                        value={field.value}
+                        onChange={field.onChange}
+                     />
+                  )} />
 
                   <DialogFooter className="pt-4">
                      <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>

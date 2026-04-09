@@ -3,7 +3,7 @@
 import { useForm, useWatch } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import * as z from "zod";
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, ArrowRightLeft, PackageMinus, PackagePlus } from "lucide-react";
 
@@ -33,12 +33,20 @@ interface RegistrarMovimientoFormProps {
    equipos: EquipoSimple[];
    stockData: InventarioStock[];
    ubicaciones: Ubicacion[];
+   initialTipoItemId?: string;
    onSuccess: () => void;
 }
 
 type FormValues = z.infer<ReturnType<typeof createInventarioMovimientoSchema>>;
 
-export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, ubicaciones, onSuccess }: RegistrarMovimientoFormProps) {
+export function RegistrarMovimientoForm({
+   tiposItem,
+   equipos,
+   stockData,
+   ubicaciones,
+   initialTipoItemId,
+   onSuccess
+}: RegistrarMovimientoFormProps) {
    const { toast } = useToast();
    const queryClient = useQueryClient();
 
@@ -48,11 +56,11 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, ubicaci
       // @ts-expect-error Zod schema dynamic resolution typing
       resolver: standardSchemaResolver(dynamicSchema),
       defaultValues: {
-         tipo_item_id: "",
+         tipo_item_id: initialTipoItemId || "",
          tipo_movimiento: TipoMovimientoInvEnum.EntradaCompra,
          cantidad: 1,
          lote_origen: "N/A",
-         lote_destino: "N/A",
+         lote_destino: "N/A", // <-- Valor por defecto fuerte
          costo_unitario: null as any,
          notas: "",
          ubicacion_origen_id: "",
@@ -62,9 +70,24 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, ubicaci
       },
    });
 
+   useEffect(() => {
+      if (initialTipoItemId) {
+         form.setValue("tipo_item_id", initialTipoItemId);
+         form.setValue("tipo_movimiento", TipoMovimientoInvEnum.EntradaCompra);
+      }
+   }, [initialTipoItemId, form]);
+
    const tipoMovimiento = useWatch({ control: form.control, name: "tipo_movimiento" });
    const tipoItemId = useWatch({ control: form.control, name: "tipo_item_id" });
    const ubicacionOrigenSel = useWatch({ control: form.control, name: "ubicacion_origen_id" });
+   const loteOrigenSel = useWatch({ control: form.control, name: "lote_origen" });
+
+   // Auto-completar el lote_destino si el origen cambia (Transparente para el usuario)
+   useEffect(() => {
+      if (loteOrigenSel) {
+         form.setValue("lote_destino", loteOrigenSel);
+      }
+   }, [loteOrigenSel, form]);
 
    const tipoStr = tipoMovimiento as string;
 
@@ -89,7 +112,6 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, ubicaci
    const showCosto = tipoStr === TipoMovimientoInvEnum.EntradaCompra;
    const showEquipoAsociado = tipoStr === TipoMovimientoInvEnum.SalidaUso;
 
-   // ─── LÓGICA DE STOCK (ORIGEN ESTRICTO) ───
    const stockDisponibleDelItem = useMemo(() => {
       return stockData.filter(s => s.tipo_item_id === tipoItemId && s.cantidad_actual > 0);
    }, [stockData, tipoItemId]);
@@ -104,7 +126,6 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, ubicaci
          .map(s => s.lote || "N/A");
    }, [stockDisponibleDelItem, ubicacionOrigenSel]);
 
-   // ─── FETCHER DESTINO (ASYNC COMBOBOX) ───
    const fetchUbicaciones = useCallback(async (search: string): Promise<Option[]> => {
       try {
          const data = await ubicacionesService.getAll({ include_inactive: false });
@@ -132,15 +153,10 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, ubicaci
    const mutation = useMutation({
       mutationFn: inventarioService.registrarMovimiento,
       onSuccess: () => {
-         toast({
-            title: "Movimiento Registrado",
-            description: "El stock ha sido actualizado correctamente.",
-         });
-
+         toast({ title: "Movimiento Registrado", description: "El stock ha sido actualizado correctamente." });
          queryClient.invalidateQueries({ queryKey: ["stock"] });
          queryClient.invalidateQueries({ queryKey: ["inventario-movimientos"] });
          queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-
          form.reset();
          onSuccess();
       },
@@ -184,111 +200,96 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, ubicaci
    return (
       <Form {...form}>
          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 max-h-[80vh] overflow-y-auto px-1">
-            <FormField
-               control={form.control}
-               name="tipo_item_id"
-               render={({ field }) => (
-                  <FormItem>
-                     <FormLabel>Item de Inventario <span className="text-destructive">*</span></FormLabel>
-                     <Select
-                        onValueChange={(val) => {
-                           field.onChange(val);
-                           form.setValue("ubicacion_origen_id", "");
-                           form.setValue("lote_origen", "N/A");
-                           form.clearErrors("cantidad");
-                        }}
-                        value={field.value ?? undefined}
-                     >
-                        <FormControl>
-                           <SelectTrigger>
-                              <SelectValue placeholder="Seleccione Item..." />
-                           </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                           {tiposItem.map((item) => (
-                              <SelectItem key={item.id} value={item.id}>
-                                 {item.nombre} ({item.unidad_medida})
-                              </SelectItem>
-                           ))}
-                        </SelectContent>
-                     </Select>
-                     <FormMessage />
-                  </FormItem>
-               )}
+            <FormField control={form.control} name="tipo_item_id" render={({ field }) => (
+               <FormItem>
+                  <FormLabel>Item de Inventario <span className="text-destructive">*</span></FormLabel>
+                  <Select
+                     onValueChange={(val) => {
+                        field.onChange(val);
+                        form.setValue("ubicacion_origen_id", "");
+                        form.setValue("lote_origen", "N/A");
+                        form.setValue("lote_destino", "N/A"); // Resetear destino también
+                        form.clearErrors(["cantidad", "ubicacion_origen_id", "ubicacion_destino_id"]);
+                     }}
+                     value={field.value ?? undefined}
+                  >
+                     <FormControl>
+                        <SelectTrigger><SelectValue placeholder="Seleccione Item..." /></SelectTrigger>
+                     </FormControl>
+                     <SelectContent>
+                        {tiposItem.map((item) => (
+                           <SelectItem key={item.id} value={item.id}>
+                              {item.nombre} ({item.unidad_medida})
+                           </SelectItem>
+                        ))}
+                     </SelectContent>
+                  </Select>
+                  <FormMessage />
+               </FormItem>
+            )}
             />
 
-            <FormField
-               control={form.control}
-               name="tipo_movimiento"
-               render={({ field }) => (
-                  <FormItem>
-                     <FormLabel>Tipo de Movimiento <span className="text-destructive">*</span></FormLabel>
-                     <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                           <SelectTrigger>
-                              <SelectValue placeholder="Tipo..." />
-                           </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                           {Object.values(TipoMovimientoInvEnum).map((tipo) => (
-                              <SelectItem key={tipo} value={tipo}>{tipo}</SelectItem>
-                           ))}
-                        </SelectContent>
-                     </Select>
-                     <FormMessage />
-                  </FormItem>
-               )}
+            <FormField control={form.control} name="tipo_movimiento" render={({ field }) => (
+               <FormItem>
+                  <FormLabel>Tipo de Movimiento <span className="text-destructive">*</span></FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                     <FormControl>
+                        <SelectTrigger><SelectValue placeholder="Tipo..." /></SelectTrigger>
+                     </FormControl>
+                     <SelectContent>
+                        {Object.values(TipoMovimientoInvEnum).map((tipo) => (
+                           <SelectItem key={tipo} value={tipo}>{tipo}</SelectItem>
+                        ))}
+                     </SelectContent>
+                  </Select>
+                  <FormMessage />
+               </FormItem>
+            )}
             />
 
             <div className="grid grid-cols-2 gap-4">
-               <FormField
-                  control={form.control}
-                  name="cantidad"
-                  render={({ field }) => (
+               <FormField control={form.control} name="cantidad" render={({ field }) => (
+                  <FormItem>
+                     <FormLabel>Cantidad <span className="text-destructive">*</span></FormLabel>
+                     <FormControl>
+                        <Input
+                           type="number"
+                           min="1"
+                           value={field.value ?? 1}
+                           onChange={(e) => {
+                              const n = e.target.valueAsNumber;
+                              field.onChange(Number.isFinite(n) ? n : 1);
+                           }}
+                        />
+                     </FormControl>
+                     <FormMessage />
+                  </FormItem>
+               )}
+               />
+
+               {showCosto && (
+                  <FormField control={form.control} name="costo_unitario" render={({ field }) => (
                      <FormItem>
-                        <FormLabel>Cantidad <span className="text-destructive">*</span></FormLabel>
+                        <FormLabel>Costo Unitario</FormLabel>
                         <FormControl>
-                           <Input
-                              type="number"
-                              min="1"
-                              value={field.value ?? 1}
-                              onChange={(e) => {
-                                 const n = e.target.valueAsNumber;
-                                 field.onChange(Number.isFinite(n) ? n : 1);
-                              }}
-                           />
+                           <div className="relative">
+                              <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
+                              <Input
+                                 type="number"
+                                 min="0"
+                                 step="0.01"
+                                 className="pl-7"
+                                 value={field.value ?? ""}
+                                 onChange={(e) => {
+                                    const val = e.target.value;
+                                    field.onChange(val === "" ? null : val);
+                                 }}
+                              />
+                           </div>
                         </FormControl>
                         <FormMessage />
                      </FormItem>
                   )}
-               />
-
-               {showCosto && (
-                  <FormField
-                     control={form.control}
-                     name="costo_unitario"
-                     render={({ field }) => (
-                        <FormItem>
-                           <FormLabel>Costo Unitario</FormLabel>
-                           <FormControl>
-                              <div className="relative">
-                                 <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
-                                 <Input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    className="pl-7"
-                                    value={field.value ?? ""}
-                                    onChange={(e) => {
-                                       const val = e.target.value;
-                                       field.onChange(val === "" ? null : val);
-                                    }}
-                                 />
-                              </div>
-                           </FormControl>
-                           <FormMessage />
-                        </FormItem>
-                     )}
                   />
                )}
             </div>
@@ -296,176 +297,151 @@ export function RegistrarMovimientoForm({ tiposItem, equipos, stockData, ubicaci
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                {reqOrigen && (
                   <div className="space-y-4 bg-muted/30 p-3 rounded-md border">
-                     <FormField
-                        control={form.control}
-                        name="ubicacion_origen_id"
-                        render={({ field }) => (
-                           <FormItem>
-                              <FormLabel>Ubicación Origen <span className="text-destructive">*</span></FormLabel>
-                              <Select
-                                 onValueChange={(val) => {
-                                    field.onChange(val);
-                                    form.clearErrors("ubicacion_origen_id");
-                                 }}
-                                 value={field.value || undefined}
-                                 disabled={!tipoItemId || ubicacionesOrigenDisponibles.length === 0}
-                              >
-                                 <FormControl>
-                                    <SelectTrigger>
-                                       <SelectValue placeholder="Seleccione origen..." />
-                                    </SelectTrigger>
-                                 </FormControl>
-                                 <SelectContent>
-                                    {ubicacionesOrigenDisponibles.map((ubId) => {
-                                       const ubName = ubicaciones.find(u => u.id === ubId)?.nombre || ubId;
-                                       return (
-                                          <SelectItem key={ubId} value={ubId}>
-                                             {ubName}
-                                          </SelectItem>
-                                       );
-                                    })}
-                                 </SelectContent>
-                              </Select>
-                              <FormDescription className="text-xs">Solo muestra ubicaciones con stock.</FormDescription>
-                              <FormMessage />
-                           </FormItem>
-                        )}
+                     <FormField control={form.control} name="ubicacion_origen_id" render={({ field }) => (
+                        <FormItem>
+                           <FormLabel>Ubicación Origen <span className="text-destructive">*</span></FormLabel>
+                           <Select
+                              onValueChange={(val) => {
+                                 field.onChange(val);
+                                 form.clearErrors("ubicacion_origen_id");
+                              }}
+                              value={field.value || undefined}
+                              disabled={!tipoItemId || ubicacionesOrigenDisponibles.length === 0}
+                           >
+                              <FormControl>
+                                 <SelectTrigger><SelectValue placeholder="Seleccione origen..." /></SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                 {ubicacionesOrigenDisponibles.map((ubId) => {
+                                    const ubName = ubicaciones.find(u => u.id === ubId)?.nombre || ubId;
+                                    return <SelectItem key={ubId} value={ubId}>{ubName}</SelectItem>;
+                                 })}
+                              </SelectContent>
+                           </Select>
+                           <FormDescription className="text-xs">Solo muestra ubicaciones con stock.</FormDescription>
+                           <FormMessage />
+                        </FormItem>
+                     )}
                      />
-                     <FormField
-                        control={form.control}
-                        name="lote_origen"
-                        render={({ field }) => (
-                           <FormItem>
-                              <FormLabel>Lote Origen</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value || undefined} disabled={!ubicacionOrigenSel}>
-                                 <FormControl>
-                                    <SelectTrigger>
-                                       <SelectValue placeholder="Seleccione lote..." />
-                                    </SelectTrigger>
-                                 </FormControl>
-                                 <SelectContent>
-                                    {lotesOrigenDisponibles.map((lote) => (
-                                       <SelectItem key={lote} value={lote}>{lote}</SelectItem>
-                                    ))}
-                                 </SelectContent>
-                              </Select>
-                              <FormMessage />
-                           </FormItem>
-                        )}
+                     <FormField control={form.control} name="lote_origen" render={({ field }) => (
+                        <FormItem>
+                           <FormLabel>Lote Origen</FormLabel>
+                           <Select onValueChange={field.onChange} value={field.value || undefined} disabled={!ubicacionOrigenSel}>
+                              <FormControl>
+                                 <SelectTrigger><SelectValue placeholder="Seleccione lote..." /></SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                 {lotesOrigenDisponibles.map((lote) => (
+                                    <SelectItem key={lote} value={lote}>{lote}</SelectItem>
+                                 ))}
+                              </SelectContent>
+                           </Select>
+                           <FormMessage />
+                        </FormItem>
+                     )}
                      />
                   </div>
                )}
 
                {reqDestino && (
                   <div className="space-y-4 bg-primary/5 p-3 rounded-md border border-primary/20">
-                     <FormField
-                        control={form.control}
-                        name="ubicacion_destino_id"
-                        render={({ field }) => (
+                     <FormField control={form.control} name="ubicacion_destino_id" render={({ field }) => (
+                        <FormItem>
+                           <FormLabel>Ubicación Destino <span className="text-destructive">*</span></FormLabel>
+                           <FormControl>
+                              <AsyncCombobox
+                                 value={field.value}
+                                 onChange={field.onChange}
+                                 fetcher={fetchUbicaciones}
+                                 defaultOptions={defaultUbicacionOptions}
+                                 placeholder="Buscar destino físico..."
+                              />
+                           </FormControl>
+                           <FormMessage />
+                        </FormItem>
+                     )}
+                     />
+
+                     {/* OCULTAMOS EL LOTE DESTINO PERO LO MANTENEMOS EN EL DOM PARA QUE ZOD NO FALLE */}
+                     <div className="hidden">
+                        <FormField control={form.control} name="lote_destino" render={({ field }) => (
                            <FormItem>
-                              <FormLabel>Ubicación Destino <span className="text-destructive">*</span></FormLabel>
-                              <FormControl>
-                                 <AsyncCombobox
-                                    value={field.value}
-                                    onChange={field.onChange}
-                                    fetcher={fetchUbicaciones}
-                                    defaultOptions={defaultUbicacionOptions}
-                                    placeholder="Buscar destino físico..."
-                                 />
-                              </FormControl>
+                              <FormControl><Input placeholder="N/A" {...field} /></FormControl>
+                           </FormItem>
+                        )}
+                        />
+                     </div>
+
+                     {/* Mostramos un badge informativo en lugar del input */}
+                     {reqOrigen && loteOrigenSel && (
+                        <div className="text-sm border rounded-md p-2 bg-muted/20 text-muted-foreground flex justify-between items-center">
+                           <span>Lote Destino:</span>
+                           <span className="font-mono bg-background px-2 py-0.5 rounded border">{loteOrigenSel}</span>
+                        </div>
+                     )}
+                     {!reqOrigen && (
+                        <FormField control={form.control} name="lote_destino" render={({ field }) => (
+                           <FormItem>
+                              <FormLabel>Lote Destino (Opcional)</FormLabel>
+                              <FormControl><Input placeholder="N/A" {...field} /></FormControl>
                               <FormMessage />
                            </FormItem>
                         )}
-                     />
-                     <FormField
-                        control={form.control}
-                        name="lote_destino"
-                        render={({ field }) => (
-                           <FormItem>
-                              <FormLabel>Lote Destino</FormLabel>
-                              <FormControl>
-                                 <Input placeholder="N/A" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                           </FormItem>
-                        )}
-                     />
+                        />
+                     )}
                   </div>
                )}
             </div>
 
             {showEquipoAsociado && (
-               <FormField
-                  control={form.control}
-                  name="equipo_asociado_id"
-                  render={({ field }) => (
-                     <FormItem>
-                        <FormLabel>Equipo Asociado (Opcional)</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value ?? undefined}>
-                           <FormControl>
-                              <SelectTrigger>
-                                 <SelectValue placeholder="Seleccione equipo..." />
-                              </SelectTrigger>
-                           </FormControl>
-                           <SelectContent>
-                              {equipos.map((eq) => (
-                                 <SelectItem key={eq.id} value={eq.id}>
-                                    {eq.nombre} ({eq.numero_serie})
-                                 </SelectItem>
-                              ))}
-                           </SelectContent>
-                        </Select>
-                        <FormDescription>Si la pieza se usó para reparar un equipo.</FormDescription>
-                        <FormMessage />
-                     </FormItem>
-                  )}
+               <FormField control={form.control} name="equipo_asociado_id" render={({ field }) => (
+                  <FormItem>
+                     <FormLabel>Equipo Asociado (Opcional)</FormLabel>
+                     <Select onValueChange={field.onChange} value={field.value ?? undefined}>
+                        <FormControl>
+                           <SelectTrigger><SelectValue placeholder="Seleccione equipo..." /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                           {equipos.map((eq) => (
+                              <SelectItem key={eq.id} value={eq.id}>{eq.nombre} ({eq.numero_serie})</SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
+                     <FormDescription>Si la pieza se usó para reparar un equipo.</FormDescription>
+                     <FormMessage />
+                  </FormItem>
+               )}
                />
             )}
 
             {isAjuste && (
-               <FormField
-                  control={form.control}
-                  name="motivo_ajuste"
-                  render={({ field }) => (
-                     <FormItem>
-                        <FormLabel>Motivo del Ajuste <span className="text-destructive">*</span></FormLabel>
-                        <FormControl>
-                           <Textarea
-                              placeholder="Justifique la diferencia de inventario (mín. 5 caracteres)..."
-                              {...field}
-                              value={field.value || ""}
-                           />
-                        </FormControl>
-                        <FormMessage />
-                     </FormItem>
-                  )}
-               />
-            )}
-
-            <FormField
-               control={form.control}
-               name="notas"
-               render={({ field }) => (
+               <FormField control={form.control} name="motivo_ajuste" render={({ field }) => (
                   <FormItem>
-                     <FormLabel>Notas Generales</FormLabel>
+                     <FormLabel>Motivo del Ajuste <span className="text-destructive">*</span></FormLabel>
                      <FormControl>
-                        <Textarea placeholder="Observaciones adicionales..." {...field} value={field.value || ""} />
+                        <Textarea placeholder="Justifique la diferencia de inventario (mín. 5 caracteres)..." {...field} value={field.value || ""} />
                      </FormControl>
                      <FormMessage />
                   </FormItem>
                )}
+               />
+            )}
+
+            <FormField control={form.control} name="notas" render={({ field }) => (
+               <FormItem>
+                  <FormLabel>Notas Generales</FormLabel>
+                  <FormControl>
+                     <Textarea placeholder="Observaciones adicionales..." {...field} value={field.value || ""} />
+                  </FormControl>
+                  <FormMessage />
+               </FormItem>
+            )}
             />
 
             <div className="flex justify-end pt-2">
                <Button type="submit" disabled={mutation.isPending}>
                   {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {!reqOrigen ? (
-                     <PackagePlus className="mr-2 h-4 w-4" />
-                  ) : !reqDestino ? (
-                     <PackageMinus className="mr-2 h-4 w-4" />
-                  ) : (
-                     <ArrowRightLeft className="mr-2 h-4 w-4" />
-                  )}
+                  {!reqOrigen ? <PackagePlus className="mr-2 h-4 w-4" /> : !reqDestino ? <PackageMinus className="mr-2 h-4 w-4" /> : <ArrowRightLeft className="mr-2 h-4 w-4" />}
                   Registrar Movimiento
                </Button>
             </div>

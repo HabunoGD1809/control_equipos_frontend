@@ -25,7 +25,7 @@ export default function ResetPasswordPage() {
    const form = useForm<ResetFormValues>({
       resolver: standardSchemaResolver(resetPasswordConfirmSchema),
       defaultValues: {
-         username: "",
+         username_or_email: "", // <--- ACTUALIZADO
          token: "",
          new_password: "",
          confirm_password: ""
@@ -83,10 +83,11 @@ export default function ResetPasswordPage() {
                   ) : (
                      <Form {...form}>
                         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                           <FormField control={form.control} name="username" render={({ field }) => (
+                           {/* ACTUALIZADO EL NAME Y LABEL */}
+                           <FormField control={form.control} name="username_or_email" render={({ field }) => (
                               <FormItem>
-                                 <FormLabel>Usuario</FormLabel>
-                                 <FormControl><Input placeholder="Su nombre de usuario" {...field} /></FormControl>
+                                 <FormLabel>Usuario o Correo Electrónico</FormLabel>
+                                 <FormControl><Input placeholder="ejemplo@correo.com o mi_usuario" {...field} /></FormControl>
                                  <FormMessage />
                               </FormItem>
                            )} />

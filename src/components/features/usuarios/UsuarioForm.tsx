@@ -9,6 +9,7 @@ import { usuarioCreateSchema, usuarioUpdateSchema } from "@/lib/zod";
 import { usuariosService } from "@/app/services/usuariosService";
 import { rolesService } from "@/app/services/rolesService";
 import { catalogosService } from "@/app/services/catalogosService";
+import { empleadosService } from "@/app/services/empleadosService";
 import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -26,8 +27,8 @@ interface FormValues {
    password?: string;
    rol_id: string;
    departamento_id?: string | null;
+   empleado_id?: string | null;
    bloqueado?: boolean;
-   is_active?: boolean;
    requiere_cambio_contrasena?: boolean;
 }
 
@@ -47,6 +48,10 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
    const [roles, setRoles] = useState<Rol[]>([]);
    const [loadingRoles, setLoadingRoles] = useState(true);
 
+   // ESTADOS ROBUSTOS PARA PRECARGA
+   const [departamentos, setDepartamentos] = useState<Option[]>([]);
+   const [empleados, setEmpleados] = useState<Option[]>([]);
+
    const formSchema = isEditing ? usuarioUpdateSchema : usuarioCreateSchema;
 
    const form = useForm<FormValues>({
@@ -58,51 +63,75 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
          password: "",
          rol_id: initialData?.rol_id ?? "",
          departamento_id: initialData?.departamento_id ?? null,
+         empleado_id: initialData?.empleado_id ?? null,
          bloqueado: initialData?.bloqueado ?? false,
-         is_active: initialData?.is_active ?? true,
          requiere_cambio_contrasena: initialData?.requiere_cambio_contrasena ?? false,
       },
    });
 
+   // 🚀 CARGA OPTIMIZADA EN PARALELO (Carga ultra rápida)
    useEffect(() => {
-      rolesService
-         .getAll()
-         .then(setRoles)
-         .catch(() => {
-            toast({ variant: "destructive", title: "Error", description: "No se pudieron cargar los roles." });
-         })
-         .finally(() => setLoadingRoles(false));
+      let isMounted = true;
+      setLoadingRoles(true);
+
+      const loadData = async () => {
+         try {
+            // Promise.all dispara las 3 peticiones al mismo tiempo, reduciendo el tiempo de espera.
+            // Limitamos a 50 para no asfixiar el navegador. El AsyncCombobox buscará el resto si el usuario teclea.
+            const [rolesData, deptosData, empleadosData] = await Promise.all([
+               rolesService.getAll(),
+               catalogosService.getDepartamentos({ limit: 50, include_inactive: false }),
+               empleadosService.getAll(0, 50)
+            ]);
+
+            if (!isMounted) return;
+
+            // 1. Cargar Roles
+            setRoles(rolesData);
+
+            // 2. Cargar Departamentos (con chequeo de seguridad por si viene paginado)
+            const deptosArr = Array.isArray(deptosData) ? deptosData : (deptosData as any)?.data || [];
+            setDepartamentos(deptosArr.map((d: any) => ({ value: d.id, label: d.nombre })));
+
+            // 3. Cargar Empleados (con chequeo de seguridad por si viene paginado)
+            const empsArr = Array.isArray(empleadosData) ? empleadosData : (empleadosData as any)?.data || [];
+            setEmpleados(empsArr.map((e: any) => ({ value: e.id, label: e.nombre_completo })));
+
+         } catch (error) {
+            if (isMounted) toast({ variant: "destructive", title: "Error", description: "No se pudieron cargar los catálogos." });
+         } finally {
+            if (isMounted) setLoadingRoles(false);
+         }
+      };
+
+      loadData();
+
+      return () => { isMounted = false; };
    }, [toast]);
 
-   // --- Fetcher de Departamentos ---
-   const fetchDepartamentos = useCallback(async (search: string): Promise<Option[]> => {
-      try {
-         const data = await catalogosService.getDepartamentos({ include_inactive: false });
-         const searchLower = search.toLowerCase();
-         const filtered = search
-            ? data.filter(d => d.nombre.toLowerCase().includes(searchLower))
-            : data;
-
-         return filtered.slice(0, 50).map((d) => ({
-            value: d.id,
-            label: d.nombre
-         }));
-      } catch (error) {
-         console.error("Error al buscar departamentos:", error);
-         return [];
-      }
-   }, []);
-
+   // OPCIONES POR DEFECTO DINÁMICAS
    const defaultDepartamentoOptions = useMemo<Option[]>(() => {
-      if (initialData?.departamento_rel) {
-         return [{
-            value: initialData.departamento_rel.id,
-            label: initialData.departamento_rel.nombre
-         }];
-      }
+      if (departamentos.length > 0) return departamentos;
+      if (initialData?.departamento_rel) return [{ value: initialData.departamento_rel.id, label: initialData.departamento_rel.nombre }];
       return [];
-   }, [initialData]);
-   // ---------------------------------
+   }, [departamentos, initialData]);
+
+   const defaultEmpleadoOptions = useMemo<Option[]>(() => {
+      if (empleados.length > 0) return empleados;
+      if (initialData?.empleado_rel) return [{ value: initialData.empleado_rel.id, label: initialData.empleado_rel.nombre_completo }];
+      return [];
+   }, [empleados, initialData]);
+
+   // FETCHERS LOCALES SÚPER RÁPIDOS
+   const fetchDepartamentos = useCallback(async (search: string): Promise<Option[]> => {
+      const lower = search.toLowerCase();
+      return departamentos.filter(d => d.label.toLowerCase().includes(lower));
+   }, [departamentos]);
+
+   const fetchEmpleados = useCallback(async (search: string): Promise<Option[]> => {
+      const lower = search.toLowerCase();
+      return empleados.filter(e => e.label.toLowerCase().includes(lower));
+   }, [empleados]);
 
    const handleApiError = (error: any) => {
       const { message, field } = getFriendlyErrorMessage(error);
@@ -122,8 +151,8 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
                email: cleanString(data.email),
                rol_id: data.rol_id,
                departamento_id: data.departamento_id || null,
+               empleado_id: data.empleado_id || null,
                bloqueado: data.bloqueado,
-               is_active: data.is_active,
                requiere_cambio_contrasena: data.requiere_cambio_contrasena,
             };
             if (data.password) payload.password = data.password;
@@ -137,6 +166,7 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
                password: data.password!,
                rol_id: data.rol_id,
                departamento_id: data.departamento_id || null,
+               empleado_id: data.empleado_id || null,
                requiere_cambio_contrasena: data.requiere_cambio_contrasena,
             });
             toast({ title: "Éxito", description: "Usuario creado correctamente." });
@@ -152,81 +182,65 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
    return (
       <Form {...form}>
          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-2">
-            <FormField
-               control={form.control}
-               name="nombre_usuario"
-               render={({ field }) => (
-                  <FormItem>
-                     <FormLabel>Nombre de Usuario <span className="text-destructive">*</span></FormLabel>
+            <FormField control={form.control} name="nombre_usuario" render={({ field }) => (
+               <FormItem>
+                  <FormLabel>Nombre de Usuario <span className="text-destructive">*</span></FormLabel>
+                  <FormControl>
+                     <Input placeholder="ej. jperez" {...field} value={field.value ?? ""} />
+                  </FormControl>
+                  <FormMessage />
+               </FormItem>
+            )} />
+
+            <FormField control={form.control} name="email" render={({ field }) => (
+               <FormItem>
+                  <FormLabel>Email <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
+                  <FormControl>
+                     <Input type="email" placeholder="ej. correo@empresa.com" {...field} value={field.value ?? ""} />
+                  </FormControl>
+                  <FormMessage />
+               </FormItem>
+            )} />
+
+            <FormField control={form.control} name="password" render={({ field }) => (
+               <FormItem>
+                  <FormLabel>
+                     {isEditing ? "Nueva Contraseña" : "Contraseña"}{" "}
+                     <span className="text-destructive">{!isEditing && "*"}</span>
+                     {isEditing && (
+                        <span className="text-muted-foreground font-normal text-xs ml-1">
+                           (dejar vacío para no cambiar)
+                        </span>
+                     )}
+                  </FormLabel>
+                  <FormControl>
+                     <Input type="password" placeholder="Mínimo 8 caracteres" {...field} value={field.value ?? ""} />
+                  </FormControl>
+                  <FormMessage />
+               </FormItem>
+            )} />
+
+            <FormField control={form.control} name="rol_id" render={({ field }) => (
+               <FormItem>
+                  <FormLabel>Rol <span className="text-destructive">*</span></FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingRoles}>
                      <FormControl>
-                        <Input placeholder="ej. jperez" {...field} value={field.value ?? ""} />
+                        <SelectTrigger>
+                           <SelectValue placeholder={loadingRoles ? "Cargando roles..." : "Seleccione un rol"} />
+                        </SelectTrigger>
                      </FormControl>
-                     <FormMessage />
-                  </FormItem>
-               )}
-            />
-            <FormField
-               control={form.control}
-               name="email"
-               render={({ field }) => (
-                  <FormItem>
-                     <FormLabel>
-                        Email <span className="text-muted-foreground font-normal text-xs">(Opcional)</span>
-                     </FormLabel>
-                     <FormControl>
-                        <Input type="email" placeholder="ej. correo@empresa.com" {...field} value={field.value ?? ""} />
-                     </FormControl>
-                     <FormMessage />
-                  </FormItem>
-               )}
-            />
-            <FormField
-               control={form.control}
-               name="password"
-               render={({ field }) => (
-                  <FormItem>
-                     <FormLabel>
-                        {isEditing ? "Nueva Contraseña" : "Contraseña"}{" "}
-                        <span className="text-destructive">{!isEditing && "*"}</span>
-                        {isEditing && (
-                           <span className="text-muted-foreground font-normal text-xs ml-1">
-                              (dejar vacío para no cambiar)
-                           </span>
-                        )}
-                     </FormLabel>
-                     <FormControl>
-                        <Input type="password" placeholder="Mínimo 8 caracteres" {...field} value={field.value ?? ""} />
-                     </FormControl>
-                     <FormMessage />
-                  </FormItem>
-               )}
-            />
-            <FormField
-               control={form.control}
-               name="rol_id"
-               render={({ field }) => (
-                  <FormItem>
-                     <FormLabel>Rol <span className="text-destructive">*</span></FormLabel>
-                     <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingRoles}>
-                        <FormControl>
-                           <SelectTrigger>
-                              <SelectValue placeholder={loadingRoles ? "Cargando roles..." : "Seleccione un rol"} />
-                           </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                           {roles.map((r) => (
-                              <SelectItem key={r.id} value={r.id}>{r.nombre}</SelectItem>
-                           ))}
-                        </SelectContent>
-                     </Select>
-                     <FormMessage />
-                  </FormItem>
-               )}
-            />
-            <FormField
-               control={form.control}
-               name="departamento_id"
-               render={({ field }) => (
+                     <SelectContent>
+                        {roles.map((r) => (
+                           <SelectItem key={r.id} value={r.id}>{r.nombre}</SelectItem>
+                        ))}
+                     </SelectContent>
+                  </Select>
+                  <FormMessage />
+               </FormItem>
+            )} />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <FormField control={form.control} name="departamento_id" render={({ field }) => (
                   <FormItem>
                      <FormLabel>Departamento <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                      <FormControl>
@@ -241,63 +255,51 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
                      </FormControl>
                      <FormMessage />
                   </FormItem>
-               )}
-            />
+               )} />
 
-            {/* TOGGLES Y PERMISOS ADICIONALES */}
+               <FormField control={form.control} name="empleado_id" render={({ field }) => (
+                  <FormItem>
+                     <FormLabel>Perfil de Empleado <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
+                     <FormControl>
+                        <AsyncCombobox
+                           value={field.value}
+                           onChange={field.onChange}
+                           fetcher={fetchEmpleados}
+                           defaultOptions={defaultEmpleadoOptions}
+                           placeholder="Buscar empleado de RRHH..."
+                           emptyMessage="No se encontraron empleados."
+                        />
+                     </FormControl>
+                     <FormMessage />
+                  </FormItem>
+               )} />
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-               <FormField
-                  control={form.control}
-                  name="requiere_cambio_contrasena"
-                  render={({ field }) => (
+               <FormField control={form.control} name="requiere_cambio_contrasena" render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 bg-card shadow-sm">
+                     <div className="space-y-0.5">
+                        <FormLabel className="text-sm font-medium">Forzar Cambio</FormLabel>
+                        <p className="text-xs text-muted-foreground">Al próximo login.</p>
+                     </div>
+                     <FormControl>
+                        <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+                     </FormControl>
+                  </FormItem>
+               )} />
+
+               {isEditing && (
+                  <FormField control={form.control} name="bloqueado" render={({ field }) => (
                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 bg-card shadow-sm">
                         <div className="space-y-0.5">
-                           <FormLabel className="text-sm font-medium">Forzar Cambio</FormLabel>
-                           <p className="text-xs text-muted-foreground">Al próximo login.</p>
+                           <FormLabel className="text-sm font-medium">Bloquear Acceso</FormLabel>
+                           <p className="text-xs text-muted-foreground">Impide inicio de sesión temporal.</p>
                         </div>
                         <FormControl>
                            <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
                         </FormControl>
                      </FormItem>
-                  )}
-               />
-
-               {isEditing && (
-                  <>
-                     <FormField
-                        control={form.control}
-                        name="bloqueado"
-                        render={({ field }) => (
-                           <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 bg-card shadow-sm">
-                              <div className="space-y-0.5">
-                                 <FormLabel className="text-sm font-medium">Bloquear Acceso</FormLabel>
-                                 <p className="text-xs text-muted-foreground">Impide inicio de sesión temporal.</p>
-                              </div>
-                              <FormControl>
-                                 <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
-                              </FormControl>
-                           </FormItem>
-                        )}
-                     />
-
-                     <FormField
-                        control={form.control}
-                        name="is_active"
-                        render={({ field }) => (
-                           <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 bg-card shadow-sm border-destructive/20">
-                              <div className="space-y-0.5">
-                                 <FormLabel className="text-sm font-medium text-destructive">Cuenta Activa</FormLabel>
-                                 <p className="text-[10px] leading-tight text-muted-foreground">
-                                    Desactivar oculta al usuario (Borrado Lógico).
-                                 </p>
-                              </div>
-                              <FormControl>
-                                 <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
-                              </FormControl>
-                           </FormItem>
-                        )}
-                     />
-                  </>
+                  )} />
                )}
             </div>
 

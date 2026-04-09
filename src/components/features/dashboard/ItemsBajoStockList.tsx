@@ -44,8 +44,10 @@ export function ItemsBajoStockList({ items }: ItemsBajoStockListProps) {
                      </p>
                   </div>
                </div>
+
+               {/* SOLUCIÓN: Agregamos parámetros a la URL (action=reponer e item_id) */}
                <Button variant="ghost" size="icon" asChild className="shrink-0 text-red-600 hover:text-red-700 hover:bg-red-500/10">
-                  <Link href={`/inventario`}>
+                  <Link href={`/inventario?action=reponer&item_id=${item.tipo_item.id}`}>
                      <ArrowRight className="h-4 w-4" />
                   </Link>
                </Button>

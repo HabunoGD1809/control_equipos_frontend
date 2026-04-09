@@ -2,7 +2,7 @@
 
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
@@ -13,10 +13,8 @@ import { AsyncCombobox, type Option } from "@/components/ui/AsyncCombobox";
 import { useToast } from "@/components/ui/use-toast";
 import { api } from "@/lib/http";
 import { getFriendlyErrorMessage } from "@/lib/error-handling";
-import { catalogosService } from "@/app/services/catalogosService";
 
 type FormValues = {
-   nombre: string;
    [key: string]: any;
 };
 
@@ -24,27 +22,33 @@ interface GenericCatalogFormProps {
    initialData?: any;
    apiEndpoint: string;
    formFields: string[];
-   isUbicacion?: boolean; // <-- PROPIEDAD AÑADIDA
+   isUbicacion?: boolean;
    onSuccess: () => void;
 }
 
-// Función auxiliar para humanizar los nombres de los campos
 const humanizeFieldName = (field: string) => {
    if (field === "color_hex") return "Color (Hex)";
    if (field === "periodicidad_dias") return "Periodicidad (días)";
    if (field === "requiere_documentacion") return "Requiere Documentación";
    if (field === "es_preventivo") return "Es Preventivo";
-   if (field === "departamento_id") return "Departamento"; // <-- AÑADIDO
+   if (field === "departamento_id") return "Departamento";
+   if (field === "nombre_completo") return "Nombre Completo";
+   if (field === "email_corporativo") return "Email Corporativo";
 
-   // Capitalizar la primera letra y reemplazar guiones bajos por espacios
    return field.charAt(0).toUpperCase() + field.slice(1).replace(/_/g, ' ');
 };
 
-export function GenericCatalogForm({ initialData, apiEndpoint, formFields, isUbicacion = false, onSuccess }: GenericCatalogFormProps) {
+export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuccess }: GenericCatalogFormProps) {
    const router = useRouter();
    const { toast } = useToast();
    const [isLoading, setIsLoading] = useState(false);
+   const [isLoadingDeptos, setIsLoadingDeptos] = useState(false);
    const isEditing = !!initialData;
+
+   const [departamentos, setDepartamentos] = useState<Option[]>([]);
+
+   // Si el arreglo de campos pide un departamento, lo marcamos para cargarlo
+   const requiresDepartamento = formFields.includes("departamento_id");
 
    const defaultValues: Record<string, any> = {};
    formFields.forEach(field => {
@@ -55,44 +59,47 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, isUbi
       }
    });
 
-   const form = useForm<FormValues>({
-      defaultValues,
-   });
+   const form = useForm<FormValues>({ defaultValues });
 
-   // ─── FETCHER DE DEPARTAMENTOS (Solo si es Ubicación) ───
-   const fetchDepartamentos = useCallback(async (search: string): Promise<Option[]> => {
-      if (!isUbicacion) return [];
-      try {
-         const data = await catalogosService.getDepartamentos({ include_inactive: false });
-         const searchLower = search.toLowerCase();
-         const filtered = search
-            ? data.filter(d => d.nombre.toLowerCase().includes(searchLower))
-            : data;
-
-         return filtered.slice(0, 50).map((d) => ({
-            value: d.id,
-            label: d.nombre
-         }));
-      } catch (error) {
-         console.error("Error al buscar departamentos:", error);
-         return [];
+   // PRECARGA DE DEPARTAMENTOS SEGURA (Evita el "No se encontraron")
+   useEffect(() => {
+      let isMounted = true;
+      if (requiresDepartamento) {
+         setIsLoadingDeptos(true);
+         api.get('/catalogos/departamentos/', { params: { include_inactive: false } })
+            .then(data => {
+               if (!isMounted) return;
+               // Protección contra objetos { data: [] }
+               const arr = Array.isArray(data) ? data : (data as any)?.data || [];
+               setDepartamentos(arr.map((d: any) => ({ value: d.id, label: d.nombre })));
+            })
+            .catch(console.error)
+            .finally(() => {
+               if (isMounted) setIsLoadingDeptos(false);
+            });
       }
-   }, [isUbicacion]);
+      return () => { isMounted = false; };
+   }, [requiresDepartamento]);
+
+   const fetchDepartamentos = useCallback(async (search: string): Promise<Option[]> => {
+      const searchLower = search.toLowerCase();
+      return departamentos.filter(d => d.label.toLowerCase().includes(searchLower));
+   }, [departamentos]);
 
    const defaultDepartamentoOptions = useMemo<Option[]>(() => {
-      if (isUbicacion && initialData?.departamento_rel) {
-         return [{
-            value: initialData.departamento_rel.id,
-            label: initialData.departamento_rel.nombre
-         }];
+      if (departamentos.length > 0) return departamentos;
+      if (initialData?.departamento_rel) {
+         return [{ value: initialData.departamento_rel.id, label: initialData.departamento_rel.nombre }];
       }
       return [];
-   }, [initialData, isUbicacion]);
-   // ────────────────────────────────────────────────────────
+   }, [departamentos, initialData]);
 
    const onSubmit = async (data: FormValues) => {
-      if (!data.nombre || data.nombre.trim().length < 2) {
-         form.setError("nombre", { type: "manual", message: "El nombre debe tener al menos 2 caracteres." });
+      // Detectamos dinámicamente cómo se llama el campo principal
+      const primaryKey = formFields.includes("nombre_completo") ? "nombre_completo" : "nombre";
+
+      if (!data[primaryKey] || data[primaryKey].trim().length < 2) {
+         form.setError(primaryKey, { type: "manual", message: "Este campo debe tener al menos 2 caracteres." });
          return;
       }
 
@@ -100,6 +107,7 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, isUbi
       try {
          const payload: Record<string, any> = {};
 
+         // Limpiamos la data (si envían un string vacío, lo mandamos como null para no chocar con la BD)
          formFields.forEach((field) => {
             const val = data[field];
             if (val === "" || val === undefined) {
@@ -111,7 +119,6 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, isUbi
             }
          });
 
-         // Casos especiales de validación
          if (payload.color_hex && !/^#[0-9A-F]{6}$/i.test(payload.color_hex)) {
             form.setError("color_hex", { type: "manual", message: "Formato Hex inválido." });
             setIsLoading(false);
@@ -122,20 +129,21 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, isUbi
             payload.periodicidad_dias = null;
          }
 
+         console.log("Enviando Payload:", payload); // Por si queremos auditar
+
          if (isEditing) {
             await api.put(`${apiEndpoint}/${initialData.id}`, payload);
-            toast({ title: "Éxito", description: "Ítem actualizado correctamente." });
+            toast({ title: "Éxito", description: "Registro actualizado correctamente." });
          } else {
             await api.post(apiEndpoint, payload);
-            toast({ title: "Éxito", description: "Ítem creado correctamente." });
+            toast({ title: "Éxito", description: "Registro creado correctamente." });
          }
          router.refresh();
          onSuccess();
       } catch (err: any) {
          const { message, field } = getFriendlyErrorMessage(err);
-
          if (field || message.includes("ya existe")) {
-            form.setError("nombre", { type: "manual", message });
+            form.setError(field || primaryKey, { type: "manual", message });
          } else {
             toast({ variant: "destructive", title: "Error", description: message });
          }
@@ -149,8 +157,6 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, isUbi
          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
 
             {formFields.map((field) => {
-
-               // 1. Caso especial: Color Hex
                if (field === "color_hex") {
                   return (
                      <FormField key={field} control={form.control} name={field} render={({ field: formField }) => (
@@ -170,7 +176,6 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, isUbi
                   );
                }
 
-               // 2. Caso especial: Periodicidad (Número)
                if (field === "periodicidad_dias") {
                   return (
                      <FormField key={field} control={form.control} name={field} render={({ field: formField }) => (
@@ -188,7 +193,6 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, isUbi
                   );
                }
 
-               // 3. Caso especial: Booleanos (Switch)
                if (field === "es_preventivo" || field === "requiere_documentacion") {
                   return (
                      <FormField key={field} control={form.control} name={field} render={({ field: formField }) => (
@@ -200,7 +204,6 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, isUbi
                   );
                }
 
-               // 4. NUEVO CASO: Selector de Departamento (AsyncCombobox)
                if (field === "departamento_id") {
                   return (
                      <FormField key={field} control={form.control} name={field} render={({ field: formField }) => (
@@ -211,9 +214,10 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, isUbi
                                  value={formField.value}
                                  onChange={formField.onChange}
                                  fetcher={fetchDepartamentos}
-                                 defaultOptions={defaultDepartamentoOptions}
-                                 placeholder="Buscar departamento..."
+                                 defaultOptions={isLoadingDeptos ? [] : defaultDepartamentoOptions}
+                                 placeholder={isLoadingDeptos ? "Cargando..." : "Buscar departamento..."}
                                  emptyMessage="No se encontraron departamentos."
+                                 disabled={isLoadingDeptos}
                               />
                            </FormControl>
                            <FormMessage />
@@ -222,7 +226,7 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, isUbi
                   );
                }
 
-               const isRequired = field === "nombre";
+               const isRequired = field === "nombre" || field === "nombre_completo";
 
                return (
                   <FormField key={field} control={form.control} name={field} render={({ field: formField }) => (
@@ -235,7 +239,7 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, isUbi
                            <Input
                               {...formField}
                               value={formField.value ?? ""}
-                              placeholder={field === "nombre" ? "Ej: Sede Principal..." : ""}
+                              placeholder={isRequired ? `Ej: ${humanizeFieldName(field)}...` : ""}
                            />
                         </FormControl>
                         <FormMessage />
@@ -245,7 +249,7 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, isUbi
             })}
 
             <div className="flex justify-end pt-4">
-               <Button type="submit" disabled={isLoading}>
+               <Button type="submit" disabled={isLoading || isLoadingDeptos}>
                   {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {isEditing ? "Guardar Cambios" : "Crear Ítem"}
                </Button>

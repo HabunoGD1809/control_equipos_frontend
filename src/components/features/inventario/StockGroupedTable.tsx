@@ -42,6 +42,7 @@ export function StockGroupedTable({ data }: StockGroupedTableProps) {
             codigo_barras: null,
             proveedor_preferido_id: null,
             proveedor_preferido: null,
+            marca_rel: (item.tipo_item as TipoItemInventario).marca_rel || null,
           },
           total_cantidad: 0,
           stocks: [],
@@ -98,6 +99,7 @@ export function StockGroupedTable({ data }: StockGroupedTableProps) {
           <TableBody>
             {groupedData.map((group) => {
               const isExpanded = expandedRows.has(group.tipo_item.id);
+              const nombreMarca = group.tipo_item.marca_rel?.nombre || "--";
 
               return (
                 <Fragment key={group.tipo_item.id}>
@@ -118,7 +120,7 @@ export function StockGroupedTable({ data }: StockGroupedTableProps) {
                       </div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
-                      <span className="text-sm font-medium">{group.tipo_item.marca || "-"}</span>
+                      <span className="text-sm font-medium">{nombreMarca}</span>
                       {group.tipo_item.modelo && <span className="text-xs text-muted-foreground block">{group.tipo_item.modelo}</span>}
                     </TableCell>
                     <TableCell className="text-center">

@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
 import { Input } from "@/components/ui/Input";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/Avatar";
 import { useToast } from "@/components/ui/use-toast";
 import { Usuario } from "@/types/api";
 import { updateProfileAction } from "@/actions/user-actions";
@@ -40,13 +41,14 @@ export function UpdateProfileForm({ currentUser }: UpdateProfileFormProps) {
 
    const fileInputRef = useRef<HTMLInputElement>(null);
    const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
-
    const [cropSrc, setCropSrc] = useState<string | null>(null);
    const [isCropOpen, setIsCropOpen] = useState(false);
 
    const [avatarPreview, setAvatarPreview] = useState<string | null>(
       getAvatarSrc((currentUser as any).avatar_url)
    );
+
+   const userInitials = currentUser.nombre_usuario.substring(0, 2).toUpperCase();
 
    const form = useForm<FormValues>({
       resolver: standardSchemaResolver(updateProfileSchema),
@@ -71,7 +73,6 @@ export function UpdateProfileForm({ currentUser }: UpdateProfileFormProps) {
       });
    };
 
-   // 1. Usuario selecciona archivo → abre crop modal
    const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       if (!file) return;
@@ -81,7 +82,6 @@ export function UpdateProfileForm({ currentUser }: UpdateProfileFormProps) {
       if (fileInputRef.current) fileInputRef.current.value = "";
    };
 
-   // 2. Usuario confirma crop → sube el blob recortado
    const handleCropConfirm = async (croppedBlob: Blob) => {
       setIsCropOpen(false);
       setIsUploadingAvatar(true);
@@ -117,22 +117,23 @@ export function UpdateProfileForm({ currentUser }: UpdateProfileFormProps) {
             />
          )}
 
-         <div className="flex flex-col md:flex-row gap-8 items-start">
-            {/* Avatar */}
-            <div className="flex flex-col items-center space-y-4 pt-4 shrink-0">
+         <div className="flex flex-col sm:flex-row gap-8 items-start">
+            <div className="flex flex-col items-center space-y-3 shrink-0">
                <div
-                  className="relative w-32 h-32 rounded-full overflow-hidden border-4 border-muted bg-accent group cursor-pointer"
-                  onClick={() => fileInputRef.current?.click()}
+                  className="relative group cursor-pointer"
+                  onClick={() => !isUploadingAvatar && fileInputRef.current?.click()}
                >
-                  {avatarPreview ? (
-                     <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                     <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">
-                        Sin Foto
-                     </div>
-                  )}
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                     <Camera className="text-white h-8 w-8" />
+                  <Avatar className={`h-28 w-28 border-2 border-border shadow-sm transition-opacity ${isUploadingAvatar ? 'opacity-50' : 'group-hover:opacity-90'}`}>
+                     {avatarPreview ? (
+                        <AvatarImage src={avatarPreview} alt={currentUser.nombre_usuario} className="object-cover" />
+                     ) : (
+                        <AvatarImage src={`https://api.dicebear.com/8.x/initials/svg?seed=${currentUser.nombre_usuario}&backgroundColor=1e293b,2563eb`} />
+                     )}
+                     <AvatarFallback className="text-2xl font-bold bg-muted">{userInitials}</AvatarFallback>
+                  </Avatar>
+
+                  <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                     {isUploadingAvatar ? <Loader2 className="text-white h-6 w-6 animate-spin" /> : <Camera className="text-white h-6 w-6" />}
                   </div>
                </div>
 
@@ -143,21 +144,16 @@ export function UpdateProfileForm({ currentUser }: UpdateProfileFormProps) {
                   ref={fileInputRef}
                   onChange={handleFileSelect}
                />
-
-               <Button variant="outline" size="sm" disabled={isUploadingAvatar} onClick={() => fileInputRef.current?.click()}>
-                  {isUploadingAvatar ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Cambiar Foto"}
-               </Button>
             </div>
 
-            {/* Formulario */}
             <Form {...form}>
                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5 flex-1 w-full">
-                  <div className="grid grid-cols-1 gap-6">
+                  <div className="space-y-4">
                      <FormField control={form.control} name="nombre_usuario" render={({ field }) => (
                         <FormItem>
                            <FormLabel>Nombre de Usuario</FormLabel>
                            <FormControl>
-                              <Input {...field} disabled={isPending} value={field.value ?? ""} className="bg-background max-w-md" />
+                              <Input {...field} disabled={isPending} value={field.value ?? ""} className="max-w-sm bg-background" />
                            </FormControl>
                            <FormMessage />
                         </FormItem>
@@ -166,14 +162,14 @@ export function UpdateProfileForm({ currentUser }: UpdateProfileFormProps) {
                         <FormItem>
                            <FormLabel>Correo Electrónico <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
                            <FormControl>
-                              <Input type="email" {...field} value={field.value ?? ""} disabled={isPending} placeholder="tucorreo@empresa.com" className="bg-background max-w-md" />
+                              <Input type="email" {...field} value={field.value ?? ""} disabled={isPending} placeholder="tucorreo@empresa.com" className="max-w-sm bg-background" />
                            </FormControl>
                            <FormMessage />
                         </FormItem>
                      )} />
                   </div>
-                  <div className="flex pt-4">
-                     <Button type="submit" disabled={isPending} className="min-w-32 shadow-sm">
+                  <div className="pt-2">
+                     <Button type="submit" disabled={isPending} size="sm" className="shadow-sm">
                         {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                         Guardar Cambios
                      </Button>

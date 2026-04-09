@@ -126,7 +126,7 @@ export function EquipoDetailTab({ equipo }: EquipoDetailTabProps) {
                   <div className="grid grid-cols-2 gap-y-6 gap-x-4">
                      <div className="space-y-1">
                         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Marca</span>
-                        <p className="font-medium text-foreground">{equipo.marca || "--"}</p>
+                        <p className="font-medium text-foreground">{equipo.marca_rel?.nombre || "--"}</p>
                      </div>
                      <div className="space-y-1">
                         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Modelo</span>

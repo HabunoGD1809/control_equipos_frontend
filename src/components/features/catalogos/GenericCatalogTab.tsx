@@ -20,7 +20,6 @@ import { useToast } from "@/components/ui/use-toast";
 
 type GenericItem = {
    id: string;
-   nombre: string;
    is_active?: boolean;
    [key: string]: any;
 };
@@ -39,6 +38,7 @@ const humanizeFieldName = (field: string) => {
    if (field === "requiere_documentacion") return "Req. Doc.";
    if (field === "es_preventivo") return "Preventivo";
    if (field === "departamento_id") return "Departamento";
+   if (field === "nombre_completo") return "Nombre Completo";
 
    return field.charAt(0).toUpperCase() + field.slice(1).replace(/_/g, ' ');
 };
@@ -55,16 +55,13 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [selectedItem, setSelectedItem] = useState<GenericItem | null>(null);
 
-   // --- NUEVO ESTADO PARA EL SWITCH ---
    const [showInactive, setShowInactive] = useState(false);
    const [isLoading, setIsLoading] = useState(false);
 
-   // Sincroniza el estado local cuando cambian los props Iniciales
    useEffect(() => {
       setItems(data || []);
    }, [JSON.stringify(data)]);
 
-   // --- NUEVA FUNCIÓN PARA REFRESCAR LOS DATOS (con filtro) ---
    const fetchItems = useCallback(async () => {
       setIsLoading(true);
       try {
@@ -79,18 +76,15 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
       }
    }, [apiEndpoint, showInactive, toast]);
 
-   // Re-fetch cuando el switch cambie
    useEffect(() => {
-      // Evitamos hacer el fetch en el primer render, ya que usamos el prop `data`
       if (items.length > 0 || showInactive) {
          fetchItems();
       }
    }, [showInactive, fetchItems]);
-   // -----------------------------------------------------------
 
    const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } = useDeleteConfirmation({
       onDelete: (id) => api.delete(`${apiEndpoint}/${id}`),
-      onSuccess: fetchItems, // Usamos la nueva función para refrescar
+      onSuccess: fetchItems,
       successMessage: `El ítem ha sido eliminado correctamente del catálogo.`,
    });
 
@@ -105,7 +99,6 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
    };
 
    const dynamicColumns: ColumnDef<GenericItem>[] = formFields.map((field) => {
-      // Caso Especial 1: Color Hex
       if (field === "color_hex") {
          return {
             accessorKey: field,
@@ -123,7 +116,6 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
          };
       }
 
-      // Caso Especial 2: Booleanos
       if (field === "es_preventivo" || field === "requiere_documentacion") {
          return {
             accessorKey: field,
@@ -135,7 +127,6 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
          };
       }
 
-      // Caso Especial 3: Periodicidad
       if (field === "periodicidad_dias") {
          return {
             accessorKey: field,
@@ -147,7 +138,6 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
          };
       }
 
-      // Caso Especial 4: Relaciones Foráneas (Departamento)
       if (field === "departamento_id") {
          return {
             accessorKey: "departamento_rel.nombre",
@@ -159,13 +149,14 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
          };
       }
 
-      // Caso por defecto (Textos: Nombre, Descripción, Edificio)
       return {
          accessorKey: field,
          header: humanizeFieldName(field),
          cell: ({ row }) => {
             const val = row.getValue(field) as string;
-            const isNombre = field === "nombre";
+            // Evaluamos si el campo actual es el campo principal de nombre
+            const isNombre = field === "nombre" || field === "nombre_completo";
+
             return (
                <div className="flex items-center gap-2">
                   <span className={isNombre ? "font-semibold text-foreground" : "text-muted-foreground"}>
@@ -180,7 +171,6 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
       };
    });
 
-   // Añadimos la columna de acciones al final
    const columns: ColumnDef<GenericItem>[] = [
       ...dynamicColumns,
       {
@@ -209,6 +199,9 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
       },
    ];
 
+   // Determinamos cuál es la columna por la que el usuario va a filtrar
+   const filterColumnName = formFields.includes("nombre_completo") ? "nombre_completo" : "nombre";
+
    return (
       <div className="space-y-4 animate-in fade-in duration-300">
          <ConfirmDeleteDialog
@@ -232,14 +225,13 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
                   isUbicacion={isUbicacion}
                   onSuccess={async () => {
                      setIsModalOpen(false);
-                     await fetchItems(); // Usamos la nueva función
+                     await fetchItems();
                   }}
                />
             </DialogContent>
          </Dialog>
 
          <div className="flex justify-between items-center mb-4">
-            {/* EL SWITCH DE INACTIVOS */}
             <div className="flex items-center space-x-2">
                <Switch
                   id={`show-inactive-${title}`}
@@ -264,7 +256,7 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
          <DataTable
             columns={columns}
             data={items}
-            filterColumn="nombre"
+            filterColumn={filterColumnName}
             tableContainerClassName="shadow-sm border rounded-lg bg-card"
          />
       </div>

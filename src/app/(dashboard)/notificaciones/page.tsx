@@ -177,19 +177,17 @@ export default function NotificacionesPage() {
                      </div>
                   )}
                </div>
-
-               {isLoading && (
-                  <div className="flex justify-center p-6 border-t">
-                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  </div>
-               )}
             </CardContent>
 
-            {/* AHORA CONDICIONAMOS A 'hasMore' */}
             {notifications.length > 0 && hasMore && (
                <CardFooter className="bg-muted/20 border-t p-4 flex justify-center">
-                  <Button variant="outline" onClick={() => { setPage(p => p + 1); fetchNotifications(page + 1); }} disabled={isLoading}>
-                     Cargar notificaciones anteriores
+                  <Button
+                     variant="outline"
+                     onClick={() => { setPage(p => p + 1); fetchNotifications(page + 1); }}
+                     disabled={isLoading}
+                  >
+                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                     {isLoading ? "Cargando..." : "Cargar notificaciones anteriores"}
                   </Button>
                </CardFooter>
             )}

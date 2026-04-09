@@ -33,7 +33,9 @@ export function Notifications() {
    const prevCountRef = useRef<number | null>(null);
    const eventSourceRef = useRef<EventSource | null>(null);
 
-   // 1. Query Inicial (SIN Polling)
+   // ESTADO PARA CONTROLAR LA APERTURA DEL MENÚ
+   const [isOpen, setIsOpen] = useState(false);
+
    const { data: polledCount = 0 } = useQuery({
       queryKey: ["notificaciones", "unreadCount"],
       queryFn: () => notificacionesService.getUnreadCount(),
@@ -43,55 +45,37 @@ export function Notifications() {
       refetchIntervalInBackground: false,
    });
 
-   // Toast Automático al detectar incremento de notificaciones
    useEffect(() => {
       if (!enabled) return;
-
       const prev = prevCountRef.current;
-
       if (prev !== null && polledCount > prev) {
-         toast({
-            title: "Nueva Notificación",
-            description: "Tienes una nueva alerta o reporte generado.",
-            duration: 4000,
-         });
+         toast({ title: "Nueva Notificación", description: "Tienes una nueva alerta o reporte generado.", duration: 4000 });
          qc.invalidateQueries({ queryKey: ["notificaciones", "latest"] });
       }
-
       prevCountRef.current = polledCount;
       setRealtimeUnreadCount(polledCount);
    }, [polledCount, enabled, toast, qc]);
 
-   // 2. Conexión SSE — Disparador reactivo principal 
    useEffect(() => {
       if (!enabled) return;
-
       eventSourceRef.current?.close();
       const source = new EventSource("/api/sse/notificaciones");
       eventSourceRef.current = source;
 
-      // Atrapamos el evento estándar
-      source.onmessage = (event) => {
+      source.onmessage = () => {
          qc.invalidateQueries({ queryKey: ["notificaciones", "unreadCount"] });
          qc.invalidateQueries({ queryKey: ["notificaciones", "latest"] });
       };
 
-      // Atrapamos el evento custom "update"
       source.addEventListener("update", () => {
          qc.invalidateQueries({ queryKey: ["notificaciones", "unreadCount"] });
          qc.invalidateQueries({ queryKey: ["notificaciones", "latest"] });
       });
 
-      source.onerror = () => {
-         console.warn("[SSE] Conexión perdida, el navegador reintentará de forma nativa...");
-      };
-
-      return () => {
-         source.close();
-      };
+      source.onerror = () => console.warn("[SSE] Conexión perdida, reintentando...");
+      return () => source.close();
    }, [enabled, qc]);
 
-   // 3. Query de la Lista de Notificaciones
    const { data: notifications = [] } = useQuery({
       queryKey: ["notificaciones", "latest"],
       queryFn: () => notificacionesService.getAll({ limit: 5 }),
@@ -99,7 +83,6 @@ export function Notifications() {
       staleTime: 0,
    });
 
-   // 4. Mutaciones
    const markAllMutation = useMutation({
       mutationFn: () => notificacionesService.marcarTodasComoLeidas(),
       onSuccess: async () => {
@@ -122,9 +105,7 @@ export function Notifications() {
          a.remove();
          toast({ title: "Descarga completada", description: "El reporte se ha descargado exitosamente." });
       },
-      onError: () => {
-         toast({ variant: "destructive", title: "Error de descarga", description: "El reporte no se pudo descargar o expiró." });
-      },
+      onError: () => toast({ variant: "destructive", title: "Error", description: "No se pudo descargar el reporte." }),
    });
 
    const getUrlReferencia = (notif: Notificacion) => {
@@ -133,8 +114,15 @@ export function Notifications() {
          case "equipos": return `/equipos/${notif.referencia_id}`;
          case "reservas_equipo": return `/reservas`;
          case "mantenimiento": return `/mantenimientos`;
+         case "usuarios": return `/perfil`;
          default: return null;
       }
+   };
+
+   // FUNCIÓN AUXILIAR PARA NAVEGAR Y CERRAR EL MENÚ
+   const handleNavigation = (url: string) => {
+      setIsOpen(false); // Cierra el dropdown
+      router.push(url); // Navega a la ruta
    };
 
    if (!enabled) {
@@ -148,7 +136,7 @@ export function Notifications() {
    const displayCount = realtimeUnreadCount !== null ? realtimeUnreadCount : polledCount;
 
    return (
-      <DropdownMenu>
+      <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
          <DropdownMenuTrigger asChild>
             <Button variant="outline" size="icon" className="relative transition-all duration-300 hover:bg-accent">
                <Bell className="h-[1.2rem] w-[1.2rem]" />
@@ -175,7 +163,7 @@ export function Notifications() {
                      disabled={markAllMutation.isPending}
                   >
                      <Check className="h-3.5 w-3.5 mr-1" />
-                     Marcar todas leídas
+                     Marcar leídas
                   </Button>
                )}
             </div>
@@ -196,7 +184,7 @@ export function Notifications() {
                               if (isReport && notif.referencia_id) {
                                  downloadReportMutation.mutate(notif.referencia_id);
                               } else if (url) {
-                                 router.push(url);
+                                 handleNavigation(url); // USAMOS LA NUEVA FUNCIÓN
                               }
                            }}
                         >
@@ -226,7 +214,6 @@ export function Notifications() {
                      <Check className="h-6 w-6 text-muted-foreground/50" />
                   </div>
                   <p className="text-sm font-medium text-foreground">Todo al día</p>
-                  <p className="text-xs text-muted-foreground">No tienes notificaciones pendientes.</p>
                </div>
             )}
 
@@ -234,7 +221,7 @@ export function Notifications() {
                <Button
                   variant="ghost"
                   className="w-full text-xs font-semibold justify-center h-8"
-                  onClick={() => router.push("/notificaciones")}
+                  onClick={() => handleNavigation("/notificaciones")} // USAMOS LA NUEVA FUNCIÓN
                >
                   Ver historial completo
                </Button>

@@ -1,17 +1,15 @@
 import { cookies } from 'next/headers';
-import { Mail, Calendar, ShieldCheck, Activity, Building2, User } from 'lucide-react';
+import { ShieldCheck, Calendar, Activity, Building2, UserCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/Avatar';
+import { Card, CardContent } from '@/components/ui/Card';
 import { Separator } from '@/components/ui/Separator';
 import { Badge } from '@/components/ui/Badge';
 import { ChangePasswordForm } from '@/components/features/usuarios/ChangePasswordForm';
 import { UpdateProfileForm } from '@/components/features/usuarios/UpdateProfileForm';
 import { Usuario } from '@/types/api';
 
-// --- Función de obtención de datos ---
 async function getCurrentUser(): Promise<Usuario | null> {
    const accessToken = (await cookies()).get('access_token')?.value;
    if (!accessToken) return null;
@@ -29,20 +27,6 @@ async function getCurrentUser(): Promise<Usuario | null> {
    }
 }
 
-function ProfileInfoRow({ icon: Icon, label, value }: { icon: React.ElementType, label: string, value?: string | null }) {
-   if (!value) return null;
-   return (
-      <div className="flex items-center justify-between p-2.5 rounded-md bg-muted/30 border border-border/50 text-[13px] transition-colors hover:bg-muted/50">
-         <div className="flex items-center text-muted-foreground">
-            <Icon className="h-4 w-4 mr-2 text-primary/70" />
-            <span className="font-medium">{label}</span>
-         </div>
-         <span className="font-medium text-foreground text-right truncate max-w-37.5" title={value}>{value}</span>
-      </div>
-   );
-}
-
-// --- Componente Principal ---
 export default async function PerfilPage() {
    const user = await getCurrentUser();
 
@@ -60,115 +44,108 @@ export default async function PerfilPage() {
       );
    }
 
-   const userInitials = user.nombre_usuario.substring(0, 2).toUpperCase();
-
    return (
-      <div className="space-y-5 max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 pb-4">
+      <div className="space-y-10 max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12 pt-4 px-2 sm:px-4">
 
          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Configuración de Perfil</h1>
-            <p className="text-muted-foreground mt-1 text-sm">
-               Administra tu información personal y las credenciales de tu cuenta.
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">Configuración</h1>
+            <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+               Administra la configuración de tu cuenta y preferencias del sistema.
             </p>
          </div>
 
-         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+         <Separator />
 
-            <div className="lg:col-span-4 space-y-6">
-               <Card className="overflow-hidden border-border/50 shadow-sm">
-                  <div className="h-20 bg-linear-to-r from-primary/15 via-primary/5 to-transparent w-full relative">
-                     <div className="absolute inset-0 bg-grid-white/10 mask-[linear-gradient(0deg,white,rgba(255,255,255,0.6))] dark:bg-grid-black/10"></div>
-                  </div>
-
-                  <CardContent className="px-5 pb-5 pt-0 relative flex flex-col items-center">
-                     {/* Avatar Ajustado */}
-                     <Avatar className="h-24 w-24 border-4 border-background shadow-sm -mt-12 mb-3 bg-primary/5">
-                        <AvatarImage src={`https://api.dicebear.com/8.x/initials/svg?seed=${user.nombre_usuario}&backgroundColor=1e293b,2563eb`} alt={user.nombre_usuario} />
-                        <AvatarFallback className="text-xl font-bold text-primary">{userInitials}</AvatarFallback>
-                     </Avatar>
-
-                     {/* Nombre de Usuario y Badges */}
-                     <div className="text-center space-y-1 mb-4 w-full">
-                        <h2 className="text-xl font-bold tracking-tight text-foreground truncate px-2" title={user.nombre_usuario}>
-                           {user.nombre_usuario}
-                        </h2>
-
-                        <div className="flex flex-wrap items-center justify-center gap-1.5 mt-2">
-                           <Badge variant="default" className="text-xs font-medium px-2 py-0.5 capitalize shadow-none flex items-center gap-1 bg-primary/90 hover:bg-primary">
-                              <User className="w-3 h-3" />
-                              {user.rol?.nombre || 'Usuario'}
-                           </Badge>
-
-                           {user.departamento_rel && (
-                              <Badge variant="outline" className="text-xs font-medium px-2 py-0.5 shadow-none flex items-center gap-1 border-primary/20 text-foreground bg-primary/5">
-                                 <Building2 className="w-3 h-3 text-primary/70" />
-                                 {user.departamento_rel.nombre}
-                              </Badge>
-                           )}
-                        </div>
+         {/* 1. SECCIÓN: Información del Sistema */}
+         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+            <div className="md:col-span-4 space-y-1">
+               <h3 className="text-lg font-semibold text-foreground">Información del Sistema</h3>
+               <p className="text-sm text-muted-foreground pr-4">
+                  Detalles internos de tu cuenta. Si necesitas modificar tu nivel de acceso, contacta a un administrador.
+               </p>
+            </div>
+            <div className="md:col-span-8">
+               <Card className="shadow-sm border-border/50 bg-muted/10">
+                  <CardContent className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
+                     <div className="space-y-1">
+                        <span className="text-sm font-medium flex items-center text-muted-foreground">
+                           <UserCircle className="h-4 w-4 mr-2" /> Rol de Acceso
+                        </span>
+                        <Badge variant="secondary" className="capitalize text-sm font-normal">
+                           {user.rol?.nombre || 'Estándar'}
+                        </Badge>
                      </div>
 
-                     <Separator className="w-full mb-4 opacity-50" />
+                     <div className="space-y-1">
+                        <span className="text-sm font-medium flex items-center text-muted-foreground">
+                           <Building2 className="h-4 w-4 mr-2" /> Departamento
+                        </span>
+                        <span className="text-foreground text-sm font-medium">
+                           {user.departamento_rel?.nombre || 'No asignado'}
+                        </span>
+                     </div>
 
-                     {/* Detalles Informativos */}
-                     <div className="w-full space-y-2">
-                        <ProfileInfoRow
-                           icon={Mail}
-                           label="Correo"
-                           value={user.email || 'No registrado'}
-                        />
-                        <ProfileInfoRow
-                           icon={Calendar}
-                           label="Miembro"
-                           value={format(new Date(user.created_at), "dd MMM yyyy", { locale: es })}
-                        />
-                        <ProfileInfoRow
-                           icon={Activity}
-                           label="Acceso"
-                           value={user.ultimo_login ? format(new Date(user.ultimo_login), "dd/MM/yy HH:mm", { locale: es }) : 'Sesión actual'}
-                        />
+                     <div className="space-y-1">
+                        <span className="text-sm font-medium flex items-center text-muted-foreground">
+                           <Calendar className="h-4 w-4 mr-2" /> Miembro desde
+                        </span>
+                        <span className="text-foreground text-sm font-medium">
+                           {format(new Date(user.created_at), "dd MMMM, yyyy", { locale: es })}
+                        </span>
+                     </div>
+
+                     <div className="space-y-1">
+                        <span className="text-sm font-medium flex items-center text-muted-foreground">
+                           <Activity className="h-4 w-4 mr-2" /> Último acceso
+                        </span>
+                        <span className="text-foreground text-sm font-medium">
+                           {user.ultimo_login ? format(new Date(user.ultimo_login), "dd/MM/yyyy HH:mm", { locale: es }) : 'Sesión actual'}
+                        </span>
                      </div>
                   </CardContent>
                </Card>
             </div>
+         </div>
 
-            <div className="lg:col-span-8 space-y-5">
+         <Separator />
 
-               {/* Tarjeta de Información General */}
-               <Card className="border-border/50 shadow-sm overflow-hidden">
-                  <CardHeader className="bg-muted/10 border-b border-border/40 pb-3 pt-4 px-6">
-                     <CardTitle className="text-base flex items-center gap-2">
-                        <User className="h-4 w-4 text-muted-foreground" />
-                        Información Pública
-                     </CardTitle>
-                     <CardDescription className="text-[13px] mt-1">
-                        Actualiza tu usuario y correo. Cambios de rol o departamento requieren un administrador.
-                     </CardDescription>
-                  </CardHeader>
-                  <CardContent className="p-5 sm:p-6">
+         {/* 2. Sección: Perfil Público */}
+         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+            <div className="md:col-span-4 space-y-1">
+               <h3 className="text-lg font-semibold text-foreground">Perfil Público</h3>
+               <p className="text-sm text-muted-foreground pr-4">
+                  Esta información será visible para otros usuarios del sistema en los registros de auditoría y movimientos.
+               </p>
+            </div>
+            <div className="md:col-span-8">
+               <Card className="shadow-sm border-border/50">
+                  <CardContent className="p-6">
                      <UpdateProfileForm currentUser={user} />
                   </CardContent>
                </Card>
+            </div>
+         </div>
 
-               <Card className="border-destructive/20 shadow-sm overflow-hidden relative">
+         <Separator />
+
+         {/* 3. Sección: Seguridad */}
+         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+            <div className="md:col-span-4 space-y-1">
+               <h3 className="text-lg font-semibold text-foreground">Seguridad</h3>
+               <p className="text-sm text-muted-foreground pr-4">
+                  Actualiza tu contraseña asociada a la cuenta. Usa una clave robusta que no uses en otros sitios.
+               </p>
+            </div>
+            <div className="md:col-span-8">
+               <Card className="shadow-sm border-destructive/20 relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-1 h-full bg-destructive/50"></div>
-
-                  <CardHeader className="bg-destructive/5 border-b border-destructive/10 pb-3 pt-4 px-6 pl-8">
-                     <div className="flex items-center gap-2">
-                        <ShieldCheck className="h-4 w-4 text-destructive" />
-                        <CardTitle className="text-base">Seguridad de la Cuenta</CardTitle>
-                     </div>
-                     <CardDescription className="text-[13px] mt-1">
-                        Usa una combinación de letras, números y símbolos para mayor seguridad.
-                     </CardDescription>
-                  </CardHeader>
-                  <CardContent className="p-5 sm:p-6 pl-8">
+                  <CardContent className="p-6 pl-8">
                      <ChangePasswordForm />
                   </CardContent>
                </Card>
-
             </div>
          </div>
+
       </div>
    );
 }

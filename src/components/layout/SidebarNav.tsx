@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { ChevronDown } from "lucide-react";
 
 import { useHasPermission } from "@/hooks/useHasPermission";
 import { cn } from "@/lib/utils";
@@ -23,7 +24,7 @@ interface SidebarNavProps {
 
 export function SidebarNav({ items, isCollapsed }: SidebarNavProps) {
    return (
-      <nav className="flex flex-col gap-1.5">
+      <nav className="flex flex-col gap-1">
          {items.map((item, index) =>
             item.subRoutes ? (
                <CollapsibleNavItem key={`collapsible-${index}`} item={item} isCollapsed={isCollapsed} />
@@ -48,26 +49,33 @@ function CollapsibleNavItem({ item, isCollapsed }: { item: NavItemProps; isColla
    if (!hasPermissionForAnySubRoute) return null;
 
    return (
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col mb-1">
          <button
             onClick={() => !isCollapsed && setIsOpen(!isOpen)}
             title={isCollapsed ? item.label : undefined}
             className={cn(
-               "flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 group outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
-               isOpen && !isCollapsed ? "text-primary" : "text-foreground/70 hover:bg-accent/80 hover:text-accent-foreground",
+               "flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-md transition-all duration-200 group outline-none focus-visible:ring-2 focus-visible:ring-primary/50 relative",
+               isOpen && !isCollapsed
+                  ? "text-foreground font-semibold"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
                isCollapsed ? "justify-center" : "justify-between"
             )}
          >
             <div className="flex items-center transition-transform duration-200 group-hover:translate-x-1">
-               <item.icon className={cn("h-5 w-5 shrink-0", isCollapsed ? "mr-0" : "mr-3", isOpen && !isCollapsed ? "text-primary" : "")} />
+               <item.icon className={cn(
+                  "h-5 w-5 shrink-0 transition-colors",
+                  isCollapsed ? "mr-0" : "mr-3",
+                  isOpen && !isCollapsed ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+               )} />
                {!isCollapsed && <span>{item.label}</span>}
             </div>
             {!isCollapsed && (
                <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+                  <ChevronDown className="h-4 w-4 opacity-50" />
                </motion.div>
             )}
          </button>
+
          <AnimatePresence initial={false}>
             {isOpen && !isCollapsed && (
                <motion.div
@@ -77,7 +85,8 @@ function CollapsibleNavItem({ item, isCollapsed }: { item: NavItemProps; isColla
                   transition={{ duration: 0.2, ease: "easeInOut" }}
                   className="overflow-hidden"
                >
-                  <div className="mt-1 ml-5 pl-3 border-l-2 border-primary/10 flex flex-col gap-1">
+                  {/* Línea guía vertical más suave */}
+                  <div className="mt-1 ml-5 pl-4 border-l border-border/40 flex flex-col gap-1 relative">
                      {item.subRoutes?.map(subItem => (
                         <NavItem key={subItem.href} item={subItem} isCollapsed={false} isSubItem />
                      ))}
@@ -102,17 +111,27 @@ function NavItem({ item, isCollapsed, isSubItem = false }: { item: NavItemProps;
          href={item.href || "#"}
          title={isCollapsed ? item.label : undefined}
          className={cn(
-            "flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 relative group outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+            "flex items-center py-2 text-sm font-medium rounded-md transition-all duration-200 relative group outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
             isActive
-               ? "text-primary-foreground shadow-sm"
-               : "text-foreground/70 hover:bg-accent/80 hover:text-accent-foreground",
-            isCollapsed ? "justify-center" : "justify-start"
+               ? "text-primary bg-primary/10"
+               : "text-muted-foreground hover:bg-accent hover:text-foreground",
+            isCollapsed ? "justify-center px-3" : "px-3"
          )}
       >
-         {isActive && (
+         {/* Barra indicadora vertical (Estilo Linear/Vercel) */}
+         {isActive && !isSubItem && !isCollapsed && (
             <motion.div
-               layoutId={isSubItem ? "active-sub-nav-pill" : "active-nav-pill"}
-               className="absolute inset-0 bg-primary rounded-lg"
+               layoutId="active-sidebar-indicator"
+               className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 bg-primary rounded-r-full"
+               transition={{ type: "spring", stiffness: 400, damping: 30 }}
+            />
+         )}
+
+         {/* Animación de la píldora solo para modo colapsado (como un tooltip de fondo) */}
+         {isActive && isCollapsed && (
+            <motion.div
+               layoutId="active-collapsed-pill"
+               className="absolute inset-0 bg-primary/10 border border-primary/20 rounded-md"
                transition={{ type: "spring", stiffness: 400, damping: 30 }}
             />
          )}
@@ -122,11 +141,20 @@ function NavItem({ item, isCollapsed, isSubItem = false }: { item: NavItemProps;
             !isActive && !isCollapsed && "group-hover:translate-x-1"
          )}>
             <item.icon className={cn(
-               "h-5 w-5 shrink-0",
-               isCollapsed ? "mr-0" : "mr-3",
-               isSubItem && !isCollapsed ? "h-4 w-4" : ""
+               "shrink-0 transition-colors",
+               isCollapsed ? "mr-0 h-5 w-5" : "mr-3",
+               isSubItem ? "h-4 w-4" : "h-5 w-5",
+               isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
             )} />
-            {!isCollapsed && <span className="truncate">{item.label}</span>}
+
+            {!isCollapsed && (
+               <span className={cn(
+                  "truncate",
+                  isActive && "font-semibold"
+               )}>
+                  {item.label}
+               </span>
+            )}
          </div>
       </Link>
    );

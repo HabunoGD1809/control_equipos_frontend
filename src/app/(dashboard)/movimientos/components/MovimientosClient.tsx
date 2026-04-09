@@ -61,9 +61,8 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
    const [movimientos, setMovimientos] = useState<Movimiento[]>(initialData);
    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-   // Estados para Modales
    const [movimientoToAuthorize, setMovimientoToAuthorize] = useState<Movimiento | null>(null);
-   const [movimientoToRecibir, setMovimientoToRecibir] = useState<Movimiento | null>(null); // <-- NUEVO ESTADO
+   const [movimientoToRecibir, setMovimientoToRecibir] = useState<Movimiento | null>(null);
 
    const { toast } = useToast();
    const router = useRouter();
@@ -88,17 +87,10 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
          return;
       try {
          await movimientosService.cancelar(id);
-         toast({
-            title: "Cancelado",
-            description: "El movimiento ha sido cancelado exitosamente.",
-         });
+         toast({ title: "Cancelado", description: "El movimiento ha sido cancelado exitosamente." });
          refreshData();
       } catch (error: any) {
-         toast({
-            variant: "destructive",
-            title: "Error",
-            description: error.message || "No se pudo cancelar.",
-         });
+         toast({ variant: "destructive", title: "Error", description: error.message || "No se pudo cancelar." });
       }
    };
 
@@ -108,40 +100,25 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
       {
          accessorKey: "ubicacion_destino_nombre",
          header: "Destino",
-         cell: ({ row }) =>
-            row.original.ubicacion_destino_nombre || (
-               <span className="text-muted-foreground">N/A</span>
-            ),
+         cell: ({ row }) => row.original.ubicacion_destino_nombre || <span className="text-muted-foreground">N/A</span>,
       },
       { accessorKey: "proposito", header: "Propósito" },
       {
          accessorKey: "fecha_hora",
          header: "Fecha",
-         cell: ({ row }) =>
-            format(new Date(row.getValue("fecha_hora")), "Pp", { locale: es }),
+         cell: ({ row }) => format(new Date(row.getValue("fecha_hora")), "Pp", { locale: es }),
       },
       {
          accessorKey: "estado",
          header: "Estado",
          cell: ({ row }) => {
             const estado = row.getValue("estado") as string;
-            let variant:
-               | "default"
-               | "secondary"
-               | "destructive"
-               | "outline"
-               | "warning" = "outline";
-            if (estado === EstadoMovimientoEquipoEnum.Completado)
-               variant = "default";
-            if (
-               estado === EstadoMovimientoEquipoEnum.Cancelado ||
-               estado === EstadoMovimientoEquipoEnum.Rechazado
-            )
-               variant = "destructive";
-            if (estado === EstadoMovimientoEquipoEnum.Pendiente)
-               variant = "secondary";
-            if (estado === EstadoMovimientoEquipoEnum.EnProceso)
-               variant = "default";
+            let variant: "default" | "secondary" | "destructive" | "outline" | "warning" = "outline";
+            if (estado === EstadoMovimientoEquipoEnum.Completado) variant = "default";
+            if (estado === EstadoMovimientoEquipoEnum.Cancelado || estado === EstadoMovimientoEquipoEnum.Rechazado) variant = "destructive";
+            if (estado === EstadoMovimientoEquipoEnum.Pendiente) variant = "secondary";
+            if (estado === EstadoMovimientoEquipoEnum.EnProceso) variant = "default";
+
             return <Badge variant={variant as any}>{estado}</Badge>;
          },
       },
@@ -151,8 +128,7 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
             const mov = row.original;
             const isPendiente = mov.estado === EstadoMovimientoEquipoEnum.Pendiente;
             const isEnProceso = mov.estado === EstadoMovimientoEquipoEnum.EnProceso;
-            const isCancelable =
-               isPendiente || mov.estado === EstadoMovimientoEquipoEnum.Autorizado;
+            const isCancelable = isPendiente || mov.estado === EstadoMovimientoEquipoEnum.Autorizado;
 
             return (
                <DropdownMenu>
@@ -165,32 +141,25 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
                      <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                      <DropdownMenuSeparator />
                      {isPendiente && (
-                        <DropdownMenuItem onClick={() => setMovimientoToAuthorize(mov)}>
-                           <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                        <DropdownMenuItem onClick={() => setMovimientoToAuthorize(mov)} className="cursor-pointer">
+                           <CheckCircle className="mr-2 h-4 w-4 text-emerald-600" />
                            <span>Validar Movimiento</span>
                         </DropdownMenuItem>
                      )}
                      {isEnProceso && (
-                        // <-- LLAMADA AL NUEVO MODAL
-                        <DropdownMenuItem onClick={() => setMovimientoToRecibir(mov)}>
+                        <DropdownMenuItem onClick={() => setMovimientoToRecibir(mov)} className="cursor-pointer">
                            <PackageCheck className="mr-2 h-4 w-4 text-blue-600" />
-                           <span className="font-semibold text-blue-600">
-                              Recibir Equipo
-                           </span>
+                           <span className="font-semibold text-blue-600">Recibir Equipo</span>
                         </DropdownMenuItem>
                      )}
                      {isCancelable && (
-                        <DropdownMenuItem onClick={() => handleCancelar(mov.id)}>
-                           <Ban className="mr-2 h-4 w-4 text-red-600" />
+                        <DropdownMenuItem onClick={() => handleCancelar(mov.id)} className="cursor-pointer text-destructive focus:text-destructive">
+                           <Ban className="mr-2 h-4 w-4" />
                            <span>Cancelar Movimiento</span>
                         </DropdownMenuItem>
                      )}
-
                      {!isPendiente && !isEnProceso && !isCancelable && (
-                        <DropdownMenuItem
-                           disabled
-                           className="text-muted-foreground italic"
-                        >
+                        <DropdownMenuItem disabled className="text-muted-foreground italic">
                            Sin acciones disponibles
                         </DropdownMenuItem>
                      )}
@@ -204,7 +173,7 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
    return (
       <div className="space-y-4 animate-in fade-in duration-300">
          <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                <DialogHeader>
                   <DialogTitle>Registrar Nuevo Movimiento</DialogTitle>
                   <DialogDescription>
@@ -221,30 +190,20 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
             </DialogContent>
          </Dialog>
 
-         {/* Modales de Flujo de Trabajo */}
          <AutorizarMovimientoModal
             movimiento={movimientoToAuthorize}
             isOpen={!!movimientoToAuthorize}
-            onClose={() => {
-               setMovimientoToAuthorize(null);
-               refreshData();
-            }}
+            onClose={() => { setMovimientoToAuthorize(null); refreshData(); }}
          />
 
          <RecibirMovimientoModal
             movimiento={movimientoToRecibir}
             isOpen={!!movimientoToRecibir}
-            onClose={() => {
-               setMovimientoToRecibir(null);
-               refreshData();
-            }}
+            onClose={() => { setMovimientoToRecibir(null); refreshData(); }}
          />
 
          <div className="flex justify-end">
-            <Button
-               onClick={() => setIsCreateModalOpen(true)}
-               className="shadow-sm"
-            >
+            <Button onClick={() => setIsCreateModalOpen(true)} className="shadow-sm">
                <PlusCircle className="mr-2 h-4 w-4" /> Registrar Movimiento
             </Button>
          </div>

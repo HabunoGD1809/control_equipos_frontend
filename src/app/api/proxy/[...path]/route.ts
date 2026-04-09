@@ -46,18 +46,9 @@ async function proxyRequest(
 
    if (method !== "GET" && method !== "DELETE") {
       if (isMultipart) {
-         const incomingFormData = await request.formData();
-         const outgoingFormData = new FormData();
-
-         for (const [key, value] of incomingFormData.entries()) {
-            if (value instanceof File) {
-               outgoingFormData.append(key, value, value.name);
-            } else {
-               outgoingFormData.append(key, value);
-            }
-         }
-
-         body = outgoingFormData;
+         // ✅ Bytes crudos + Content-Type original (incluye el boundary correcto)
+         body = await request.blob();
+         headers.set("Content-Type", contentType);
       } else {
          const text = await request.text();
          if (text) {
@@ -73,7 +64,6 @@ async function proxyRequest(
          headers,
          body,
          cache: "no-store",
-         // Node 18+ requiere duplex: "half" cuando se envía un ReadableStream como body
          ...(body ? { duplex: "half" } : {}),
       });
 

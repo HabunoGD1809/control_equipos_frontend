@@ -8,7 +8,8 @@ import {
    Ubicacion,
    Tecnico,
    Departamento,
-   Marca
+   Marca,
+   Empleado
 } from "@/types/api";
 
 async function getCatalogosData() {
@@ -27,7 +28,8 @@ async function getCatalogosData() {
          ubicacionesRes,
          tecnicosRes,
          departamentosRes,
-         marcasRes
+         marcasRes,
+         empleadosRes // <-- NUEVO REQUEST
       ] = await Promise.all([
          fetch(`${baseUrl}/catalogos/estados-equipo/`, { headers, cache: 'no-store' }),
          fetch(`${baseUrl}/catalogos/tipos-documento/`, { headers, cache: 'no-store' }),
@@ -37,6 +39,7 @@ async function getCatalogosData() {
          fetch(`${baseUrl}/tecnicos/`, { headers, cache: 'no-store' }),
          fetch(`${baseUrl}/catalogos/departamentos/`, { headers, cache: 'no-store' }),
          fetch(`${baseUrl}/catalogos/marcas/`, { headers, cache: 'no-store' }),
+         fetch(`${baseUrl}/empleados/`, { headers, cache: 'no-store' }),
       ]);
 
       return {
@@ -47,7 +50,8 @@ async function getCatalogosData() {
          ubicaciones: ubicacionesRes.ok ? await ubicacionesRes.json() as Ubicacion[] : [],
          tecnicos: tecnicosRes.ok ? await tecnicosRes.json() as Tecnico[] : [],
          departamentos: departamentosRes.ok ? await departamentosRes.json() as Departamento[] : [],
-         marcas: marcasRes.ok ? await marcasRes.json() as Marca[] : [], 
+         marcas: marcasRes.ok ? await marcasRes.json() as Marca[] : [],
+         empleados: empleadosRes.ok ? await empleadosRes.json() as Empleado[] : [],
       };
    } catch (error) {
       console.error("[GET_CATALOGOS_DATA_ERROR]", error);
@@ -79,6 +83,7 @@ export default async function CatalogosPage() {
             initialTecnicos={data.tecnicos}
             initialDepartamentos={data.departamentos}
             initialMarcas={data.marcas}
+            initialEmpleados={data.empleados}
          />
       </div>
    );

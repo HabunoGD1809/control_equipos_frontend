@@ -243,6 +243,33 @@ export interface MarcaCreate {
 
 export type MarcaUpdate = Partial<MarcaCreate> & { is_active?: boolean };
 
+// ─── EMPLEADOS ───────────────────────────────────────────────────────
+
+export interface EmpleadoSimple {
+  id: string;
+  nombre_completo: string;
+  cargo?: string | null;
+  email_corporativo?: string | null;
+}
+
+export interface Empleado extends EmpleadoSimple {
+  departamento_id?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  departamento_rel?: DepartamentoSimple | null;
+}
+
+export interface EmpleadoCreate {
+  nombre_completo: string;
+  cargo?: string | null;
+  email_corporativo?: string | null;
+  departamento_id?: string | null;
+  is_active?: boolean;
+}
+
+export type EmpleadoUpdate = Partial<EmpleadoCreate>;
+
 // ─── USUARIOS ────────────────────────────────────────────────────────────────
 
 export interface UsuarioSimple {
@@ -250,7 +277,6 @@ export interface UsuarioSimple {
   nombre_usuario: string;
   email?: string | null;
   avatar_url?: string | null;
-  is_active?: boolean;
 }
 
 export interface RolResumen {
@@ -266,14 +292,15 @@ export interface Usuario {
   avatar_url?: string | null;
   rol_id: string;
   departamento_id?: string | null;
+  empleado_id?: string | null;
   bloqueado: boolean;
-  is_active: boolean;
   ultimo_login?: string | null;
   created_at: string;
   updated_at: string;
   requiere_cambio_contrasena: boolean;
   rol: RolResumen;
   departamento_rel?: DepartamentoSimple | null;
+  empleado_rel?: EmpleadoSimple | null;
 }
 
 // ─── PROVEEDORES ─────────────────────────────────────────────────────────────
@@ -398,7 +425,8 @@ export interface EquipoRead {
   codigo_interno?: string | null;
   estado_id: string;
   ubicacion_id?: string | null;
-  ubicacion_actual?: string | null; // Mantenido por retrocompatibilidad temporal
+  empleado_asignado_id?: string | null;
+  ubicacion_actual?: string | null;
   marca_id?: string | null;
   modelo?: string | null;
   fecha_adquisicion?: string | null;
@@ -414,6 +442,7 @@ export interface EquipoRead {
   proveedor?: ProveedorSimple | null;
   ubicacion?: Ubicacion | null;
   marca_rel?: MarcaSimple | null;
+  empleado_asignado?: EmpleadoSimple | null;
 }
 
 export interface EquipoSearchResult {
@@ -521,7 +550,7 @@ export interface Mantenimiento {
   fecha_finalizacion?: string | null;
   costo_estimado?: string | number | null;
   costo_real?: string | number | null;
-  tecnico_id: string; // Migrado a UUID
+  tecnico_id: string;
   estado: EstadoMantenimiento;
   prioridad: number;
   observaciones?: string | null;
@@ -581,6 +610,7 @@ export interface Movimiento {
   fecha_prevista_retorno?: string | null;
   ubicacion_origen_id?: string | null;
   ubicacion_destino_id?: string | null;
+  empleado_destino_id?: string | null;
   ubicacion_origen_nombre?: string | null;
   ubicacion_destino_nombre?: string | null;
   proposito?: string | null;
@@ -597,7 +627,9 @@ export interface Movimiento {
   equipo: EquipoSimple;
   usuario_registrador?: UsuarioSimple | null;
   usuario_autorizador?: UsuarioSimple | null;
+  empleado_destino?: EmpleadoSimple | null;
 }
+
 export interface MovimientoReciente {
   id: string;
   equipo_nombre: string;
@@ -844,6 +876,7 @@ export interface UsuarioCreate {
   password: string;
   rol_id: string;
   departamento_id?: string | null;
+  empleado_id?: string | null;
   requiere_cambio_contrasena?: boolean;
 }
 
@@ -853,10 +886,10 @@ export interface UsuarioUpdate {
   password?: string | null;
   rol_id?: string | null;
   departamento_id?: string | null;
+  empleado_id?: string | null;
   avatar_url?: string | null;
   intentos_fallidos?: number | null;
   bloqueado?: boolean | null;
-  is_active?: boolean;
   requiere_cambio_contrasena?: boolean | null;
 }
 
@@ -907,7 +940,8 @@ export interface EquipoCreate {
   numero_serie: string;
   codigo_interno?: string | null;
   estado_id: string;
-  ubicacion_id?: string | null; // Obliga a usar UUID
+  ubicacion_id?: string | null;
+  empleado_asignado_id?: string | null;
   marca_id?: string | null;
   modelo?: string | null;
   fecha_adquisicion?: string | null;
@@ -966,6 +1000,7 @@ export interface MovimientoCreate {
   fecha_prevista_retorno?: string | null;
   ubicacion_origen_id?: string | null;
   ubicacion_destino_id?: string | null;
+  empleado_destino_id?: string | null;
   proposito?: string | null;
   recibido_por?: string | null;
   observaciones?: string | null;
@@ -1006,8 +1041,8 @@ export interface ReservaEquipoCheckInOut {
 
 export interface DocumentacionVerify {
   estado:
-    | typeof EstadoDocumentoEnum.Verificado
-    | typeof EstadoDocumentoEnum.Rechazado;
+  | typeof EstadoDocumentoEnum.Verificado
+  | typeof EstadoDocumentoEnum.Rechazado;
   notas_verificacion?: string | null;
 }
 
@@ -1095,11 +1130,11 @@ export interface AsignacionLicenciaUpdate {
 
 export type ReporteParams = {
   tipo_reporte:
-    | "equipos"
-    | "mantenimientos"
-    | "kardex"
-    | "movimientos"
-    | "auditoria";
+  | "equipos"
+  | "mantenimientos"
+  | "kardex"
+  | "movimientos"
+  | "auditoria";
   formato: "pdf" | "excel" | "csv";
   fecha_inicio: string;
   fecha_fin: string;

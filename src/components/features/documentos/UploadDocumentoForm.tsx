@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useState, useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import * as z from "zod";
@@ -27,12 +27,13 @@ import {
 } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { useToast } from "@/components/ui/use-toast";
-import { AsyncCombobox } from "@/components/ui/AsyncCombobox";
+import { AsyncCombobox, type Option } from "@/components/ui/AsyncCombobox";
 
 import { TipoDocumento } from "@/types/api";
 import { createDocumentoSchema, MIME_TYPE_MAP } from "@/lib/zod";
 import { documentosService } from "@/app/services/documentosService";
 import { equiposService } from "@/app/services/equiposService";
+import { api } from "@/lib/http";
 
 interface UploadDocumentoFormProps {
    equipoId?: string;
@@ -57,6 +58,10 @@ export function UploadDocumentoForm({
    const queryClient = useQueryClient();
 
    const isStandalone = !equipoId && !mantenimientoId && !licenciaId;
+
+   // ESTADO PARA PRECARGAR EQUIPOS (Evita el "No se encontraron equipos" al hacer clic vacío)
+   const [defaultEquipos, setDefaultEquipos] = useState<Option[]>([]);
+   const [isLoadingEquipos, setIsLoadingEquipos] = useState(isStandalone);
 
    const dynamicSchema = useMemo(
       () => createDocumentoSchema(tiposDocumento),
@@ -96,7 +101,30 @@ export function UploadDocumentoForm({
       return [...mimes, ...exts].join(",");
    }, [selectedTipoId, tiposDocumento]);
 
-   // 🚀 SOLUCIÓN DE RENDIMIENTO: useCallback para evitar re-renderizados del Combobox
+   // PRECARGA INICIAL DE EQUIPOS (Solo si es un documento suelto "Standalone")
+   useEffect(() => {
+      let isMounted = true;
+      if (isStandalone) {
+         api.get('/equipos/', { params: { skip: 0, limit: 50 } })
+            .then((data) => {
+               if (!isMounted) return;
+               const arr = Array.isArray(data) ? data : (data as any)?.data || [];
+               setDefaultEquipos(arr.map((eq: any) => ({
+                  value: eq.id,
+                  label: `${eq.nombre} (${eq.numero_serie})`
+               })));
+            })
+            .catch(console.error)
+            .finally(() => {
+               if (isMounted) setIsLoadingEquipos(false);
+            });
+      } else {
+         setIsLoadingEquipos(false);
+      }
+      return () => { isMounted = false; };
+   }, [isStandalone]);
+
+   // FETCHER PARA CUANDO EL USUARIO ESCRIBE
    const fetchEquiposAsync = useCallback(async (query: string) => {
       const resultados = await equiposService.search(query);
       return resultados.map((eq) => ({
@@ -182,9 +210,11 @@ export function UploadDocumentoForm({
                            <AsyncCombobox
                               value={field.value}
                               onChange={field.onChange}
-                              placeholder="Buscar equipo por nombre o serie..."
+                              placeholder={isLoadingEquipos ? "Cargando equipos..." : "Buscar equipo por nombre o serie..."}
                               emptyMessage="No se encontraron equipos."
+                              defaultOptions={defaultEquipos} // INYECCIÓN DE LA LISTA PRECARGADA
                               fetcher={fetchEquiposAsync}
+                              disabled={isLoadingEquipos}
                            />
                         </FormControl>
                         <FormMessage />

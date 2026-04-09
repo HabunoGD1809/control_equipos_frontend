@@ -13,28 +13,20 @@ import { movimientoEquipoSchema } from "@/lib/zod";
 import { movimientosService } from "@/app/services/movimientosService";
 import { equiposService } from "@/app/services/equiposService";
 import { ubicacionesService } from "@/app/services/ubicacionesService";
+import { empleadosService } from "@/app/services/empleadosService";
 import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import {
   MovimientoCreate,
   TipoMovimientoEquipoEnum,
   TipoMovimientoEquipo,
   EquipoRead,
-  UsuarioSimple,
   Ubicacion,
 } from "@/types/api";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/Button";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/Form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
 import { Calendar } from "@/components/ui/Calendar";
@@ -46,13 +38,12 @@ type MovimientoFormValues = z.infer<typeof movimientoEquipoSchema>;
 interface MovimientoFormProps {
   equipo?: EquipoRead;
   equipos?: EquipoRead[];
-  usuarios: UsuarioSimple[];
   ubicaciones: Ubicacion[];
   onSuccess?: () => void;
   onCancel: () => void;
 }
 
-export function MovimientoForm({ equipo, equipos, usuarios, ubicaciones, onSuccess, onCancel }: MovimientoFormProps) {
+export function MovimientoForm({ equipo, equipos, ubicaciones, onSuccess, onCancel }: MovimientoFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -63,6 +54,7 @@ export function MovimientoForm({ equipo, equipos, usuarios, ubicaciones, onSucce
       tipo_movimiento: undefined as unknown as TipoMovimientoEquipo,
       ubicacion_origen_id: equipo?.ubicacion_id ?? null,
       ubicacion_destino_id: null,
+      empleado_destino_id: null, // <-- NUEVO
       proposito: "",
       observaciones: "",
       fecha_prevista_retorno: null,
@@ -103,14 +95,20 @@ export function MovimientoForm({ equipo, equipos, usuarios, ubicaciones, onSucce
       form.setValue("ubicacion_origen_id", null);
       const almacenPrincipal = ubicaciones.find(u => u.nombre.toLowerCase().includes("almacén"));
       form.setValue("ubicacion_destino_id", almacenPrincipal ? almacenPrincipal.id : null);
+      form.setValue("empleado_destino_id", null);
       form.setValue("recibido_por", null);
       form.setValue("fecha_prevista_retorno", null);
+      form.clearErrors();
     } else if (tipoSeleccionado === TipoMovimientoEquipoEnum.AsignacionInterna) {
-      form.setValue("ubicacion_destino_id", null);
+      form.setValue("fecha_prevista_retorno", null);
+      form.clearErrors();
+    } else if (tipoSeleccionado === TipoMovimientoEquipoEnum.SalidaTemporal) {
+      // Dejamos que el usuario escoja destino y asigne empleado si quiere
+    } else {
+      form.setValue("fecha_prevista_retorno", null);
     }
   }, [tipoSeleccionado, form, ubicaciones]);
 
-  // ─── FETCHER SEGURO PARA TYPESCRIPT ───
   const fetchUbicaciones = useCallback(async (search: string): Promise<Option[]> => {
     try {
       const data = await ubicacionesService.getAll({ include_inactive: false });
@@ -132,7 +130,6 @@ export function MovimientoForm({ equipo, equipos, usuarios, ubicaciones, onSucce
       label: `${u.nombre} ${u.edificio ? `(${u.edificio})` : ''}`.trim()
     }));
   }, [ubicaciones]);
-  // ──────────────────────────────
 
   const mutation = useMutation({
     mutationFn: movimientosService.create,
@@ -158,13 +155,15 @@ export function MovimientoForm({ equipo, equipos, usuarios, ubicaciones, onSucce
       tipo_movimiento: data.tipo_movimiento,
       ubicacion_origen_id: data.ubicacion_origen_id || null,
       ubicacion_destino_id: data.ubicacion_destino_id || null,
+      empleado_destino_id: data.empleado_destino_id || null, // <-- NUEVO PAYLOAD
       proposito: data.proposito || null,
       observaciones: data.observaciones || null,
       recibido_por: data.recibido_por || null,
       fecha_prevista_retorno: data.fecha_prevista_retorno
-        ? (data.fecha_prevista_retorno as Date).toISOString()
+        ? new Date(data.fecha_prevista_retorno).toISOString()
         : null,
     };
+
     mutation.mutate(payload);
   };
 
@@ -174,6 +173,7 @@ export function MovimientoForm({ equipo, equipos, usuarios, ubicaciones, onSucce
       tipo_movimiento: undefined as unknown as TipoMovimientoEquipo,
       ubicacion_origen_id: equipo?.ubicacion_id ?? null,
       ubicacion_destino_id: null,
+      empleado_destino_id: null,
       proposito: "",
       observaciones: "",
       fecha_prevista_retorno: null,
@@ -181,11 +181,11 @@ export function MovimientoForm({ equipo, equipos, usuarios, ubicaciones, onSucce
     });
   };
 
-  const mostrarDestino = tipoSeleccionado && !isEntrada;
+  const mostrarDestino = !!tipoSeleccionado;
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+      <form onSubmit={form.handleSubmit(onSubmit, (err) => console.log("Errores de Zod:", err))} className="space-y-5">
         {!equipo && (
           <FormField control={form.control} name="equipo_id" render={({ field }) => (
             <FormItem>
@@ -269,15 +269,25 @@ export function MovimientoForm({ equipo, equipos, usuarios, ubicaciones, onSucce
             )}
 
             {tipoSeleccionado === TipoMovimientoEquipoEnum.AsignacionInterna && (
-              <FormField control={form.control} name="recibido_por" render={({ field }) => (
+              <FormField control={form.control} name="empleado_destino_id" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Asignar a empleado <span className="text-destructive">*</span></FormLabel>
-                  <Select value={field.value ?? ""} onValueChange={field.onChange}>
-                    <FormControl><SelectTrigger className="bg-card"><SelectValue placeholder="Buscar empleado..." /></SelectTrigger></FormControl>
-                    <SelectContent className="max-h-50">
-                      {usuarios.filter(u => u.is_active).map((u) => <SelectItem key={u.id} value={u.nombre_usuario}>{u.nombre_usuario}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <AsyncCombobox
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Buscar por nombre o correo corporativo..."
+                      emptyMessage="No se encontró ningún empleado."
+                      fetcher={async (query) => {
+                        const resultados = await empleadosService.search(query);
+                        return resultados.map((emp) => ({
+                          value: emp.id,
+                          label: `${emp.nombre_completo} ${emp.cargo ? `(${emp.cargo})` : ''}`
+                        }));
+                      }}
+                    />
+                  </FormControl>
+                  <FormDescription>Busca en el catálogo de Recursos Humanos.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -290,7 +300,7 @@ export function MovimientoForm({ equipo, equipos, usuarios, ubicaciones, onSucce
                   <Popover>
                     <PopoverTrigger asChild>
                       <FormControl>
-                        <Button variant="outline" className={cn("w-full pl-3 text-left font-normal bg-card", !field.value && "text-muted-foreground")}>
+                        <Button type="button" variant="outline" className={cn("w-full pl-3 text-left font-normal bg-card", !field.value && "text-muted-foreground")}>
                           {field.value ? format(field.value as Date, "PPP", { locale: es }) : "Seleccionar fecha"}
                           <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                         </Button>

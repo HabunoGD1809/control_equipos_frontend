@@ -1,20 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useState, useMemo } from "react";
-import { Plus, Pencil, Ban, CheckCircle, Loader2, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Plus, Pencil, Ban, CheckCircle, Loader2, RefreshCw, Key, Copy } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { ColumnDef } from "@tanstack/react-table";
 
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/Dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/Dialog";
 import { Badge } from "@/components/ui/Badge";
-import { Switch } from "@/components/ui/Switch";
-import { Label } from "@/components/ui/Label";
+import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/use-toast";
 import { UsuarioForm } from "@/components/features/usuarios/UsuarioForm";
 import { usuariosService } from "@/app/services/usuariosService";
+import { api } from "@/lib/http";
 import type { Usuario } from "@/types/api";
 
 export function UsuariosClient() {
@@ -24,12 +24,14 @@ export function UsuariosClient() {
    const [loading, setLoading] = useState(true);
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [selectedUser, setSelectedUser] = useState<Usuario | undefined>(undefined);
-   const [showInactive, setShowInactive] = useState(false);
+
+   const [isResetting, setIsResetting] = useState<string | null>(null);
+   const [generatedTokenData, setGeneratedTokenData] = useState<{ username: string, token: string } | null>(null);
 
    const fetchUsuarios = useCallback(async () => {
       setLoading(true);
       try {
-         const users = await usuariosService.getAll({ include_inactive: showInactive });
+         const users = await usuariosService.getAll();
          setData(users);
       } catch {
          toast({
@@ -40,15 +42,11 @@ export function UsuariosClient() {
       } finally {
          setLoading(false);
       }
-   }, [toast, showInactive]);
+   }, [toast]);
 
    useEffect(() => {
       fetchUsuarios();
    }, [fetchUsuarios]);
-
-   const filteredData = useMemo(() => {
-      return data.filter((u) => showInactive || u.is_active !== false);
-   }, [data, showInactive]);
 
    const handleEdit = (user: Usuario) => { setSelectedUser(user); setIsModalOpen(true); };
    const handleCreate = () => { setSelectedUser(undefined); setIsModalOpen(true); };
@@ -71,28 +69,61 @@ export function UsuariosClient() {
       }
    };
 
+   const handleRequestReset = async (user: Usuario) => {
+      setIsResetting(user.id);
+      try {
+         const response = await api.post<{ username: string, reset_token: string }>("/auth/password-recovery/request-reset", {
+            username_or_email: user.nombre_usuario
+         });
+
+         setGeneratedTokenData({
+            username: response.username,
+            token: response.reset_token
+         });
+
+         toast({
+            title: "Token Generado",
+            description: "El token temporal ha sido creado exitosamente.",
+         });
+      } catch (err) {
+         toast({
+            variant: "destructive",
+            title: "Error",
+            description: "No se pudo generar el token de reseteo.",
+         });
+      } finally {
+         setIsResetting(null);
+      }
+   };
+
+   const copyToClipboard = async (text: string) => {
+      await navigator.clipboard.writeText(text);
+      toast({ description: "Token copiado al portapapeles." });
+   };
+
    const columns: ColumnDef<Usuario>[] = [
       {
          accessorKey: "nombre_usuario",
          header: "Usuario",
          cell: ({ row }) => (
             <div className="flex flex-col gap-0.5">
-               <div className="flex items-center gap-2">
-                  <span className="font-medium">{row.original.nombre_usuario}</span>
-                  {row.original.is_active === false && (
-                     <Badge variant="outline" className="text-[10px] text-destructive border-destructive">Inactivo</Badge>
-                  )}
-               </div>
+               <span className="font-medium">{row.original.nombre_usuario}</span>
                {row.original.email && <span className="text-xs text-muted-foreground">{row.original.email}</span>}
             </div>
          ),
       },
       {
-         // Mostramos el Departamento aquí
          accessorKey: "departamento_rel.nombre",
          header: "Departamento",
          cell: ({ row }) => (
             <span className="text-muted-foreground">{row.original.departamento_rel?.nombre || "--"}</span>
+         ),
+      },
+      {
+         accessorKey: "empleado_rel.nombre_completo",
+         header: "Empleado Vinculado",
+         cell: ({ row }) => (
+            <span className="text-muted-foreground">{row.original.empleado_rel?.nombre_completo || "--"}</span>
          ),
       },
       {
@@ -106,7 +137,6 @@ export function UsuariosClient() {
          accessorKey: "bloqueado",
          header: "Acceso",
          cell: ({ row }) => {
-            if (row.original.is_active === false) return <Badge variant="secondary">Cuenta Eliminada</Badge>;
             return (
                <Badge variant={row.original.bloqueado ? "destructive" : "default"}>
                   {row.original.bloqueado ? "Bloqueado" : "Permitido"}
@@ -128,21 +158,34 @@ export function UsuariosClient() {
          id: "actions",
          cell: ({ row }) => {
             const user = row.original;
+            const isGeneratingToken = isResetting === user.id;
+
             return (
                <div className="flex items-center gap-2 justify-end">
+                  <Button
+                     variant="ghost"
+                     size="sm"
+                     onClick={() => handleRequestReset(user)}
+                     disabled={isGeneratingToken}
+                     title="Generar token de recuperación"
+                     className="text-amber-600 hover:text-amber-700 hover:bg-amber-600/10"
+                  >
+                     {isGeneratingToken ? <Loader2 className="h-4 w-4 animate-spin" /> : <Key className="h-4 w-4" />}
+                  </Button>
+
                   <Button variant="ghost" size="sm" onClick={() => handleEdit(user)} title="Editar Usuario">
                      <Pencil className="h-4 w-4" />
                   </Button>
+
                   <Button
                      variant="ghost"
                      size="sm"
                      onClick={() => handleToggleBloqueo(user)}
                      title={user.bloqueado ? "Desbloquear" : "Bloquear"}
-                     disabled={user.is_active === false}
                      className={
                         user.bloqueado
-                           ? "text-green-600 hover:text-green-700"
-                           : "text-destructive hover:text-destructive"
+                           ? "text-green-600 hover:text-green-700 hover:bg-green-600/10"
+                           : "text-destructive hover:text-destructive hover:bg-destructive/10"
                      }
                   >
                      {user.bloqueado ? <CheckCircle className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
@@ -163,13 +206,7 @@ export function UsuariosClient() {
 
    return (
       <div className="space-y-4 animate-in fade-in duration-300">
-         <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center space-x-2">
-               <Switch id="show-inactive" checked={showInactive} onCheckedChange={setShowInactive} />
-               <Label htmlFor="show-inactive" className="text-sm text-muted-foreground cursor-pointer">
-                  Mostrar eliminados
-               </Label>
-            </div>
+         <div className="flex justify-end items-center mb-4">
             <div className="flex gap-2">
                <Button variant="outline" onClick={fetchUsuarios} disabled={loading} title="Actualizar lista">
                   <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
@@ -180,7 +217,7 @@ export function UsuariosClient() {
             </div>
          </div>
 
-         <DataTable columns={columns} data={filteredData} tableContainerClassName="shadow-sm border rounded-md" />
+         <DataTable columns={columns} data={data} tableContainerClassName="shadow-sm border rounded-md" />
 
          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
             <DialogContent className="sm:max-w-125">
@@ -192,6 +229,34 @@ export function UsuariosClient() {
                   onSuccess={() => { setIsModalOpen(false); fetchUsuarios(); }}
                   onCancel={() => setIsModalOpen(false)}
                />
+            </DialogContent>
+         </Dialog>
+
+         <Dialog open={!!generatedTokenData} onOpenChange={(open) => !open && setGeneratedTokenData(null)}>
+            <DialogContent className="sm:max-w-md">
+               <DialogHeader>
+                  <DialogTitle>Token de Recuperación Generado</DialogTitle>
+                  <DialogDescription>
+                     Copia este token y envíaselo al usuario <b>{generatedTokenData?.username}</b>. Es válido por 15 minutos.
+                  </DialogDescription>
+               </DialogHeader>
+               <div className="flex items-center space-x-2 pt-4">
+                  <Input
+                     readOnly
+                     value={generatedTokenData?.token || ""}
+                     className="font-mono text-sm"
+                  />
+                  <Button
+                     size="icon"
+                     className="shrink-0"
+                     onClick={() => copyToClipboard(generatedTokenData?.token || "")}
+                  >
+                     <Copy className="h-4 w-4" />
+                  </Button>
+               </div>
+               <div className="pt-4 flex justify-end">
+                  <Button variant="secondary" onClick={() => setGeneratedTokenData(null)}>Cerrar</Button>
+               </div>
             </DialogContent>
          </Dialog>
       </div>

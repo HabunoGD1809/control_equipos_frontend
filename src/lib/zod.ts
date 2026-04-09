@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { isBefore, isAfter, startOfDay, isValid } from "date-fns";
+import { isBefore, isAfter, startOfDay } from "date-fns";
 import {
   EstadoMantenimientoEnum,
   TipoMovimientoEquipoEnum,
@@ -41,11 +41,18 @@ export const MIME_TYPE_MAP: Record<string, string[]> = {
 const requiredString = (message = "Este campo es requerido.") =>
   z.string({ error: message }).min(1, { error: message });
 
+const optionalUuid = (message = "UUID inválido.") =>
+  z.preprocess(
+    (val) => (val === "" || val === undefined ? null : val),
+    z.uuid({ error: message }).nullable().optional(),
+  );
+
 const requiredUuid = (message = "Debe seleccionar una opción.") =>
-  z
-    .string({ error: message })
-    .min(1, { error: message })
-    .pipe(z.string().uuid({ message: "Formato UUID inválido" }));
+  z.preprocess(
+    (val) =>
+      val === "" || val === null || val === undefined ? undefined : val,
+    z.uuid({ error: message }),
+  );
 
 const requiredDate = (message = "La fecha es requerida.") =>
   z.preprocess(
@@ -68,7 +75,7 @@ const requiredEnum = <T extends string>(
 ) => z.enum(values as [T, ...T[]], { error: message });
 
 const urlField = z.union([
-  z.string().url({ error: "Formato de URL inválido." }),
+  z.url({ error: "Formato de URL inválido." }),
   z.literal(""),
   z.null(),
   z.undefined(),
@@ -135,9 +142,9 @@ export const createDocumentoSchema = (tiposDisponibles: TipoDocumento[]) =>
         .max(255, { error: "Máximo 255 caracteres." }),
       tipo_documento_id: requiredUuid("Debe seleccionar un tipo de documento."),
       descripcion: z.string().optional().nullable(),
-      equipo_id: z.string().uuid().optional().nullable(),
-      mantenimiento_id: z.string().uuid().optional().nullable(),
-      licencia_id: z.string().uuid().optional().nullable(),
+      equipo_id: optionalUuid(),
+      mantenimiento_id: optionalUuid(),
+      licencia_id: optionalUuid(),
       file: z
         .any()
         .refine(
@@ -183,6 +190,7 @@ export const createDocumentoSchema = (tiposDisponibles: TipoDocumento[]) =>
         const allowedMimes = tipoSeleccionado.formato_permitido.flatMap(
           (ext) => MIME_TYPE_MAP[ext.toLowerCase()] || [],
         );
+
         if (allowedMimes.length > 0 && !allowedMimes.includes(file.type)) {
           ctx.addIssue({
             code: "custom",
@@ -200,7 +208,7 @@ export const documentacionUpdateSchema = z.object({
     .max(255, { error: "Máximo 255 caracteres." })
     .optional(),
   descripcion: z.string().optional().nullable(),
-  tipo_documento_id: z.string().uuid().optional(),
+  tipo_documento_id: z.uuid({ error: "UUID inválido." }).optional(),
 });
 
 export const documentacionVerifySchema = z
@@ -230,6 +238,7 @@ const equipoBaseSchema = z.object({
   nombre: requiredString("El nombre es requerido.")
     .min(2, { error: "El nombre debe tener al menos 2 caracteres." })
     .max(255, { error: "Máximo 255 caracteres." }),
+
   numero_serie: requiredString("El número de serie es requerido.").regex(
     /^[A-Z0-9]+-[A-Z0-9]+-[A-Z0-9]+$/,
     {
@@ -237,29 +246,36 @@ const equipoBaseSchema = z.object({
         "Formato estricto: Bloques alfanuméricos en mayúscula separados por guiones (Ej: AB-1234-X)",
     },
   ),
+
   codigo_interno: z
     .string()
     .max(100, { error: "Máximo 100 caracteres." })
     .optional()
     .nullable(),
+
   estado_id: requiredUuid("Debe seleccionar un estado."),
-  ubicacion_id: z.string().uuid().optional().nullable(),
-  proveedor_id: z.string().uuid().optional().nullable(),
-  marca_id: z.string().uuid("ID de marca inválido").optional().nullable(),
+  ubicacion_id: optionalUuid(),
+  empleado_asignado_id: optionalUuid(),
+  proveedor_id: optionalUuid(),
+  marca_id: optionalUuid(),
+
   modelo: z
     .string()
     .max(100, { error: "Máximo 100 caracteres." })
     .optional()
     .nullable(),
+
   fecha_adquisicion: optionalDate(),
   fecha_puesta_marcha: optionalDate(),
   fecha_garantia_expiracion: optionalDate(),
   valor_adquisicion: optionalMonetary2(),
+
   centro_costo: z
     .string()
     .max(100, { error: "Máximo 100 caracteres." })
     .optional()
     .nullable(),
+
   notas: z.string().optional().nullable(),
 });
 
@@ -358,7 +374,7 @@ export const mantenimientoUpdateSchema = z.object({
   fecha_finalizacion: optionalDate(),
   costo_estimado: optionalMonetary2(),
   costo_real: optionalMonetary2(),
-  tecnico_id: z.string().uuid().optional().nullable(),
+  tecnico_id: optionalUuid("Inválido"),
   prioridad: z.coerce.number().int().min(0).max(2).optional(),
   estado: requiredEnum(Object.values(EstadoMantenimientoEnum)).optional(),
   observaciones: z.string().optional().nullable(),
@@ -420,12 +436,12 @@ export const tipoItemSchema = z.object({
     "Unidad de medida inválida.",
   ),
   descripcion: z.string().optional().nullable(),
-  marca_id: z.string().uuid("ID de marca inválido").optional().nullable(),
+  marca_id: optionalUuid("ID de marca inválido"),
   modelo: z.string().max(100).optional().nullable(),
   sku: z.string().max(100).optional().nullable(),
   codigo_barras: z.string().max(100).optional().nullable(),
   stock_minimo: z.coerce.number().int().min(0).default(0),
-  proveedor_preferido_id: z.string().uuid().optional().nullable(),
+  proveedor_preferido_id: optionalUuid("Inválido"),
   is_active: z.boolean().optional(),
 });
 
@@ -447,13 +463,15 @@ export const createInventarioMovimientoSchema = (
       costo_unitario: optionalMonetary4(),
       lote_origen: z.string().max(50).optional().default("N/A"),
       lote_destino: z.string().max(50).optional().default("N/A"),
-      ubicacion_origen_id: z.string().uuid().optional().nullable(),
-      ubicacion_destino_id: z.string().uuid().optional().nullable(),
+
+      ubicacion_origen_id: optionalUuid("Inválido"),
+      ubicacion_destino_id: optionalUuid("Inválido"),
+      equipo_asociado_id: optionalUuid("Inválido"),
+      mantenimiento_id: optionalUuid("Inválido"),
+      referencia_transferencia: optionalUuid("Inválido"),
+
       motivo_ajuste: z.string().optional().nullable(),
-      mantenimiento_id: z.string().uuid().optional().nullable(),
       referencia_externa: z.string().optional().nullable(),
-      referencia_transferencia: z.string().uuid().optional().nullable(),
-      equipo_asociado_id: z.string().uuid().optional().nullable(),
       notas: z.string().optional().nullable(),
     })
     .superRefine((data, ctx) => {
@@ -518,6 +536,7 @@ export const createInventarioMovimientoSchema = (
         );
 
         const disponible = stockActual ? stockActual.cantidad_actual : 0;
+
         if (data.cantidad > disponible) {
           ctx.addIssue({
             code: "custom",
@@ -540,7 +559,7 @@ export const editStockSchema = inventarioStockUpdateSchema;
 export const softwareCatalogoSchema = z.object({
   nombre: requiredString("El nombre es requerido.").min(2).max(255),
   version: z.string().max(50).optional().nullable(),
-  marca_id: z.string().uuid("ID de marca inválido").optional().nullable(),
+  marca_id: optionalUuid("ID de marca inválido"),
   tipo_licencia: requiredEnum(Object.values(TipoLicenciaSoftwareEnum)),
   metrica_licenciamiento: requiredEnum(
     Object.values(MetricaLicenciamientoEnum),
@@ -556,7 +575,7 @@ export const licenciaSoftwareSchema = z
     clave_producto: z.string().optional().nullable(),
     fecha_adquisicion: requiredDate("La fecha de adquisición es requerida."),
     fecha_expiracion: optionalDate(),
-    proveedor_id: z.string().uuid().optional().nullable(),
+    proveedor_id: optionalUuid("Inválido"),
     costo_adquisicion: optionalMonetary2(),
     cantidad_total: z.coerce
       .number()
@@ -581,8 +600,8 @@ export const asignarLicenciaSchema = z
     asignar_a: z.enum(["equipo", "usuario"], {
       error: "Seleccione un destino.",
     }),
-    equipo_id: z.string().uuid().optional().nullable(),
-    usuario_id: z.string().uuid().optional().nullable(),
+    equipo_id: optionalUuid("Inválido"),
+    usuario_id: optionalUuid("Inválido"),
     notas: z.string().optional().nullable(),
     instalado: z.boolean().optional(),
   })
@@ -603,10 +622,10 @@ export const asignarLicenciaSchema = z
     return rest;
   });
 
-// ─── USUARIOS Y ROLES ─────────────────────────────────────
+// ─── USUARIOS, EMPLEADOS Y ROLES ─────────────────────────
 
 const emailField = z.union([
-  z.string().email({ error: "Formato de correo inválido." }),
+  z.email({ error: "Formato de correo inválido." }),
   z.literal(""),
   z.null(),
   z.undefined(),
@@ -617,7 +636,8 @@ export const usuarioCreateSchema = z.object({
   email: emailField,
   password: z.string().min(8, { error: "Mínimo 8 caracteres" }),
   rol_id: requiredUuid("Rol requerido."),
-  departamento_id: z.string().uuid().optional().nullable(),
+  departamento_id: optionalUuid("Inválido"),
+  empleado_id: optionalUuid("Inválido"),
   requiere_cambio_contrasena: z.boolean().optional(),
 });
 
@@ -631,18 +651,26 @@ export const usuarioUpdateSchema = z.object({
     z.undefined(),
   ]),
   avatar_url: urlField,
-  rol_id: z.string().uuid().optional(),
-  departamento_id: z.string().uuid().optional().nullable(),
+  rol_id: z.uuid({ error: "Inválido" }).optional(),
+  departamento_id: optionalUuid("Inválido"),
+  empleado_id: optionalUuid("Inválido"),
   bloqueado: z.boolean().optional(),
-  is_active: z.boolean().optional(),
   requiere_cambio_contrasena: z.boolean().optional(),
+});
+
+export const empleadoSchema = z.object({
+  nombre_completo: requiredString("Nombre requerido.").min(3).max(255),
+  cargo: z.string().max(150).optional().nullable(),
+  email_corporativo: emailField,
+  departamento_id: optionalUuid("Inválido"),
+  is_active: z.boolean().optional(),
 });
 
 export const rolSchema = z.object({
   nombre: requiredString("Nombre requerido.").min(3).max(100),
   descripcion: z.string().optional().nullable(),
   permiso_ids: z
-    .array(z.string().uuid())
+    .array(z.uuid({ error: "Inválido" }))
     .min(1, { error: "Mínimo un permiso." }),
 });
 
@@ -673,7 +701,7 @@ export const tecnicoSchema = z
       .min(3, { error: "Mínimo 3 caracteres." })
       .max(255),
     es_externo: z.boolean().default(false),
-    proveedor_id: z.string().uuid().optional().nullable(),
+    proveedor_id: optionalUuid("Inválido"),
     telefono_contacto: z.string().max(50).optional().nullable(),
     email_contacto: emailField,
     is_active: z.boolean().default(true),
@@ -696,7 +724,7 @@ export const estadoEquipoSchema = z.object({
   nombre: requiredString("Nombre requerido.").min(2).max(100),
   descripcion: z.string().optional().nullable(),
   color_hex: z.union([
-    z.string().regex(/^#([0-9a-fA-F]{6})$/, { error: "Color Hex inválido" }),
+    z.hex({ error: "Color Hex inválido" }),
     z.literal(""),
     z.null(),
     z.undefined(),
@@ -733,7 +761,7 @@ export const marcaSchema = z.object({
   is_active: z.boolean().optional(),
 });
 
-// ─── RESERVAS Y MOVIMIENTOS (Handoffs) ────────────────────
+// ─── RESERVAS Y MOVIMIENTOS ───────────────────────────────
 
 export const reservaSchema = z
   .object({
@@ -747,13 +775,14 @@ export const reservaSchema = z
   })
   .refine(
     (data) => {
-      if (!isValid(data.fecha_inicio) || !isValid(data.fecha_fin)) return false;
       const start = new Date(data.fecha_inicio);
       const [sh, sm] = data.hora_inicio.split(":").map(Number);
       start.setHours(sh, sm);
+
       const end = new Date(data.fecha_fin);
       const [eh, em] = data.hora_fin.split(":").map(Number);
       end.setHours(eh, em);
+
       return isAfter(end, start);
     },
     {
@@ -769,8 +798,9 @@ export const movimientoEquipoSchema = z
       Object.values(TipoMovimientoEquipoEnum),
       "Tipo inválido.",
     ),
-    ubicacion_origen_id: z.string().uuid().optional().nullable(),
-    ubicacion_destino_id: z.string().uuid().optional().nullable(),
+    ubicacion_origen_id: optionalUuid("Inválido"),
+    ubicacion_destino_id: optionalUuid("Inválido"),
+    empleado_destino_id: optionalUuid("Inválido"),
     proposito: z.string().optional().nullable(),
     observaciones: z.string().optional().nullable(),
     fecha_prevista_retorno: optionalDate(),
@@ -789,11 +819,11 @@ export const movimientoEquipoSchema = z
     }
 
     if (data.tipo_movimiento === TipoMovimientoEquipoEnum.AsignacionInterna) {
-      if (!data.ubicacion_destino_id) {
+      if (!data.empleado_destino_id) {
         ctx.addIssue({
           code: "custom",
-          message: "Ubicación destino de la asignación requerida.",
-          path: ["ubicacion_destino_id"],
+          message: "Debe seleccionar el empleado que recibe la asignación.",
+          path: ["empleado_destino_id"],
         });
       }
       if (!data.ubicacion_origen_id) {
@@ -862,7 +892,6 @@ export const modalAutorizacionSchema = z
     }
   });
 
-// NUEVO: Flujo de Acuse de Recibo (Handoff)
 export const recibirMovimientoSchema = z
   .object({
     estado: requiredEnum(
@@ -914,12 +943,14 @@ export const changePasswordSchema = z
   });
 
 export const resetPasswordRequestSchema = z.object({
-  username: requiredString("El nombre de usuario es requerido."),
+  username_or_email: requiredString(
+    "El nombre de usuario o correo electrónico es requerido.",
+  ),
 });
 
 export const resetPasswordConfirmSchema = z
   .object({
-    username: requiredString("El usuario es requerido."),
+    username_or_email: requiredString("El usuario o correo es requerido."),
     token: requiredString("El token es requerido."),
     new_password: z.string().min(8, {
       error: "La nueva contraseña debe tener al menos 8 caracteres.",
@@ -931,11 +962,12 @@ export const resetPasswordConfirmSchema = z
     path: ["confirm_password"],
   });
 
-// ─── UBICACIONES ──────────────────────────────────────────────────────────
+// ─── UBICACIONES ──────────────────────────────────────────
+
 export const ubicacionSchema = z.object({
   nombre: requiredString("Nombre de ubicación requerido.").min(2).max(255),
   edificio: z.string().optional().nullable(),
-  departamento_id: z.string().uuid("ID de departamento inválido").optional().nullable(),
+  departamento_id: optionalUuid("ID de departamento inválido"),
   is_active: z.boolean().optional(),
 });
 

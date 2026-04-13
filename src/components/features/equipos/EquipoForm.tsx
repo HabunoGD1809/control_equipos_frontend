@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { useState, useMemo, useCallback, useEffect } from "react";
-import { useForm, type SubmitHandler } from "react-hook-form";
+import { useState, useMemo, useCallback } from "react";
+import { useForm, useWatch, type SubmitHandler, type Control } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { useRouter } from "next/navigation";
 import { format, isBefore, startOfDay } from "date-fns";
@@ -40,15 +40,37 @@ type EquipoFormValues = z.infer<typeof equipoSchema>;
 const formatToDateString = (d?: Date | null) => (d ? format(d, "yyyy-MM-dd") : null);
 const cleanString = (str?: string | null) => (str && str.trim() !== "" ? str.trim() : null);
 
+function LifecycleDateFields({ control }: { control: Control<EquipoFormValues> }) {
+   const fechaAdquisicion = useWatch({ control, name: "fecha_adquisicion" });
+   const today = startOfDay(new Date());
+
+   return (
+      <>
+         <FormField control={control} name="fecha_adquisicion" render={({ field }) => (
+            <DatePickerField label="Fecha Adquisición (Opcional)" value={field.value} onChange={field.onChange} disabled={(date) => date > today || date < new Date("1900-01-01")} />
+         )} />
+         <FormField control={control} name="fecha_puesta_marcha" render={({ field }) => (
+            <DatePickerField label="Puesta en Marcha (Opcional)" value={field.value} onChange={field.onChange} description="Debe ser posterior a la adquisición." disabled={(date) => {
+               if (date > today || date < new Date("1900-01-01")) return true;
+               if (fechaAdquisicion && isBefore(date, startOfDay(fechaAdquisicion))) return true;
+               return false;
+            }} />
+         )} />
+         <FormField control={control} name="fecha_garantia_expiracion" render={({ field }) => (
+            <DatePickerField label="Expira Garantía (Opcional)" value={field.value} onChange={field.onChange} disabled={(date) => {
+               if (date < new Date("1900-01-01")) return true;
+               if (fechaAdquisicion && isBefore(date, startOfDay(fechaAdquisicion))) return true;
+               return false;
+            }} />
+         )} />
+      </>
+   );
+}
+
 export function EquipoForm({ estados, proveedores, initialData, isEditing = false, onSuccess, onCancel }: EquipoFormProps) {
    const router = useRouter();
    const { toast } = useToast();
    const [isLoading, setIsLoading] = useState(false);
-
-   // ESTADOS ROBUSTOS PARA PRECARGA
-   const [marcas, setMarcas] = useState<Option[]>([]);
-   const [ubicaciones, setUbicaciones] = useState<Option[]>([]);
-   const [empleados, setEmpleados] = useState<Option[]>([]);
 
    const form = useForm<EquipoFormValues>({
       resolver: standardSchemaResolver(equipoSchema),
@@ -71,66 +93,45 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
       },
    });
 
-   // DESCARGA INICIAL DE CATÁLOGOS
-   useEffect(() => {
-      let isMounted = true;
-      catalogosService.getMarcas({ include_inactive: false }).then(data => {
-         if (isMounted && Array.isArray(data)) setMarcas(data.map(m => ({ value: m.id, label: m.nombre })));
-      }).catch(console.error);
-
-      ubicacionesService.getAll({ include_inactive: false }).then(data => {
-         if (isMounted && Array.isArray(data)) setUbicaciones(data.map(u => ({ value: u.id, label: `${u.nombre} ${u.edificio ? `(${u.edificio})` : ''}`.trim() })));
-      }).catch(console.error);
-
-      empleadosService.getAll(0, 1000).then(data => {
-         if (isMounted && Array.isArray(data)) setEmpleados(data.map(e => ({ value: e.id, label: e.nombre_completo })));
-      }).catch(console.error);
-
-      return () => { isMounted = false; };
-   }, []);
-
-   const fechaAdquisicion = form.watch("fecha_adquisicion");
-   const today = startOfDay(new Date());
-
    const handleNumeroSerieChange = (e: React.ChangeEvent<HTMLInputElement>, fieldChange: (val: string) => void) => {
       const value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "");
       fieldChange(value);
    };
 
-   // OPCIONES POR DEFECTO DINÁMICAS
+   // Opciones por defecto optimizadas (Fase 1)
    const defaultUbicacionOptions = useMemo<Option[]>(() => {
-      if (ubicaciones.length > 0) return ubicaciones;
       if (initialData?.ubicacion) return [{ value: initialData.ubicacion.id, label: `${initialData.ubicacion.nombre} ${initialData.ubicacion.edificio ? `(${initialData.ubicacion.edificio})` : ''}`.trim() }];
       return [];
-   }, [ubicaciones, initialData]);
+   }, [initialData]);
 
    const defaultMarcaOptions = useMemo<Option[]>(() => {
-      if (marcas.length > 0) return marcas;
       if (initialData?.marca_rel) return [{ value: initialData.marca_rel.id, label: initialData.marca_rel.nombre }];
       return [];
-   }, [marcas, initialData]);
+   }, [initialData]);
 
    const defaultEmpleadoOptions = useMemo<Option[]>(() => {
-      if (empleados.length > 0) return empleados;
       if (initialData?.empleado_asignado) return [{ value: initialData.empleado_asignado.id, label: initialData.empleado_asignado.nombre_completo }];
       return [];
-   }, [empleados, initialData]);
+   }, [initialData]);
 
-   // FETCHERS LOCALES SÚPER RÁPIDOS
+   // Fetchers asíncronos (Fase 1)
    const fetchUbicaciones = useCallback(async (search: string): Promise<Option[]> => {
-      const lower = search.toLowerCase();
-      return ubicaciones.filter(u => u.label.toLowerCase().includes(lower));
-   }, [ubicaciones]);
+      if (!search || search.length < 2) return [];
+      const data = await ubicacionesService.getAll({ q: search, limit: 15, include_inactive: false });
+      return data.map(u => ({ value: u.id, label: `${u.nombre} ${u.edificio ? `(${u.edificio})` : ''}`.trim() }));
+   }, []);
 
    const fetchMarcas = useCallback(async (search: string): Promise<Option[]> => {
-      const lower = search.toLowerCase();
-      return marcas.filter(m => m.label.toLowerCase().includes(lower));
-   }, [marcas]);
+      if (!search || search.length < 2) return [];
+      const data = await catalogosService.getMarcas({ q: search, limit: 15, include_inactive: false });
+      return data.map(m => ({ value: m.id, label: m.nombre }));
+   }, []);
 
    const fetchEmpleados = useCallback(async (search: string): Promise<Option[]> => {
-      const lower = search.toLowerCase();
-      return empleados.filter(e => e.label.toLowerCase().includes(lower));
-   }, [empleados]);
+      if (!search || search.length < 2) return [];
+      const data = await empleadosService.search(search);
+      return data.map(e => ({ value: e.id, label: e.nombre_completo }));
+   }, []);
 
    const onSubmit: SubmitHandler<EquipoFormValues> = async (data) => {
       setIsLoading(true);
@@ -224,7 +225,7 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
                               fetcher={fetchMarcas}
                               defaultOptions={defaultMarcaOptions}
                               placeholder="Buscar marca..."
-                              emptyMessage="No se encontraron marcas activas."
+                              emptyMessage="No se encontraron marcas."
                            />
                         </FormControl>
                         <FormMessage />
@@ -248,7 +249,7 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
                               fetcher={fetchUbicaciones}
                               defaultOptions={defaultUbicacionOptions}
                               placeholder="Buscar ubicación..."
-                              emptyMessage="No se encontraron ubicaciones activas."
+                              emptyMessage="No se encontraron ubicaciones."
                            />
                         </FormControl>
                         <FormMessage />
@@ -277,23 +278,8 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
             <div className="rounded-xl border p-6 shadow-sm bg-card/50 transition-all">
                <h3 className="mb-6 text-lg font-semibold tracking-tight border-b pb-2">Detalles Financieros y Ciclo de Vida</h3>
                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                  <FormField control={form.control} name="fecha_adquisicion" render={({ field }) => (
-                     <DatePickerField label="Fecha Adquisición (Opcional)" value={field.value} onChange={field.onChange} disabled={(date) => date > today || date < new Date("1900-01-01")} />
-                  )} />
-                  <FormField control={form.control} name="fecha_puesta_marcha" render={({ field }) => (
-                     <DatePickerField label="Puesta en Marcha (Opcional)" value={field.value} onChange={field.onChange} description="Debe ser posterior a la adquisición." disabled={(date) => {
-                        if (date > today || date < new Date("1900-01-01")) return true;
-                        if (fechaAdquisicion && isBefore(date, startOfDay(fechaAdquisicion))) return true;
-                        return false;
-                     }} />
-                  )} />
-                  <FormField control={form.control} name="fecha_garantia_expiracion" render={({ field }) => (
-                     <DatePickerField label="Expira Garantía (Opcional)" value={field.value} onChange={field.onChange} disabled={(date) => {
-                        if (date < new Date("1900-01-01")) return true;
-                        if (fechaAdquisicion && isBefore(date, startOfDay(fechaAdquisicion))) return true;
-                        return false;
-                     }} />
-                  )} />
+
+                  <LifecycleDateFields control={form.control} />
 
                   <FormField control={form.control} name="proveedor_id" render={({ field }) => (
                      <FormItem>

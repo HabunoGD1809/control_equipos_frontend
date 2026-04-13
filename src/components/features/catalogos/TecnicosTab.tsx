@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
-import { MoreHorizontal, PlusCircle, Pencil, Trash2 } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Pencil, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
@@ -10,18 +11,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/DropdownMenu";
 import { Badge } from "@/components/ui/Badge";
 import { Tecnico, Proveedor } from "@/types/api";
-import { tecnicosService } from "@/app/services/tecnicosService";
 import { TecnicoForm } from "./TecnicoForm";
 
 interface TecnicosTabProps {
    initialData: Tecnico[];
    proveedores: Proveedor[];
+   isLoading?: boolean;
 }
 
-export const TecnicosTab: React.FC<TecnicosTabProps> = ({ initialData, proveedores }) => {
+export const TecnicosTab: React.FC<TecnicosTabProps> = ({ initialData, proveedores, isLoading = false }) => {
+   const router = useRouter();
    const [items, setItems] = useState<Tecnico[]>(initialData || []);
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [selectedItem, setSelectedItem] = useState<Tecnico | null>(null);
+
+   useEffect(() => {
+      setItems(initialData || []);
+   }, [initialData]);
 
    const handleEdit = (item: Tecnico) => {
       setSelectedItem(item);
@@ -31,6 +37,11 @@ export const TecnicosTab: React.FC<TecnicosTabProps> = ({ initialData, proveedor
    const handleNew = () => {
       setSelectedItem(null);
       setIsModalOpen(true);
+   };
+
+   const handleSuccess = () => {
+      setIsModalOpen(false);
+      router.refresh();
    };
 
    const columns: ColumnDef<Tecnico>[] = [
@@ -74,7 +85,10 @@ export const TecnicosTab: React.FC<TecnicosTabProps> = ({ initialData, proveedor
          cell: ({ row }) => (
             <DropdownMenu>
                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
+                  <Button variant="ghost" className="h-8 w-8 p-0">
+                     <span className="sr-only">Abrir menú</span>
+                     <MoreHorizontal className="h-4 w-4" />
+                  </Button>
                </DropdownMenuTrigger>
                <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Acciones</DropdownMenuLabel>
@@ -87,6 +101,15 @@ export const TecnicosTab: React.FC<TecnicosTabProps> = ({ initialData, proveedor
       },
    ];
 
+   if (isLoading) {
+      return (
+         <div className="flex items-center justify-center py-24 text-muted-foreground">
+            <Loader2 className="h-6 w-6 animate-spin mr-2" />
+            <span className="text-sm">Cargando técnicos...</span>
+         </div>
+      );
+   }
+
    return (
       <div className="space-y-4 animate-in fade-in duration-300">
          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
@@ -94,15 +117,13 @@ export const TecnicosTab: React.FC<TecnicosTabProps> = ({ initialData, proveedor
                <DialogHeader>
                   <DialogTitle>{selectedItem ? "Editar Técnico" : "Registrar Nuevo Técnico"}</DialogTitle>
                </DialogHeader>
-               <TecnicoForm
-                  initialData={selectedItem ?? undefined}
-                  proveedores={proveedores}
-                  onSuccess={async () => {
-                     setIsModalOpen(false);
-                     const fresh = await tecnicosService.getAll();
-                     setItems(fresh);
-                  }}
-               />
+               {isModalOpen && (
+                  <TecnicoForm
+                     initialData={selectedItem ?? undefined}
+                     proveedores={proveedores}
+                     onSuccess={handleSuccess}
+                  />
+               )}
             </DialogContent>
          </Dialog>
 

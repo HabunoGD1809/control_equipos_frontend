@@ -4,6 +4,7 @@ import type { Ubicacion, UbicacionCreate, UbicacionUpdate } from "@/types/api";
 type UbicacionesQuery = {
    skip?: number;
    limit?: number;
+   q?: string;
    include_inactive?: boolean;
 };
 

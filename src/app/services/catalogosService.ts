@@ -83,7 +83,7 @@ export const catalogosService = {
    },
 
    // --- Departamentos ---
-   async getDepartamentos(params?: { include_inactive?: boolean; limit?: number }): Promise<Departamento[]> {
+   async getDepartamentos(params?: { q?: string; include_inactive?: boolean; limit?: number }): Promise<Departamento[]> {
       return api.get<Departamento[]>("/catalogos/departamentos/", { params });
    },
 
@@ -103,7 +103,7 @@ export const catalogosService = {
    },
 
    // --- Marcas ---
-   async getMarcas(params?: { include_inactive?: boolean; limit?: number }): Promise<Marca[]> {
+   async getMarcas(params?: { q?: string; include_inactive?: boolean; limit?: number }): Promise<Marca[]> {
       return api.get<Marca[]>("/catalogos/marcas/", { params });
    },
 

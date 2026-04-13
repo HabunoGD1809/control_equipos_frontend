@@ -25,17 +25,18 @@ type RoleFormValues = z.infer<typeof rolSchema>;
 
 interface RoleFormProps {
    initialData?: Rol;
+   permisosDisponibles?: Permiso[];
    onSuccess?: () => void;
    onCancel?: () => void;
 }
 
-export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
+export function RoleForm({ initialData, permisosDisponibles: propsPermisos, onSuccess, onCancel }: RoleFormProps) {
    const router = useRouter();
    const { toast } = useToast();
 
    const [isLoading, setIsLoading] = useState(false);
-   const [permisosDisponibles, setPermisosDisponibles] = useState<Permiso[]>([]);
-   const [loadingPermisos, setLoadingPermisos] = useState(true);
+   const [permisosDisponibles, setPermisosDisponibles] = useState<Permiso[]>(propsPermisos || []);
+   const [loadingPermisos, setLoadingPermisos] = useState(!propsPermisos || propsPermisos.length === 0);
 
    const isAdminRole = initialData?.nombre.toLowerCase() === "admin";
 
@@ -51,6 +52,9 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
    const selectedPermisos = useWatch({ control: form.control, name: "permiso_ids" });
 
    useEffect(() => {
+      // Si ya recibimos los permisos por props, no hacemos la petición nuevamente.
+      if (propsPermisos && propsPermisos.length > 0) return;
+
       rolesService
          .getAllPermisos()
          .then(setPermisosDisponibles)
@@ -62,7 +66,7 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
             })
          )
          .finally(() => setLoadingPermisos(false));
-   }, [toast]);
+   }, [toast, propsPermisos]);
 
    const onSubmit = async (data: RoleFormValues) => {
       setIsLoading(true);

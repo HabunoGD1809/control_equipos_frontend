@@ -1,15 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { Loader2, Eraser } from "lucide-react";
 
 import { usuarioCreateSchema, usuarioUpdateSchema } from "@/lib/zod";
 import { usuariosService } from "@/app/services/usuariosService";
-import { rolesService } from "@/app/services/rolesService";
-import { catalogosService } from "@/app/services/catalogosService";
-import { empleadosService } from "@/app/services/empleadosService";
 import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -34,23 +31,25 @@ interface FormValues {
 
 interface UsuarioFormProps {
    initialData?: Usuario;
+   initialOptions: {
+      roles: Rol[];
+      departamentos: Option[];
+      empleados: Option[];
+   };
    onSuccess: () => void;
    onCancel: () => void;
 }
 
 const cleanString = (str?: string | null) => (str && str.trim() !== "" ? str.trim() : null);
 
-export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormProps) {
+export function UsuarioForm({ initialData, initialOptions, onSuccess, onCancel }: UsuarioFormProps) {
    const { toast } = useToast();
    const isEditing = !!initialData;
 
    const [isSubmitting, setIsSubmitting] = useState(false);
-   const [roles, setRoles] = useState<Rol[]>([]);
-   const [loadingRoles, setLoadingRoles] = useState(true);
 
-   // ESTADOS ROBUSTOS PARA PRECARGA
-   const [departamentos, setDepartamentos] = useState<Option[]>([]);
-   const [empleados, setEmpleados] = useState<Option[]>([]);
+   // Extraemos los datos pre-cargados desde las props
+   const { roles, departamentos, empleados } = initialOptions;
 
    const formSchema = isEditing ? usuarioUpdateSchema : usuarioCreateSchema;
 
@@ -69,46 +68,6 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
       },
    });
 
-   // 🚀 CARGA OPTIMIZADA EN PARALELO (Carga ultra rápida)
-   useEffect(() => {
-      let isMounted = true;
-      setLoadingRoles(true);
-
-      const loadData = async () => {
-         try {
-            // Promise.all dispara las 3 peticiones al mismo tiempo, reduciendo el tiempo de espera.
-            // Limitamos a 50 para no asfixiar el navegador. El AsyncCombobox buscará el resto si el usuario teclea.
-            const [rolesData, deptosData, empleadosData] = await Promise.all([
-               rolesService.getAll(),
-               catalogosService.getDepartamentos({ limit: 50, include_inactive: false }),
-               empleadosService.getAll(0, 50)
-            ]);
-
-            if (!isMounted) return;
-
-            // 1. Cargar Roles
-            setRoles(rolesData);
-
-            // 2. Cargar Departamentos (con chequeo de seguridad por si viene paginado)
-            const deptosArr = Array.isArray(deptosData) ? deptosData : (deptosData as any)?.data || [];
-            setDepartamentos(deptosArr.map((d: any) => ({ value: d.id, label: d.nombre })));
-
-            // 3. Cargar Empleados (con chequeo de seguridad por si viene paginado)
-            const empsArr = Array.isArray(empleadosData) ? empleadosData : (empleadosData as any)?.data || [];
-            setEmpleados(empsArr.map((e: any) => ({ value: e.id, label: e.nombre_completo })));
-
-         } catch (error) {
-            if (isMounted) toast({ variant: "destructive", title: "Error", description: "No se pudieron cargar los catálogos." });
-         } finally {
-            if (isMounted) setLoadingRoles(false);
-         }
-      };
-
-      loadData();
-
-      return () => { isMounted = false; };
-   }, [toast]);
-
    // OPCIONES POR DEFECTO DINÁMICAS
    const defaultDepartamentoOptions = useMemo<Option[]>(() => {
       if (departamentos.length > 0) return departamentos;
@@ -122,7 +81,7 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
       return [];
    }, [empleados, initialData]);
 
-   // FETCHERS LOCALES SÚPER RÁPIDOS
+   // FETCHERS LOCALES SÚPER RÁPIDOS (Filtran en memoria en lugar de ir a la API)
    const fetchDepartamentos = useCallback(async (search: string): Promise<Option[]> => {
       const lower = search.toLowerCase();
       return departamentos.filter(d => d.label.toLowerCase().includes(lower));
@@ -223,10 +182,10 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
             <FormField control={form.control} name="rol_id" render={({ field }) => (
                <FormItem>
                   <FormLabel>Rol <span className="text-destructive">*</span></FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingRoles}>
+                  <Select onValueChange={field.onChange} value={field.value || undefined}>
                      <FormControl>
                         <SelectTrigger>
-                           <SelectValue placeholder={loadingRoles ? "Cargando roles..." : "Seleccione un rol"} />
+                           <SelectValue placeholder="Seleccione un rol" />
                         </SelectTrigger>
                      </FormControl>
                      <SelectContent>
@@ -320,7 +279,7 @@ export function UsuarioForm({ initialData, onSuccess, onCancel }: UsuarioFormPro
                   <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
                      Cancelar
                   </Button>
-                  <Button type="submit" disabled={isSubmitting || loadingRoles} className="min-w-35">
+                  <Button type="submit" disabled={isSubmitting} className="min-w-35">
                      {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                      {isEditing ? "Guardar Cambios" : "Crear Usuario"}
                   </Button>

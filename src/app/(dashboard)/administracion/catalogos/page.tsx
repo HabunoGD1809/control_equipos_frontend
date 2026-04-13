@@ -1,18 +1,8 @@
 import { cookies } from 'next/headers';
 import { CatalogosClient } from "./components/CatalogosClient";
-import {
-   EstadoEquipo,
-   TipoDocumento,
-   TipoMantenimiento,
-   Proveedor,
-   Ubicacion,
-   Tecnico,
-   Departamento,
-   Marca,
-   Empleado
-} from "@/types/api";
+import { Empleado } from "@/types/api";
 
-async function getCatalogosData() {
+async function getInitialTabData() {
    const accessToken = (await cookies()).get('access_token')?.value;
    if (!accessToken) return null;
 
@@ -20,38 +10,13 @@ async function getCatalogosData() {
    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
    try {
-      const [
-         estadosRes,
-         tiposDocRes,
-         tiposMantRes,
-         proveedoresRes,
-         ubicacionesRes,
-         tecnicosRes,
-         departamentosRes,
-         marcasRes,
-         empleadosRes // <-- NUEVO REQUEST
-      ] = await Promise.all([
-         fetch(`${baseUrl}/catalogos/estados-equipo/`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/catalogos/tipos-documento/`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/catalogos/tipos-mantenimiento/`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/proveedores/`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/ubicaciones/`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/tecnicos/`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/catalogos/departamentos/`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/catalogos/marcas/`, { headers, cache: 'no-store' }),
-         fetch(`${baseUrl}/empleados/`, { headers, cache: 'no-store' }),
-      ]);
+      const res = await fetch(`${baseUrl}/empleados/`, {
+         headers,
+         cache: 'no-store',
+      });
 
       return {
-         estados: estadosRes.ok ? await estadosRes.json() as EstadoEquipo[] : [],
-         tiposDocumento: tiposDocRes.ok ? await tiposDocRes.json() as TipoDocumento[] : [],
-         tiposMantenimiento: tiposMantRes.ok ? await tiposMantRes.json() as TipoMantenimiento[] : [],
-         proveedores: proveedoresRes.ok ? await proveedoresRes.json() as Proveedor[] : [],
-         ubicaciones: ubicacionesRes.ok ? await ubicacionesRes.json() as Ubicacion[] : [],
-         tecnicos: tecnicosRes.ok ? await tecnicosRes.json() as Tecnico[] : [],
-         departamentos: departamentosRes.ok ? await departamentosRes.json() as Departamento[] : [],
-         marcas: marcasRes.ok ? await marcasRes.json() as Marca[] : [],
-         empleados: empleadosRes.ok ? await empleadosRes.json() as Empleado[] : [],
+         empleados: res.ok ? (await res.json() as Empleado[]) : [],
       };
    } catch (error) {
       console.error("[GET_CATALOGOS_DATA_ERROR]", error);
@@ -60,7 +25,7 @@ async function getCatalogosData() {
 }
 
 export default async function CatalogosPage() {
-   const data = await getCatalogosData();
+   const data = await getInitialTabData();
 
    if (!data) {
       return <div className="p-8">Error al cargar los catálogos.</div>;
@@ -74,17 +39,7 @@ export default async function CatalogosPage() {
                Gestione las listas maestras que alimentan los formularios del sistema.
             </p>
          </div>
-         <CatalogosClient
-            initialEstados={data.estados}
-            initialTiposDocumento={data.tiposDocumento}
-            initialTiposMantenimiento={data.tiposMantenimiento}
-            initialProveedores={data.proveedores}
-            initialUbicaciones={data.ubicaciones}
-            initialTecnicos={data.tecnicos}
-            initialDepartamentos={data.departamentos}
-            initialMarcas={data.marcas}
-            initialEmpleados={data.empleados}
-         />
+         <CatalogosClient initialEmpleados={data.empleados} />
       </div>
    );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Plus, Pencil, Shield, Loader2, RefreshCw } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
 
@@ -11,31 +11,37 @@ import { useToast } from "@/components/ui/use-toast";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { RoleForm } from "@/components/features/roles/RoleForm";
 import { rolesService } from "@/app/services/rolesService";
-import type { Rol } from "@/types/api";
+import type { Rol, Permiso } from "@/types/api";
 
-export function RolesClient() {
+interface RolesClientProps {
+   initialRoles: Rol[];
+   initialPermisos: Permiso[];
+}
+
+export function RolesClient({ initialRoles, initialPermisos }: RolesClientProps) {
    const { toast } = useToast();
 
-   const [data, setData] = useState<Rol[]>([]);
-   const [loading, setLoading] = useState(true);
+   const [data, setData] = useState<Rol[]>(initialRoles);
+   const [permisos, setPermisos] = useState<Permiso[]>(initialPermisos);
+   const [loading, setLoading] = useState(false);
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [selectedRole, setSelectedRole] = useState<Rol | undefined>(undefined);
 
-   const fetchRoles = useCallback(async () => {
+   const refreshData = useCallback(async () => {
       setLoading(true);
       try {
-         const roles = await rolesService.getAll();
-         setData(roles);
+         const [rolesData, permisosData] = await Promise.all([
+            rolesService.getAll(),
+            rolesService.getAllPermisos(),
+         ]);
+         setData(rolesData);
+         setPermisos(permisosData);
       } catch {
-         toast({ variant: "destructive", title: "Error", description: "Error al cargar roles." });
+         toast({ variant: "destructive", title: "Error", description: "No se pudieron actualizar los datos." });
       } finally {
          setLoading(false);
       }
    }, [toast]);
-
-   useEffect(() => {
-      fetchRoles();
-   }, [fetchRoles]);
 
    const columns: ColumnDef<Rol>[] = [
       {
@@ -81,14 +87,6 @@ export function RolesClient() {
       },
    ];
 
-   if (loading && data.length === 0) {
-      return (
-         <div className="flex justify-center items-center h-40">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-         </div>
-      );
-   }
-
    return (
       <div className="space-y-6 animate-in fade-in duration-300">
          <PageHeader
@@ -96,7 +94,7 @@ export function RolesClient() {
             description="Defina los perfiles de acceso y asigne capacidades específicas a cada rol."
             actions={
                <>
-                  <Button variant="outline" onClick={fetchRoles} disabled={loading} title="Actualizar lista">
+                  <Button variant="outline" onClick={refreshData} disabled={loading} title="Actualizar lista">
                      <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                   </Button>
                   <Button
@@ -115,13 +113,12 @@ export function RolesClient() {
             <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
                <DialogHeader>
                   <DialogTitle>{selectedRole ? "Editar Rol" : "Crear Nuevo Rol"}</DialogTitle>
-                  <DialogDescription>
-                     Configure los detalles y permisos granulares del rol a continuación.
-                  </DialogDescription>
+                  <DialogDescription>Configure los detalles y permisos granulares del rol.</DialogDescription>
                </DialogHeader>
                <RoleForm
                   initialData={selectedRole}
-                  onSuccess={() => { setIsModalOpen(false); fetchRoles(); }}
+                  permisosDisponibles={permisos}
+                  onSuccess={() => { setIsModalOpen(false); refreshData(); }}
                   onCancel={() => setIsModalOpen(false)}
                />
             </DialogContent>

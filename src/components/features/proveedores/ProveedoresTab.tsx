@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
-import { MoreHorizontal, PlusCircle, Trash2, Edit, Building2, Mail, Globe } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Trash2, Edit, Building2, Mail, Globe, Loader2 } from "lucide-react";
 
 import { Proveedor } from "@/types/api";
 import { Button } from "@/components/ui/Button";
@@ -21,35 +21,36 @@ import { api } from "@/lib/http";
 
 interface ProveedoresTabProps {
    data: Proveedor[];
+   isLoading?: boolean;
 }
 
-export const ProveedoresTab: React.FC<ProveedoresTabProps> = ({ data }) => {
+export const ProveedoresTab: React.FC<ProveedoresTabProps> = ({ data, isLoading = false }) => {
+   const router = useRouter();
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [selectedProveedor, setSelectedProveedor] = useState<Proveedor | null>(null);
    const [showInactive, setShowInactive] = useState(false);
-   const router = useRouter();
 
-   // Estado local para manejar el fetch asíncrono
-   const [localData, setLocalData] = useState<Proveedor[]>(data);
-   const [hasFetchedAll, setHasFetchedAll] = useState(false);
+   const [localData, setLocalData] = useState<Proveedor[]>(data || []);
+   const isInitialMount = useRef(true);
 
-   // Sincronizar con el servidor si cambia (ej. tras crear uno nuevo)
    useEffect(() => {
-      setLocalData(data);
-      setHasFetchedAll(false);
+      setLocalData(data || []);
    }, [data]);
 
-   // Fetch perezoso de inactivos
    useEffect(() => {
-      if (showInactive && !hasFetchedAll) {
-         api.get<Proveedor[]>("/proveedores/", { params: { include_inactive: true, limit: 200 } })
-            .then(res => {
-               setLocalData(res);
-               setHasFetchedAll(true);
-            })
-            .catch(console.error);
+      if (isInitialMount.current) {
+         isInitialMount.current = false;
+         return;
       }
-   }, [showInactive, hasFetchedAll]);
+
+      if (showInactive) {
+         api.get<Proveedor[]>("/proveedores/", { params: { include_inactive: true, limit: 200 } })
+            .then(setLocalData)
+            .catch(console.error);
+      } else {
+         setLocalData(data || []);
+      }
+   }, [showInactive, data]);
 
    const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } = useDeleteConfirmation({
       onDelete: (id) => api.delete(`/proveedores/${id}`),
@@ -131,12 +132,12 @@ export const ProveedoresTab: React.FC<ProveedoresTabProps> = ({ data }) => {
                </DropdownMenuTrigger>
                <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => handleEdit(row.original)}>
-                     <Edit className="mr-2 h-4 w-4" /> Editar
+                  <DropdownMenuItem onClick={() => handleEdit(row.original)} className="cursor-pointer">
+                     <Edit className="mr-2 h-4 w-4 text-primary" /> Editar
                   </DropdownMenuItem>
                   {row.original.is_active !== false && (
                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                        className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
                         onClick={() => openAlert(row.original.id)}
                      >
                         <Trash2 className="mr-2 h-4 w-4" /> Eliminar
@@ -147,6 +148,15 @@ export const ProveedoresTab: React.FC<ProveedoresTabProps> = ({ data }) => {
          )
       },
    ];
+
+   if (isLoading) {
+      return (
+         <div className="flex items-center justify-center py-24 text-muted-foreground">
+            <Loader2 className="h-6 w-6 animate-spin mr-2" />
+            <span className="text-sm">Cargando proveedores...</span>
+         </div>
+      );
+   }
 
    return (
       <div className="space-y-4 animate-in fade-in duration-300">
@@ -166,7 +176,7 @@ export const ProveedoresTab: React.FC<ProveedoresTabProps> = ({ data }) => {
             columns={columns}
             data={filteredData}
             filterColumn="nombre"
-            tableContainerClassName="shadow-sm"
+            tableContainerClassName="shadow-sm border rounded-lg bg-card"
          />
 
          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
@@ -177,10 +187,12 @@ export const ProveedoresTab: React.FC<ProveedoresTabProps> = ({ data }) => {
                      Gestione la información de contacto y fiscal de sus suplidores.
                   </DialogDescription>
                </DialogHeader>
-               <ProveedorForm
-                  initialData={selectedProveedor ?? undefined}
-                  onSuccess={handleSuccess}
-               />
+               {isModalOpen && (
+                  <ProveedorForm
+                     initialData={selectedProveedor ?? undefined}
+                     onSuccess={handleSuccess}
+                  />
+               )}
             </DialogContent>
          </Dialog>
 

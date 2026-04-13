@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import {
    PlusCircle,
@@ -63,28 +63,33 @@ export function EquiposClient({
    const router = useRouter();
    const { toast } = useToast();
    const { setFilters } = useUrlFilters();
+
    const [isRefreshing, setIsRefreshing] = useState(false);
+   const [isUploadingCSV, setIsUploadingCSV] = useState(false);
    const fileInputRef = useRef<HTMLInputElement>(null);
 
    // Estados del Modal
    const [isModalOpen, setIsModalOpen] = useState(false);
-   const [selectedEquipo, setSelectedEquipo] = useState<EquipoRead | undefined>(
-      undefined,
-   );
+   const [selectedEquipo, setSelectedEquipo] = useState<EquipoRead | undefined>(undefined);
+
    const [estados, setEstados] = useState<EstadoEquipo[]>([]);
    const [proveedores, setProveedores] = useState<ProveedorSimple[]>([]);
-   const [isUploadingCSV, setIsUploadingCSV] = useState(false);
 
    useEffect(() => {
+      let isMounted = true;
       Promise.all([
          catalogosService.getEstadosEquipo(),
          proveedoresService.getOptions(),
       ])
          .then(([estadosData, proveedoresData]) => {
-            setEstados(estadosData);
-            setProveedores(proveedoresData);
+            if (isMounted) {
+               setEstados(estadosData);
+               setProveedores(proveedoresData);
+            }
          })
          .catch((err) => console.error("Error cargando catálogos del form:", err));
+
+      return () => { isMounted = false; };
    }, []);
 
    const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } =
@@ -99,26 +104,23 @@ export function EquiposClient({
       (term) => setFilters({ q: term, page: 1 }),
    );
 
-   const handleRefresh = () => {
+   const handleRefresh = useCallback(() => {
       setIsRefreshing(true);
       router.refresh();
-      setTimeout(() => setIsRefreshing(false), 800);
-   };
+      setTimeout(() => setIsRefreshing(false), 500);
+   }, [router]);
 
-   const handleCreate = () => {
+   const handleCreate = useCallback(() => {
       setSelectedEquipo(undefined);
       setIsModalOpen(true);
-   };
+   }, []);
 
-   const handleEdit = (equipo: EquipoRead) => {
+   const handleEdit = useCallback((equipo: EquipoRead) => {
       setSelectedEquipo(equipo);
       setIsModalOpen(true);
-   };
+   }, []);
 
-   // --- NUEVA LÓGICA DE CARGA MASIVA CSV ---
-   const handleCsvUpload = async (
-      event: React.ChangeEvent<HTMLInputElement>,
-   ) => {
+   const handleCsvUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       if (!file) return;
 
@@ -136,7 +138,7 @@ export function EquiposClient({
          const result = await equiposService.bulkUpload(file);
          toast({
             title: "Carga Masiva Completada",
-            description: `Se procesaron ${result.total_procesados} equipos. Insertados: ${result.insertados}. Errores: ${result.errores.length}.`,
+            description: `Procesados: ${result.total_procesados}. Insertados: ${result.insertados}. Errores: ${result.errores.length}.`,
          });
          if (result.errores.length > 0) {
             console.warn("Errores en CSV:", result.errores);
@@ -153,9 +155,8 @@ export function EquiposClient({
          if (fileInputRef.current) fileInputRef.current.value = "";
       }
    };
-   // ----------------------------------------
 
-   const columns: ColumnDef<EquipoRead>[] = [
+   const columns = useMemo<ColumnDef<EquipoRead>[]>(() => [
       {
          accessorKey: "nombre",
          header: "Nombre",
@@ -251,7 +252,7 @@ export function EquiposClient({
             </DropdownMenu>
          ),
       },
-   ];
+   ], [router, handleEdit, openAlert]);
 
    const hasNextPage = initialData.length === initialParams.limit;
    const isEmpty = initialData.length === 0;

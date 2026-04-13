@@ -33,16 +33,18 @@ export function StockGroupedTable({ data }: StockGroupedTableProps) {
       const tipoId = item.tipo_item.id;
 
       if (!groups.has(tipoId)) {
+        const tipoItem = item.tipo_item as TipoItemInventario;
         groups.set(tipoId, {
           tipo_item: {
-            ...item.tipo_item,
-            categoria: (item.tipo_item as TipoItemInventario).categoria ?? "Otro",
-            stock_minimo: (item.tipo_item as TipoItemInventario).stock_minimo ?? 0,
-            descripcion: null,
-            codigo_barras: null,
-            proveedor_preferido_id: null,
-            proveedor_preferido: null,
-            marca_rel: (item.tipo_item as TipoItemInventario).marca_rel || null,
+            ...tipoItem,
+            categoria: tipoItem.categoria ?? "Otro",
+            stock_minimo: tipoItem.stock_minimo ?? 0,
+            descripcion: tipoItem.descripcion ?? null,
+            codigo_barras: tipoItem.codigo_barras ?? null,
+            proveedor_preferido_id: tipoItem.proveedor_preferido_id ?? null,
+            proveedor_preferido: tipoItem.proveedor_preferido ?? null,
+            marca_rel: tipoItem.marca_rel ?? null,
+            is_active: tipoItem.is_active ?? true,
           },
           total_cantidad: 0,
           stocks: [],
@@ -103,14 +105,17 @@ export function StockGroupedTable({ data }: StockGroupedTableProps) {
 
               return (
                 <Fragment key={group.tipo_item.id}>
-                  {/* FILA PADRE (Resumen) */}
+                  {/* FILA PADRE */}
                   <TableRow
                     className={`cursor-pointer transition-colors ${isExpanded ? "bg-muted/30" : "hover:bg-muted/50"}`}
                     onClick={() => toggleRow(group.tipo_item.id)}
                   >
                     <TableCell className="text-center">
                       <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full pointer-events-none">
-                        {isExpanded ? <ChevronDown className="h-4 w-4 text-primary" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                        {isExpanded
+                          ? <ChevronDown className="h-4 w-4 text-primary" />
+                          : <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        }
                       </Button>
                     </TableCell>
                     <TableCell>
@@ -121,12 +126,16 @@ export function StockGroupedTable({ data }: StockGroupedTableProps) {
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
                       <span className="text-sm font-medium">{nombreMarca}</span>
-                      {group.tipo_item.modelo && <span className="text-xs text-muted-foreground block">{group.tipo_item.modelo}</span>}
+                      {group.tipo_item.modelo && (
+                        <span className="text-xs text-muted-foreground block">{group.tipo_item.modelo}</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-1.5 bg-background border px-3 py-1 rounded-md w-fit mx-auto shadow-sm">
                         <span className="text-base font-bold text-foreground">{group.total_cantidad}</span>
-                        <span className="text-xs font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{group.tipo_item.unidad_medida}</span>
+                        <span className="text-xs font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                          {group.tipo_item.unidad_medida}
+                        </span>
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
@@ -163,7 +172,9 @@ export function StockGroupedTable({ data }: StockGroupedTableProps) {
                               </TableHeader>
                               <TableBody>
                                 {group.stocks.map((stock) => {
-                                  const isExpired = stock.fecha_caducidad ? new Date(stock.fecha_caducidad) < new Date() : false;
+                                  const isExpired = stock.fecha_caducidad
+                                    ? new Date(stock.fecha_caducidad) < new Date()
+                                    : false;
                                   return (
                                     <TableRow key={stock.id} className="h-10 hover:bg-muted/20">
                                       <TableCell className="font-medium text-sm py-1.5">{stock.ubicacion}</TableCell>
@@ -173,7 +184,11 @@ export function StockGroupedTable({ data }: StockGroupedTableProps) {
                                           <div className={`flex items-center gap-1.5 text-xs ${isExpired ? "text-destructive font-bold" : "text-muted-foreground"}`}>
                                             <Calendar className="h-3.5 w-3.5" />
                                             {format(new Date(stock.fecha_caducidad), "PP", { locale: es })}
-                                            {isExpired && <span className="bg-destructive/10 text-destructive px-1.5 py-0.5 rounded-sm ml-1 text-[10px] uppercase">Vencido</span>}
+                                            {isExpired && (
+                                              <span className="bg-destructive/10 text-destructive px-1.5 py-0.5 rounded-sm ml-1 text-[10px] uppercase">
+                                                Vencido
+                                              </span>
+                                            )}
                                           </div>
                                         ) : (
                                           <span className="text-xs text-muted-foreground italic">No caduca</span>
@@ -181,7 +196,13 @@ export function StockGroupedTable({ data }: StockGroupedTableProps) {
                                       </TableCell>
                                       <TableCell className="text-right font-bold py-1.5 text-foreground">{stock.cantidad_actual}</TableCell>
                                       <TableCell className="py-1.5 text-right">
-                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" title="Editar lote/caducidad" onClick={() => setEditingStock(stock)}>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                          title="Editar lote/caducidad"
+                                          onClick={() => setEditingStock(stock)}
+                                        >
                                           <Pencil className="h-3.5 w-3.5" />
                                         </Button>
                                       </TableCell>
@@ -202,7 +223,11 @@ export function StockGroupedTable({ data }: StockGroupedTableProps) {
         </Table>
       </div>
 
-      <EditStockDetailsModal stock={editingStock} isOpen={!!editingStock} onClose={() => setEditingStock(null)} />
+      <EditStockDetailsModal
+        stock={editingStock}
+        isOpen={!!editingStock}
+        onClose={() => setEditingStock(null)}
+      />
     </>
   );
 }

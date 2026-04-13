@@ -1,15 +1,13 @@
-type Primitive = string | number | boolean | Date;
+import { BaseFetchOptions, buildQueryString, parseApiError, prepareFetchPayload } from "./http-utils";
 
-export interface FetchOptions extends Omit<RequestInit, "headers" | "body" | "method"> {
-   params?: Record<string, Primitive | null | undefined>;
+export interface FetchOptions extends Omit<BaseFetchOptions, "headers" | "body" | "method"> {
    headers?: Record<string, string>;
    responseType?: "json" | "text" | "blob" | "arraybuffer";
-   _retry?: boolean;
 }
 
 const PROXY_PREFIX = "/api/proxy";
 
-// ─── GESTOR DE ROTACIÓN DE TOKENS (PREVENCIÓN DE RACE CONDITIONS) ───
+// ─── GESTOR DE ROTACIÓN DE TOKENS ───
 let isRefreshing = false;
 let refreshSubscribers: ((success: boolean) => void)[] = [];
 
@@ -24,22 +22,11 @@ function handleUnauthorizedClient() {
    }
 }
 
-function buildQuery(params?: FetchOptions["params"]): string {
-   if (!params) return "";
-   const sp = new URLSearchParams();
-   for (const [k, v] of Object.entries(params)) {
-      if (v === undefined || v === null) continue;
-      sp.set(k, v instanceof Date ? v.toISOString() : String(v));
-   }
-   const qs = sp.toString();
-   return qs ? `?${qs}` : "";
-}
-
 async function http<T>(path: string, options: FetchOptions & { method: string; body?: BodyInit }): Promise<T> {
    const { params, headers, responseType, _retry, ...rest } = options;
 
    const cleanPath = path.startsWith("/") ? path : `/${path}`;
-   const proxyPath = `${PROXY_PREFIX}${cleanPath}${buildQuery(params)}`;
+   const proxyPath = `${PROXY_PREFIX}${cleanPath}${buildQueryString(params)}`;
 
    const fetchOptions: RequestInit = {
       ...rest,
@@ -54,11 +41,8 @@ async function http<T>(path: string, options: FetchOptions & { method: string; b
          return new Promise<T>((resolve, reject) => {
             refreshSubscribers.push(async (success: boolean) => {
                if (success) {
-                  try {
-                     resolve(await http<T>(path, { ...options, _retry: true }));
-                  } catch (err) {
-                     reject(err);
-                  }
+                  try { resolve(await http<T>(path, { ...options, _retry: true })); }
+                  catch (err) { reject(err); }
                } else {
                   reject(new Error("No autorizado"));
                }
@@ -69,7 +53,6 @@ async function http<T>(path: string, options: FetchOptions & { method: string; b
       isRefreshing = true;
       try {
          const refreshRes = await fetch("/api/auth/refresh", { method: "POST", cache: "no-store" });
-
          if (refreshRes.ok) {
             isRefreshing = false;
             onRefreshed(true);
@@ -87,28 +70,7 @@ async function http<T>(path: string, options: FetchOptions & { method: string; b
 
    if (!res.ok) {
       if (res.status === 401) handleUnauthorizedClient();
-
-      let message = `HTTP ${res.status}`;
-      let errorData: any = null;
-
-      try {
-         if (res.headers.get("content-type")?.includes("application/json")) {
-            const body = await res.json();
-            errorData = body;
-
-            message = Array.isArray(body?.detail)
-               ? body.detail.map((e: any) => `${e.loc?.slice(-1) || 'Campo'}: ${e.msg}`).join(" | ")
-               : (body?.detail || body?.message || message);
-         } else {
-            message = await res.text() || message;
-         }
-      } catch { /* silencioso */ }
-
-      // Inyectamos status y data nativamente
-      const err = new Error(message) as Error & { status?: number; data?: any };
-      err.status = res.status;
-      err.data = errorData;
-      throw err;
+      throw await parseApiError(res);
    }
 
    if (res.status === 204) return null as T;
@@ -121,18 +83,10 @@ async function http<T>(path: string, options: FetchOptions & { method: string; b
    return (await res.json()) as T;
 }
 
-function preparePayload(body: unknown, options?: FetchOptions) {
-   if (!body) return { headers: options?.headers };
-   const isNative = typeof window !== "undefined" && (body instanceof FormData || body instanceof URLSearchParams || body instanceof Blob);
-   return isNative || typeof body === "string"
-      ? { body: body as BodyInit, headers: options?.headers }
-      : { body: JSON.stringify(body), headers: { "Content-Type": "application/json", ...options?.headers } };
-}
-
 function createMethod(method: "POST" | "PUT" | "PATCH") {
    return <T>(path: string, body?: unknown, options?: FetchOptions) => {
-      const { body: parsedBody, headers } = preparePayload(body, options);
-      return http<T>(path, { method, ...options, body: parsedBody, headers });
+      const { body: parsedBody, headers } = prepareFetchPayload(body, options);
+      return http<T>(path, { method, ...options, body: parsedBody, headers: headers as Record<string, string> });
    };
 }
 

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { MoreHorizontal, PlusCircle, Trash2, Pencil, RefreshCw } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Trash2, Pencil, RefreshCw, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
@@ -30,6 +30,7 @@ interface GenericCatalogTabProps {
    apiEndpoint: string;
    formFields: string[];
    isUbicacion?: boolean;
+   isLoading?: boolean;
 }
 
 const humanizeFieldName = (field: string) => {
@@ -39,8 +40,7 @@ const humanizeFieldName = (field: string) => {
    if (field === "es_preventivo") return "Preventivo";
    if (field === "departamento_id") return "Departamento";
    if (field === "nombre_completo") return "Nombre Completo";
-
-   return field.charAt(0).toUpperCase() + field.slice(1).replace(/_/g, ' ');
+   return field.charAt(0).toUpperCase() + field.slice(1).replace(/_/g, " ");
 };
 
 export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
@@ -48,45 +48,54 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
    title,
    apiEndpoint,
    formFields,
-   isUbicacion = false
+   isUbicacion = false,
+   isLoading: isLoadingProp = false,
 }) => {
    const { toast } = useToast();
-   const [items, setItems] = useState<GenericItem[]>(data || []);
+   const [items, setItems] = useState<GenericItem[]>(data);
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [selectedItem, setSelectedItem] = useState<GenericItem | null>(null);
-
    const [showInactive, setShowInactive] = useState(false);
-   const [isLoading, setIsLoading] = useState(false);
+   const [isRefreshing, setIsRefreshing] = useState(false);
 
+   // Sincronizar cuando el padre entrega nuevos datos
    useEffect(() => {
-      setItems(data || []);
-   }, [JSON.stringify(data)]);
+      setItems(data);
+   }, [data]);
+
+   // ─── fetchItems estabilizado con useRef ──────────────────────────────────
+   const showInactiveRef = useRef(showInactive);
+   showInactiveRef.current = showInactive;
 
    const fetchItems = useCallback(async () => {
-      setIsLoading(true);
+      setIsRefreshing(true);
       try {
          const freshData = await api.get<GenericItem[]>(apiEndpoint, {
-            params: { include_inactive: showInactive }
+            params: { include_inactive: showInactiveRef.current },
          });
          setItems(freshData);
-      } catch (error) {
+      } catch {
          toast({ variant: "destructive", title: "Error", description: "No se pudieron actualizar los datos." });
       } finally {
-         setIsLoading(false);
+         setIsRefreshing(false);
       }
-   }, [apiEndpoint, showInactive, toast]);
+   }, [apiEndpoint, toast]);
 
+   const isFirstRender = useRef(true);
    useEffect(() => {
-      if (items.length > 0 || showInactive) {
-         fetchItems();
+      if (isFirstRender.current) {
+         isFirstRender.current = false;
+         return;
       }
-   }, [showInactive, fetchItems]);
+      fetchItems();
+   }, [showInactive]);
 
-   const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } = useDeleteConfirmation({
-      onDelete: (id) => api.delete(`${apiEndpoint}/${id}`),
-      onSuccess: fetchItems,
-      successMessage: `El ítem ha sido eliminado correctamente del catálogo.`,
-   });
+   const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } =
+      useDeleteConfirmation({
+         onDelete: (id) => api.delete(`${apiEndpoint}/${id}`),
+         onSuccess: fetchItems,
+         successMessage: `El ítem ha sido eliminado correctamente del catálogo.`,
+      });
 
    const handleEdit = (item: GenericItem) => {
       setSelectedItem(item);
@@ -98,6 +107,7 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
       setIsModalOpen(true);
    };
 
+   // ─── Columnas dinámicas ──────────────────────────────────────────────────
    const dynamicColumns: ColumnDef<GenericItem>[] = formFields.map((field) => {
       if (field === "color_hex") {
          return {
@@ -112,7 +122,7 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
                      <span className="font-mono text-xs text-muted-foreground uppercase">{color}</span>
                   </div>
                );
-            }
+            },
          };
       }
 
@@ -122,8 +132,12 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
             header: humanizeFieldName(field),
             cell: ({ row }) => {
                const isTrue = row.getValue(field) as boolean;
-               return isTrue ? <Badge variant="default" className="bg-emerald-600 hover:bg-emerald-700">Sí</Badge> : <Badge variant="secondary">No</Badge>;
-            }
+               return isTrue ? (
+                  <Badge variant="default" className="bg-emerald-600 hover:bg-emerald-700">Sí</Badge>
+               ) : (
+                  <Badge variant="secondary">No</Badge>
+               );
+            },
          };
       }
 
@@ -134,7 +148,7 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
             cell: ({ row }) => {
                const dias = row.getValue(field) as number;
                return <span className="text-muted-foreground">{dias ? `${dias} días` : "-"}</span>;
-            }
+            },
          };
       }
 
@@ -145,7 +159,7 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
             cell: ({ row }) => {
                const depRel = row.original.departamento_rel;
                return <span className="text-muted-foreground">{depRel?.nombre || "-"}</span>;
-            }
+            },
          };
       }
 
@@ -154,20 +168,20 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
          header: humanizeFieldName(field),
          cell: ({ row }) => {
             const val = row.getValue(field) as string;
-            // Evaluamos si el campo actual es el campo principal de nombre
             const isNombre = field === "nombre" || field === "nombre_completo";
-
             return (
                <div className="flex items-center gap-2">
                   <span className={isNombre ? "font-semibold text-foreground" : "text-muted-foreground"}>
                      {val || "-"}
                   </span>
                   {isNombre && row.original.is_active === false && (
-                     <Badge variant="outline" className="text-[10px] text-destructive border-destructive px-1 py-0 h-4">Inactivo</Badge>
+                     <Badge variant="outline" className="text-[10px] text-destructive border-destructive px-1 py-0 h-4">
+                        Inactivo
+                     </Badge>
                   )}
                </div>
             );
-         }
+         },
       };
    });
 
@@ -199,8 +213,17 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
       },
    ];
 
-   // Determinamos cuál es la columna por la que el usuario va a filtrar
    const filterColumnName = formFields.includes("nombre_completo") ? "nombre_completo" : "nombre";
+
+   // ─── Loading state: spinner centrado, sin romper el layout ───────────────
+   if (isLoadingProp) {
+      return (
+         <div className="flex items-center justify-center py-24 text-muted-foreground">
+            <Loader2 className="h-6 w-6 animate-spin mr-2" />
+            <span className="text-sm">Cargando {title.toLowerCase()}s...</span>
+         </div>
+      );
+   }
 
    return (
       <div className="space-y-4 animate-in fade-in duration-300">
@@ -218,16 +241,18 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
                <DialogHeader>
                   <DialogTitle>{selectedItem ? `Editar ${title}` : `Crear Nuevo ${title}`}</DialogTitle>
                </DialogHeader>
-               <GenericCatalogForm
-                  initialData={selectedItem ?? undefined}
-                  apiEndpoint={apiEndpoint}
-                  formFields={formFields}
-                  isUbicacion={isUbicacion}
-                  onSuccess={async () => {
-                     setIsModalOpen(false);
-                     await fetchItems();
-                  }}
-               />
+               {isModalOpen && (
+                  <GenericCatalogForm
+                     initialData={selectedItem ?? undefined}
+                     apiEndpoint={apiEndpoint}
+                     formFields={formFields}
+                     isUbicacion={isUbicacion}
+                     onSuccess={async () => {
+                        setIsModalOpen(false);
+                        await fetchItems();
+                     }}
+                  />
+               )}
             </DialogContent>
          </Dialog>
 
@@ -244,8 +269,8 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
             </div>
 
             <div className="flex gap-2">
-               <Button variant="outline" onClick={fetchItems} disabled={isLoading} title="Actualizar lista">
-                  <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+               <Button variant="outline" onClick={fetchItems} disabled={isRefreshing} title="Actualizar lista">
+                  <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
                </Button>
                <Button onClick={handleNew} className="shadow-sm">
                   <PlusCircle className="mr-2 h-4 w-4" /> Crear Nuevo {title}

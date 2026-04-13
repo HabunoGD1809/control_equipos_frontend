@@ -2,6 +2,7 @@ import "server-only";
 import { redirect } from "next/navigation";
 import { refreshAccessToken } from "@/lib/token-refresh";
 import { getSession } from "@/lib/session";
+import { BaseFetchOptions, buildQueryString, parseApiError, prepareFetchPayload } from "./http-utils";
 
 const BASE_URL: string = (() => {
    const v = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -9,35 +10,19 @@ const BASE_URL: string = (() => {
    return v.replace(/\/$/, "");
 })();
 
-type Primitive = string | number | boolean | Date;
-
-interface FetchOptions extends RequestInit {
-   params?: Record<string, Primitive | undefined | null>;
-   _retry?: boolean;
+interface ServerFetchOptions extends BaseFetchOptions {
    skipAuthRedirect?: boolean;
 }
-
-type HttpError = Error & { status?: number; detail?: any };
 
 function redirectToLogout(): never {
    redirect("/api/auth/logout?callbackUrl=/login");
 }
 
-async function httpServer<T>(path: string, options: FetchOptions = {}): Promise<T> {
+async function httpServer<T>(path: string, options: ServerFetchOptions = {}): Promise<T> {
    const { params, headers, _retry, skipAuthRedirect, ...rest } = options;
 
    const cleanPath = path.startsWith("/") ? path : `/${path}`;
-   const url = new URL(`${BASE_URL}${cleanPath}`);
-
-   if (params) {
-      for (const [key, value] of Object.entries(params)) {
-         if (value === undefined || value === null) continue;
-         url.searchParams.set(
-            key,
-            value instanceof Date ? value.toISOString() : String(value),
-         );
-      }
-   }
+   const url = new URL(`${BASE_URL}${cleanPath}${buildQueryString(params)}`);
 
    const { accessToken } = await getSession();
 
@@ -55,24 +40,8 @@ async function httpServer<T>(path: string, options: FetchOptions = {}): Promise<
 
    if (response.status === 401 && !_retry) {
       if (skipAuthRedirect) {
-         let message = "Credenciales inválidas.";
-         let detail = null;
-         try {
-            if (response.headers.get("content-type")?.includes("application/json")) {
-               const body = await response.json();
-               detail = body?.detail || body?.message;
-               message = Array.isArray(detail)
-                  ? detail.map((e: any) => e.msg).join(" | ")
-                  : detail || message;
-            }
-         } catch { /* Silenciado */ }
-
-         const err = new Error(message) as HttpError;
-         err.status = 401;
-         err.detail = detail;
-         throw err;
+         throw await parseApiError(response);
       }
-
       const newAccessToken = await refreshAccessToken();
       if (newAccessToken) {
          return httpServer<T>(path, { ...options, _retry: true });
@@ -81,31 +50,10 @@ async function httpServer<T>(path: string, options: FetchOptions = {}): Promise<
    }
 
    if (!response.ok) {
-      if (response.status === 401) {
-         if (!skipAuthRedirect) {
-            redirectToLogout();
-         }
+      if (response.status === 401 && !skipAuthRedirect) {
+         redirectToLogout();
       }
-
-      let message = `HTTP ${response.status}`;
-      let detail = null;
-
-      try {
-         if (response.headers.get("content-type")?.includes("application/json")) {
-            const body = await response.json();
-            detail = body?.detail || body?.message;
-            message = Array.isArray(detail)
-               ? detail.map((e: any) => e.msg).join(" | ")
-               : detail || message;
-         } else {
-            message = (await response.text()) || message;
-         }
-      } catch { /* Silenciado */ }
-
-      const err = new Error(message) as HttpError;
-      err.status = response.status;
-      err.detail = detail;
-      throw err;
+      throw await parseApiError(response);
    }
 
    if (response.status === 204) return null as T;
@@ -115,31 +63,15 @@ async function httpServer<T>(path: string, options: FetchOptions = {}): Promise<
    return (await response.json()) as T;
 }
 
-const formatPayload = (body: unknown, options?: FetchOptions): FetchOptions => {
-   if (!body) return options || {};
-   const isNative = body instanceof FormData || body instanceof URLSearchParams;
-   const parsedBody =
-      isNative || typeof body === "string"
-         ? (body as BodyInit)
-         : JSON.stringify(body);
-
-   const headers = {
-      ...(!isNative ? { "Content-Type": "application/json" } : {}),
-      ...(options?.headers ?? {}),
-   };
-
-   return { ...options, body: parsedBody, headers };
-};
-
 export const serverApi = {
-   get: <T>(path: string, options?: FetchOptions) =>
+   get: <T>(path: string, options?: ServerFetchOptions) =>
       httpServer<T>(path, { method: "GET", ...options }),
-   post: <T>(path: string, body: unknown, options?: FetchOptions) =>
-      httpServer<T>(path, { method: "POST", ...formatPayload(body, options) }),
-   put: <T>(path: string, body: unknown, options?: FetchOptions) =>
-      httpServer<T>(path, { method: "PUT", ...formatPayload(body, options) }),
-   patch: <T>(path: string, body: unknown, options?: FetchOptions) =>
-      httpServer<T>(path, { method: "PATCH", ...formatPayload(body, options) }),
-   delete: <T>(path: string, options?: FetchOptions) =>
+   post: <T>(path: string, body: unknown, options?: ServerFetchOptions) =>
+      httpServer<T>(path, { method: "POST", ...prepareFetchPayload(body, options), ...options }),
+   put: <T>(path: string, body: unknown, options?: ServerFetchOptions) =>
+      httpServer<T>(path, { method: "PUT", ...prepareFetchPayload(body, options), ...options }),
+   patch: <T>(path: string, body: unknown, options?: ServerFetchOptions) =>
+      httpServer<T>(path, { method: "PATCH", ...prepareFetchPayload(body, options), ...options }),
+   delete: <T>(path: string, options?: ServerFetchOptions) =>
       httpServer<T>(path, { method: "DELETE", ...options }),
 };

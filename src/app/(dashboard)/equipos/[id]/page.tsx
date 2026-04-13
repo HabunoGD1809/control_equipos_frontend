@@ -10,7 +10,6 @@ export default async function EquipoDetailPage({ params }: PageProps) {
    const { id } = await params;
    
    try {
-      // 🚀 Solo carga el Equipo, Componentes y Jerarquía. ¡Carga instantánea!
       const data = await equiposServerService.getEquipoDetailBasics(id);
 
       if (!data || !data.equipo) {

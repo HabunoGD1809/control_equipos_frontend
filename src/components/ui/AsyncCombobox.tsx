@@ -24,7 +24,6 @@ interface AsyncComboboxProps {
    disabled?: boolean;
 }
 
-// 🚀 CLAVE: Definir el array vacío FUERA del componente para que siempre tenga la misma referencia en memoria
 const EMPTY_OPTIONS: Option[] = [];
 
 export function AsyncCombobox({
@@ -43,13 +42,11 @@ export function AsyncCombobox({
    const [searchTerm, setSearchTerm] = React.useState("");
    const debouncedSearchTerm = useDebounce(searchTerm, 400);
 
-   // 🚀 CLAVE 2: Guardar el fetcher en un ref para que no dispare re-renders si el padre lo cambia de memoria
    const fetcherRef = React.useRef(fetcher);
    React.useEffect(() => {
       fetcherRef.current = fetcher;
    }, [fetcher]);
 
-   // 🚀 CLAVE 3: Convertimos a String para forzar una comparación de valores y matar el bucle infinito de raíz
    const defaultOptionsStr = React.useMemo(() => JSON.stringify(defaultOptions), [defaultOptions]);
 
    React.useEffect(() => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Plus, Pencil, Ban, CheckCircle, Loader2, RefreshCw, Key, Copy } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -15,13 +15,23 @@ import { useToast } from "@/components/ui/use-toast";
 import { UsuarioForm } from "@/components/features/usuarios/UsuarioForm";
 import { usuariosService } from "@/app/services/usuariosService";
 import { api } from "@/lib/http";
-import type { Usuario } from "@/types/api";
+import type { Usuario, Rol } from "@/types/api";
 
-export function UsuariosClient() {
+export interface UsuariosClientProps {
+   initialData: Usuario[];
+   initialOptions: {
+      roles: Rol[];
+      departamentos: { value: string; label: string }[];
+      empleados: { value: string; label: string }[];
+   };
+}
+
+export function UsuariosClient({ initialData, initialOptions }: UsuariosClientProps) {
    const { toast } = useToast();
 
-   const [data, setData] = useState<Usuario[]>([]);
-   const [loading, setLoading] = useState(true);
+   // Inicializamos con la data que viene del servidor (SSR/RSC)
+   const [data, setData] = useState<Usuario[]>(initialData);
+   const [loading, setLoading] = useState(false); // Empieza en falso porque ya tenemos la data inicial
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [selectedUser, setSelectedUser] = useState<Usuario | undefined>(undefined);
 
@@ -44,9 +54,7 @@ export function UsuariosClient() {
       }
    }, [toast]);
 
-   useEffect(() => {
-      fetchUsuarios();
-   }, [fetchUsuarios]);
+   // Nota: Ya no necesitamos el useEffect de montaje porque initialData llena la tabla al instante.
 
    const handleEdit = (user: Usuario) => { setSelectedUser(user); setIsModalOpen(true); };
    const handleCreate = () => { setSelectedUser(undefined); setIsModalOpen(true); };
@@ -226,6 +234,7 @@ export function UsuariosClient() {
                </DialogHeader>
                <UsuarioForm
                   initialData={selectedUser}
+                  initialOptions={initialOptions} 
                   onSuccess={() => { setIsModalOpen(false); fetchUsuarios(); }}
                   onCancel={() => setIsModalOpen(false)}
                />

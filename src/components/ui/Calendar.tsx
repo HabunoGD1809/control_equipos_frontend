@@ -3,6 +3,7 @@
 import * as React from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { DayPicker } from "react-day-picker"
+import { es } from "react-day-picker/locale"
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/Button"
@@ -13,11 +14,13 @@ function Calendar({
    className,
    classNames,
    showOutsideDays = true,
+   locale = es,
    ...props
 }: CalendarProps) {
    return (
       <DayPicker
          showOutsideDays={showOutsideDays}
+         locale={locale}
          className={cn("p-3", className)}
          classNames={{
             months: "flex flex-col space-y-4",

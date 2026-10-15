@@ -108,7 +108,7 @@ export function AddComponenteForm({ padreId, onSuccess }: AddComponenteFormProps
                )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                <FormField
                   control={form.control}
                   name="tipo_relacion"
@@ -137,7 +137,7 @@ export function AddComponenteForm({ padreId, onSuccess }: AddComponenteFormProps
                      <FormItem>
                         <FormLabel>Cantidad a Vincular</FormLabel>
                         <FormControl>
-                           <Input type="number" min={1} {...field} />
+                           <Input type="number" min={1} max={1} readOnly {...field} />
                         </FormControl>
                         <FormMessage />
                      </FormItem>

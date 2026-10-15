@@ -11,7 +11,8 @@ export const notificacionesService = {
     * Obtiene la lista de notificaciones con filtros opcionales.
     */
    async getAll(params?: {
-      unread_only?: boolean;
+      solo_no_leidas?: boolean;
+      skip?: number;
       limit?: number;
    }): Promise<Notificacion[]> {
       return api.get<Notificacion[]>("/notificaciones/", { params });

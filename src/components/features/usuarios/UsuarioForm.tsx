@@ -2,11 +2,14 @@
 
 import { useState, useCallback, useMemo } from "react";
 import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { Loader2, Eraser } from "lucide-react";
 
 import { usuarioCreateSchema, usuarioUpdateSchema } from "@/lib/zod";
 import { usuariosService } from "@/app/services/usuariosService";
+import { useSession } from "@/contexts/SessionProvider";
+import { userUpdatePayload } from "@/lib/user-update";
 import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -45,16 +48,21 @@ const cleanString = (str?: string | null) => (str && str.trim() !== "" ? str.tri
 export function UsuarioForm({ initialData, initialOptions, onSuccess, onCancel }: UsuarioFormProps) {
    const { toast } = useToast();
    const isEditing = !!initialData;
+   const { user: currentUser, setUser } = useSession();
+   const isSelf = !!initialData && initialData.id === currentUser?.id;
 
    const [isSubmitting, setIsSubmitting] = useState(false);
 
    // Extraemos los datos pre-cargados desde las props
    const { roles, departamentos, empleados } = initialOptions;
 
-   const formSchema = isEditing ? usuarioUpdateSchema : usuarioCreateSchema;
+   const formSchema = usuarioCreateSchema.extend({
+      password: isEditing ? z.union([z.literal(""), z.string().min(8, "Mínimo 8 caracteres.")]).optional() : usuarioCreateSchema.shape.password,
+      bloqueado: z.boolean().optional(),
+      requiere_cambio_contrasena: z.boolean().optional(),
+   });
 
-   const form = useForm<FormValues>({
-      // @ts-expect-error TypeScript inference con zod resolver mixto
+   const form = useForm<z.input<typeof formSchema>, unknown, z.output<typeof formSchema>>({
       resolver: standardSchemaResolver(formSchema),
       defaultValues: {
          nombre_usuario: initialData?.nombre_usuario ?? "",
@@ -105,18 +113,10 @@ export function UsuarioForm({ initialData, initialOptions, onSuccess, onCancel }
       setIsSubmitting(true);
       try {
          if (isEditing) {
-            const payload: any = {
-               nombre_usuario: data.nombre_usuario?.trim() || undefined,
-               email: cleanString(data.email),
-               rol_id: data.rol_id,
-               departamento_id: data.departamento_id || null,
-               empleado_id: data.empleado_id || null,
-               bloqueado: data.bloqueado,
-               requiere_cambio_contrasena: data.requiere_cambio_contrasena,
-            };
-            if (data.password) payload.password = data.password;
+            const payload = userUpdatePayload(data, isSelf);
 
-            await usuariosService.update(initialData!.id, payload);
+            const updated = await usuariosService.update(initialData!.id, payload);
+            if (isSelf) setUser(updated);
             toast({ title: "Éxito", description: "Usuario actualizado correctamente." });
          } else {
             await usuariosService.create({
@@ -145,7 +145,7 @@ export function UsuarioForm({ initialData, initialOptions, onSuccess, onCancel }
                <FormItem>
                   <FormLabel>Nombre de Usuario <span className="text-destructive">*</span></FormLabel>
                   <FormControl>
-                     <Input placeholder="ej. jperez" {...field} value={field.value ?? ""} />
+                     <Input placeholder="ej. jperez" {...field} value={field.value ?? ""} disabled={isSelf} />
                   </FormControl>
                   <FormMessage />
                </FormItem>
@@ -161,7 +161,8 @@ export function UsuarioForm({ initialData, initialOptions, onSuccess, onCancel }
                </FormItem>
             )} />
 
-            <FormField control={form.control} name="password" render={({ field }) => (
+            {isSelf && <p className="rounded-md bg-muted p-3 text-sm">Estás editando tu cuenta. Cambia tu contraseña desde tu perfil; tu rol y tu acceso debe gestionarlos otro administrador.</p>}
+            {!isSelf && <FormField control={form.control} name="password" render={({ field }) => (
                <FormItem>
                   <FormLabel>
                      {isEditing ? "Nueva Contraseña" : "Contraseña"}{" "}
@@ -179,10 +180,11 @@ export function UsuarioForm({ initialData, initialOptions, onSuccess, onCancel }
                </FormItem>
             )} />
 
+            }
             <FormField control={form.control} name="rol_id" render={({ field }) => (
                <FormItem>
                   <FormLabel>Rol <span className="text-destructive">*</span></FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || undefined}>
+                  <Select onValueChange={field.onChange} value={field.value || undefined} disabled={isSelf}>
                      <FormControl>
                         <SelectTrigger>
                            <SelectValue placeholder="Seleccione un rol" />
@@ -208,6 +210,7 @@ export function UsuarioForm({ initialData, initialOptions, onSuccess, onCancel }
                            onChange={field.onChange}
                            fetcher={fetchDepartamentos}
                            defaultOptions={defaultDepartamentoOptions}
+                           disabled={isSelf}
                            placeholder="Buscar departamento..."
                            emptyMessage="No se encontraron departamentos."
                         />
@@ -225,6 +228,7 @@ export function UsuarioForm({ initialData, initialOptions, onSuccess, onCancel }
                            onChange={field.onChange}
                            fetcher={fetchEmpleados}
                            defaultOptions={defaultEmpleadoOptions}
+                           disabled={isSelf}
                            placeholder="Buscar empleado de RRHH..."
                            emptyMessage="No se encontraron empleados."
                         />
@@ -242,7 +246,7 @@ export function UsuarioForm({ initialData, initialOptions, onSuccess, onCancel }
                         <p className="text-xs text-muted-foreground">Al próximo login.</p>
                      </div>
                      <FormControl>
-                        <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+                        <Switch checked={field.value ?? false} onCheckedChange={field.onChange} disabled={isSelf} />
                      </FormControl>
                   </FormItem>
                )} />
@@ -255,14 +259,14 @@ export function UsuarioForm({ initialData, initialOptions, onSuccess, onCancel }
                            <p className="text-xs text-muted-foreground">Impide inicio de sesión temporal.</p>
                         </div>
                         <FormControl>
-                           <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+                           <Switch checked={field.value ?? false} onCheckedChange={field.onChange} disabled={isSelf} />
                         </FormControl>
                      </FormItem>
                   )} />
                )}
             </div>
 
-            <div className="flex justify-between items-center pt-4 border-t mt-6">
+            <div className="flex flex-wrap justify-between items-center gap-3 pt-4 border-t mt-6">
                {!isEditing ? (
                   <Button
                      type="button"
@@ -275,7 +279,7 @@ export function UsuarioForm({ initialData, initialOptions, onSuccess, onCancel }
                   </Button>
                ) : <div />}
 
-               <div className="flex gap-2">
+               <div className="flex flex-wrap gap-2">
                   <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
                      Cancelar
                   </Button>

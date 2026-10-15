@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import {
    PlusCircle,
@@ -13,7 +13,6 @@ import {
    X,
    Inbox,
    RefreshCw,
-   UploadCloud,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
@@ -35,10 +34,11 @@ import {
    DialogDescription,
 } from "@/components/ui/Dialog";
 import { EquipoForm } from "@/components/features/equipos/EquipoForm";
-import { useToast } from "@/components/ui/use-toast";
+import { EquipoCsvImport } from "@/components/features/equipos/EquipoCsvImport";
 
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { useDebouncedSearch } from "@/hooks/useDebouncedSearch";
+import { useHasPermission } from "@/hooks/useHasPermission";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 
 import { equiposService } from "@/app/services/equiposService";
@@ -61,12 +61,13 @@ export function EquiposClient({
    initialParams,
 }: EquiposClientProps) {
    const router = useRouter();
-   const { toast } = useToast();
    const { setFilters } = useUrlFilters();
+   const canCreate = useHasPermission(["crear_equipos"]);
+   const canEdit = useHasPermission(["editar_equipos"]);
+   const canDelete = useHasPermission(["eliminar_equipos"]);
+   const canReadProveedores = useHasPermission(["ver_proveedores"]);
 
    const [isRefreshing, setIsRefreshing] = useState(false);
-   const [isUploadingCSV, setIsUploadingCSV] = useState(false);
-   const fileInputRef = useRef<HTMLInputElement>(null);
 
    // Estados del Modal
    const [isModalOpen, setIsModalOpen] = useState(false);
@@ -76,10 +77,11 @@ export function EquiposClient({
    const [proveedores, setProveedores] = useState<ProveedorSimple[]>([]);
 
    useEffect(() => {
+      if (!canCreate && !canEdit) return;
       let isMounted = true;
       Promise.all([
          catalogosService.getEstadosEquipo(),
-         proveedoresService.getOptions(),
+         canReadProveedores ? proveedoresService.getOptions() : Promise.resolve([]),
       ])
          .then(([estadosData, proveedoresData]) => {
             if (isMounted) {
@@ -90,7 +92,7 @@ export function EquiposClient({
          .catch((err) => console.error("Error cargando catálogos del form:", err));
 
       return () => { isMounted = false; };
-   }, []);
+   }, [canCreate, canEdit, canReadProveedores]);
 
    const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } =
       useDeleteConfirmation({
@@ -120,42 +122,6 @@ export function EquiposClient({
       setIsModalOpen(true);
    }, []);
 
-   const handleCsvUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
-
-      if (!file.name.endsWith(".csv")) {
-         toast({
-            variant: "destructive",
-            title: "Archivo inválido",
-            description: "Por favor sube un archivo con extensión .csv",
-         });
-         return;
-      }
-
-      setIsUploadingCSV(true);
-      try {
-         const result = await equiposService.bulkUpload(file);
-         toast({
-            title: "Carga Masiva Completada",
-            description: `Procesados: ${result.total_procesados}. Insertados: ${result.insertados}. Errores: ${result.errores.length}.`,
-         });
-         if (result.errores.length > 0) {
-            console.warn("Errores en CSV:", result.errores);
-         }
-         router.refresh();
-      } catch (error: any) {
-         toast({
-            variant: "destructive",
-            title: "Error en la carga",
-            description: error.message || "Fallo al procesar el archivo.",
-         });
-      } finally {
-         setIsUploadingCSV(false);
-         if (fileInputRef.current) fileInputRef.current.value = "";
-      }
-   };
-
    const columns = useMemo<ColumnDef<EquipoRead>[]>(() => [
       {
          accessorKey: "nombre",
@@ -171,7 +137,7 @@ export function EquiposClient({
          header: "Serie / Código",
          cell: ({ row }) => (
             <div className="flex flex-col text-sm">
-               <span className="font-mono font-medium uppercase">
+               <span className="font-mono font-medium">
                   {row.original.numero_serie}
                </span>
                {row.original.codigo_interno && (
@@ -182,6 +148,8 @@ export function EquiposClient({
             </div>
          ),
       },
+      { id: "tipo_activo", accessorFn: row => row.tipo_activo || "Equipo", header: "Tipo de activo" },
+      { id: "custodio", accessorFn: row => row.empleado_asignado?.nombre_completo || "Sin asignar", header: "Custodio" },
       {
          accessorKey: "estado",
          header: "Estado",
@@ -236,23 +204,23 @@ export function EquiposClient({
                   >
                      <Eye className="mr-2 h-4 w-4 text-primary" /> Ver Detalles
                   </DropdownMenuItem>
-                  <DropdownMenuItem
+                  {canEdit && <DropdownMenuItem
                      onClick={() => handleEdit(row.original)}
                      className="cursor-pointer"
                   >
                      <Edit className="mr-2 h-4 w-4 text-primary" /> Editar
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
+                  </DropdownMenuItem>}
+                  {canDelete && <DropdownMenuItem
                      className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer"
                      onClick={() => openAlert(row.original.id)}
                   >
                      <Trash2 className="mr-2 h-4 w-4" /> Eliminar
-                  </DropdownMenuItem>
+                  </DropdownMenuItem>}
                </DropdownMenuContent>
             </DropdownMenu>
          ),
       },
-   ], [router, handleEdit, openAlert]);
+   ], [router, handleEdit, openAlert, canEdit, canDelete]);
 
    const hasNextPage = initialData.length === initialParams.limit;
    const isEmpty = initialData.length === 0;
@@ -278,7 +246,7 @@ export function EquiposClient({
                )}
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                <Button
                   variant="outline"
                   onClick={handleRefresh}
@@ -291,31 +259,11 @@ export function EquiposClient({
                   />
                </Button>
 
-               {/* INPUT INVISIBLE PARA CSV */}
-               <input
-                  type="file"
-                  accept=".csv"
-                  className="hidden"
-                  ref={fileInputRef}
-                  onChange={handleCsvUpload}
-               />
-               <Button
-                  variant="secondary"
-                  className="shadow-sm"
-                  disabled={isUploadingCSV}
-                  onClick={() => fileInputRef.current?.click()}
-               >
-                  {isUploadingCSV ? (
-                     <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                     <UploadCloud className="mr-2 h-4 w-4" />
-                  )}
-                  Importar CSV
-               </Button>
+               {canCreate && <EquipoCsvImport onSuccess={() => router.refresh()} />}
 
-               <Button onClick={handleCreate} className="w-full sm:w-auto shadow-sm">
+               {canCreate && <Button onClick={handleCreate} className="w-full sm:w-auto shadow-sm">
                   <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Equipo
-               </Button>
+               </Button>}
             </div>
          </div>
 

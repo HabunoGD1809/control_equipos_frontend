@@ -6,6 +6,12 @@ const __dirname = path.dirname(__filename);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  distDir: process.env.NEXT_BUILD_DIR || ".next",
+  output: process.env.NEXT_STANDALONE === "1" ? "standalone" : undefined,
+  logging: {
+    // Server Function arguments include passwords and must not enter development logs.
+    serverFunctions: false,
+  },
   turbopack: {
     root: __dirname,
   },

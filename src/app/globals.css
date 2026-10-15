@@ -89,3 +89,23 @@
   white-space: nowrap;
   border-width: 0;
 }
+
+/* Keep the reservation calendar aligned with the application's theme and viewport. */
+.custom-big-calendar { min-width: 0; color: hsl(var(--foreground)); }
+.custom-big-calendar .rbc-toolbar { gap: 0.5rem; margin-bottom: 1rem; }
+.custom-big-calendar .rbc-btn-group { display: inline-flex; flex-wrap: wrap; max-width: 100%; }
+.custom-big-calendar .rbc-toolbar button { color: hsl(var(--foreground)); border-color: hsl(var(--border)); background: hsl(var(--background)); }
+.custom-big-calendar .rbc-toolbar button:hover,
+.custom-big-calendar .rbc-toolbar button:focus { background: hsl(var(--accent)); color: hsl(var(--accent-foreground)); }
+.custom-big-calendar .rbc-toolbar button.rbc-active { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); box-shadow: none; }
+.custom-big-calendar .rbc-off-range-bg { background: hsl(var(--muted) / 0.5); }
+.custom-big-calendar .rbc-off-range { color: hsl(var(--muted-foreground)); }
+.custom-big-calendar .rbc-today { background: hsl(var(--accent)); }
+.custom-big-calendar :is(.rbc-month-view, .rbc-time-view, .rbc-header, .rbc-month-row, .rbc-day-bg, .rbc-time-content, .rbc-timeslot-group, .rbc-agenda-view table, .rbc-agenda-view th, .rbc-agenda-view td) { border-color: hsl(var(--border)); }
+
+@media (max-width: 639px) {
+  .custom-big-calendar .rbc-toolbar { flex-direction: column; align-items: stretch; }
+  .custom-big-calendar .rbc-toolbar-label { order: -1; padding: 0.25rem; font-weight: 600; }
+  .custom-big-calendar .rbc-btn-group { justify-content: center; gap: 0.25rem; }
+  .custom-big-calendar .rbc-toolbar button { flex: 1; min-width: 0; margin-left: 0; padding: 0.375rem 0.5rem; border-radius: 0.375rem; font-size: 0.75rem; }
+}

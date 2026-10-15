@@ -10,21 +10,26 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/Card";
 import { cn } from "@/lib/utils";
+import { useSession } from "@/contexts/SessionProvider";
+import { hasPermission } from "@/lib/permissions";
 
 export function QuickActions() {
    const router = useRouter();
+   const { user } = useSession();
 
    const actions = [
       {
          label: "Gestión Equipos",
+         permissions: ["ver_equipos"],
          icon: <MonitorDot className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />,
          onClick: () => router.push("/equipos"),
-         description: "Catálogo y registro",
+         description: hasPermission(user, ["crear_equipos"]) ? "Catálogo y registro" : "Consulta de activos",
          bgHover: "hover:border-emerald-500/30 hover:bg-emerald-500/5",
          iconBg: "bg-emerald-500/10"
       },
       {
          label: "Asignar Equipo",
+         permissions: ["ver_movimientos", "registrar_movimientos"],
          icon: <ArrowRightLeft className="h-5 w-5 text-blue-600 dark:text-blue-500" />,
          onClick: () => router.push("/movimientos"),
          description: "Entrega/Devolución",
@@ -33,6 +38,7 @@ export function QuickActions() {
       },
       {
          label: "Mantenimiento",
+         permissions: ["ver_mantenimientos", "programar_mantenimientos"],
          icon: <Wrench className="h-5 w-5 text-amber-600 dark:text-amber-500" />,
          onClick: () => router.push("/mantenimientos"),
          description: "Programar tarea",
@@ -41,6 +47,7 @@ export function QuickActions() {
       },
       {
          label: "Subir Doc",
+         permissions: ["ver_documentos", "subir_documentos"],
          icon: <FileText className="h-5 w-5 text-purple-600 dark:text-purple-500" />,
          onClick: () => router.push("/documentacion"),
          description: "Adjuntar archivo",
@@ -49,6 +56,7 @@ export function QuickActions() {
       },
       {
          label: "Catálogos",
+         permissions: ["administrar_catalogos"],
          icon: <Database className="h-5 w-5 text-indigo-600 dark:text-indigo-500" />,
          onClick: () => router.push("/administracion/catalogos"),
          description: "Ubicaciones y estados",
@@ -58,8 +66,8 @@ export function QuickActions() {
    ];
 
    return (
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
-         {actions.map((action, idx) => (
+      <div className="grid grid-cols-1 min-[360px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+         {actions.filter(action => hasPermission(user, action.permissions, "all")).map((action, idx) => (
             <Card
                key={idx}
                className={cn(
@@ -67,6 +75,7 @@ export function QuickActions() {
                   action.bgHover
                )}
                onClick={action.onClick}
+               onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); action.onClick(); } }}
                role="button"
                tabIndex={0}
             >
@@ -77,7 +86,7 @@ export function QuickActions() {
                   )}>
                      {action.icon}
                   </div>
-                  <div className="space-y-0.5">
+                  <div className="min-w-0 break-words space-y-0.5">
                      <h3 className="font-semibold text-sm text-foreground">{action.label}</h3>
                      <p className="text-xs text-muted-foreground font-medium">{action.description}</p>
                   </div>

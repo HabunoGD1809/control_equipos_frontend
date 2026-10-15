@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Printer, Edit, Trash2, Box, FileText, Activity, History, Share2, Loader2, QrCode } from "lucide-react";
 import QRCode from "react-qr-code";
@@ -31,6 +31,8 @@ import { useToast } from "@/components/ui/use-toast";
 
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { useHasPermission } from "@/hooks/useHasPermission";
+import { collectPages } from "@/lib/collection-pages";
+import { printElement } from "@/lib/print-element";
 import { equiposService } from "@/app/services/equiposService";
 import { licenciasService } from "@/app/services/licenciasService";
 import { documentosService } from "@/app/services/documentosService";
@@ -73,9 +75,15 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
    const canEdit = useHasPermission(['editar_equipos']);
    const canDelete = useHasPermission(['eliminar_equipos']);
    const canAudit = useHasPermission(['ver_auditoria']);
+   const canViewMaintenance = useHasPermission(['ver_mantenimientos']);
+   const canViewDocuments = useHasPermission(['ver_documentos']);
+   const canViewLicenses = useHasPermission(['ver_licencias']);
+   const canManageComponents = useHasPermission(['gestionar_componentes']);
 
    const [activeTab, setActiveTab] = useState("detalles");
    const [isLoadingTab, setIsLoadingTab] = useState(false);
+   const [tabError, setTabError] = useState<string | null>(null);
+   const [retryTab, setRetryTab] = useState(0);
 
    const [mantenimientos, setMantenimientos] = useState<Mantenimiento[]>([]);
    const [documentos, setDocumentos] = useState<Documentacion[]>([]);
@@ -93,6 +101,8 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
 
    // Estado para Modal de Código QR
    const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+   const qrLabelRef = useRef<HTMLDivElement>(null);
+   const fichaHref = `/api/proxy/equipos/${equipo.id}/ficha`;
 
    const [loadedTabs, setLoadedTabs] = useState<Record<string, boolean>>({
       detalles: true,
@@ -131,12 +141,13 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
          if (loadedTabs[activeTab]) return;
 
          setIsLoadingTab(true);
+         setTabError(null);
          try {
             if (activeTab === "mantenimiento") {
                const [mtoRes, tiposMtoRes, tecnicosRes] = await Promise.all([
                   mantenimientosService.getAll({ equipo_id: equipo.id }),
                   catalogosService.getTiposMantenimiento(),
-                  tecnicosService.getAll({ limit: 500 }),
+                  collectPages((skip, limit) => tecnicosService.getAll({ skip, limit })),
                ]);
                setMantenimientos(unwrapClient(mtoRes));
                setTiposMantenimiento(unwrapClient(tiposMtoRes));
@@ -155,20 +166,21 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
                setAsignaciones(unwrapClient(asigRes));
             }
             else if (activeTab === "componentes") {
-               const res = await equiposService.getAll({ limit: 500 });
+               const res = await collectPages((skip, limit) => equiposService.getAll({ skip, limit }));
                setEquiposDisponibles(unwrapClient(res));
             }
 
             setLoadedTabs(prev => ({ ...prev, [activeTab]: true }));
          } catch (error) {
             console.error(`Error cargando datos de la pestaña ${activeTab}:`, error);
+             setTabError("No se pudo cargar esta sección del equipo.");
          } finally {
             setIsLoadingTab(false);
          }
       };
 
       loadTabData();
-   }, [activeTab, equipo.id, loadedTabs]);
+   }, [activeTab, equipo.id, loadedTabs, retryTab]);
 
    return (
       <div className="space-y-6 animate-in fade-in duration-300">
@@ -178,7 +190,7 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
                   <ArrowLeft className="h-5 w-5" />
                </Button>
                <div>
-                  <h1 className="text-2xl font-bold flex items-center gap-2">
+                  <h1 className="text-2xl font-bold flex flex-wrap items-center gap-2 break-words">
                      {equipo.nombre}
                      <Badge variant="outline" className="ml-2 shadow-sm" style={{ borderColor: equipo.estado?.color_hex || '#ccc', color: equipo.estado?.color_hex || '#000' }}>
                         {equipo.estado?.nombre}
@@ -207,9 +219,7 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
                      <DropdownMenuItem onClick={() => setIsQrModalOpen(true)}>
                         <QrCode className="mr-2 h-4 w-4" /> Ver Código QR
                      </DropdownMenuItem>
-                     <DropdownMenuItem onClick={() => window.print()}>
-                        <Printer className="mr-2 h-4 w-4" /> Imprimir Ficha
-                     </DropdownMenuItem>
+                     <DropdownMenuItem asChild><a href={fichaHref} target="_blank" rel="noopener noreferrer"><Printer className="mr-2 h-4 w-4" /> Imprimir ficha (PDF)</a></DropdownMenuItem>
                      {canDelete && (
                         <DropdownMenuItem
                            className="text-destructive focus:text-destructive"
@@ -230,15 +240,16 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
                <TabsTrigger value="componentes" className="gap-2"><Box className="h-4 w-4" /><span className="hidden md:inline">Componentes</span></TabsTrigger>
                <TabsTrigger value="jerarquia" className="gap-2"><Share2 className="h-4 w-4" /><span className="hidden md:inline">Jerarquía</span></TabsTrigger>
                <TabsTrigger value="movimientos" className="gap-2"><Activity className="h-4 w-4" /><span className="hidden md:inline">Historial</span></TabsTrigger>
-               <TabsTrigger value="mantenimiento">Mantenimiento</TabsTrigger>
-               <TabsTrigger value="documentacion" className="gap-2"><FileText className="h-4 w-4" /><span className="hidden md:inline">Docs</span></TabsTrigger>
-               <TabsTrigger value="licencias">Licencias</TabsTrigger>
+               {canViewMaintenance && <TabsTrigger value="mantenimiento">Mantenimiento</TabsTrigger>}
+               {canViewDocuments && <TabsTrigger value="documentacion" className="gap-2"><FileText className="h-4 w-4" /><span className="hidden md:inline">Docs</span></TabsTrigger>}
+               {canViewLicenses && <TabsTrigger value="licencias">Licencias</TabsTrigger>}
                {canAudit && (
                   <TabsTrigger value="auditoria" className="gap-2"><History className="h-4 w-4" /><span className="hidden md:inline">Auditoría</span></TabsTrigger>
                )}
             </TabsList>
 
             <div className="mt-6 relative min-h-50">
+               {tabError && <div role="alert" className="mb-4 rounded-md border p-4 text-sm"><p>{tabError}</p><Button variant="outline" className="mt-2" onClick={() => setRetryTab(value => value + 1)}>Reintentar</Button></div>}
                {isLoadingTab && (
                   <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/50 backdrop-blur-sm rounded-md">
                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -251,6 +262,7 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
 
                <TabsContent value="componentes" className="mt-0 animate-in fade-in duration-300">
                   <EquipoComponentesTab
+                     isEditable={canManageComponents}
                      equipoId={equipo.id}
                      componentes={componentes}
                      padres={padres}
@@ -316,7 +328,7 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
                      Escanea este código para acceder al perfil del equipo.
                   </DialogDescription>
                </DialogHeader>
-               <div className="flex flex-col items-center justify-center p-6 space-y-4 bg-white rounded-xl border">
+               <div ref={qrLabelRef} className="flex flex-col items-center justify-center p-6 space-y-4 bg-white rounded-xl border">
                   <QRCode
                      value={equipoUrl}
                      size={200}
@@ -328,7 +340,7 @@ export const EquipoDetailClient: React.FC<EquipoDetailClientProps> = ({
                   </div>
                </div>
                <div className="flex justify-center mt-2">
-                  <Button variant="outline" onClick={() => window.print()} className="w-full">
+                  <Button variant="outline" onClick={() => qrLabelRef.current && printElement(qrLabelRef.current, `Etiqueta ${equipo.codigo_interno || equipo.numero_serie}`)} className="w-full">
                      <Printer className="mr-2 h-4 w-4" /> Imprimir Etiqueta
                   </Button>
                </div>

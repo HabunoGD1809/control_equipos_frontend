@@ -1,6 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { AUTH_COOKIE_NAME, REFRESH_COOKIE_NAME } from "@/lib/constants";
 
 const ACCESS_COOKIE_MAX_AGE = 60 * 60 * 24;
@@ -36,10 +37,21 @@ export async function createSession(accessToken: string, refreshToken?: string) 
    }
 }
 
-export async function deleteSession() {
+export async function deleteSession({ deferRevocation = false }: { deferRevocation?: boolean } = {}) {
    const cookieStore = await cookies();
+   const refreshToken = cookieStore.get(REFRESH_COOKIE_NAME)?.value;
+   const base = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
    cookieStore.delete(AUTH_COOKIE_NAME);
    cookieStore.delete(REFRESH_COOKIE_NAME);
+   if (refreshToken && base) {
+      const revoke = async () => {
+         try {
+            await fetch(`${base.replace(/\/$/, "")}/auth/logout`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refresh_token: refreshToken }), cache: "no-store", signal: AbortSignal.timeout(3000) });
+         } catch { /* The local session must still close when the API is unavailable. */ }
+      };
+      if (deferRevocation) after(revoke);
+      else await revoke();
+   }
 }
 
 export async function verifySession() {

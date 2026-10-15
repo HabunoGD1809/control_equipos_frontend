@@ -1,4 +1,6 @@
 "use client";
+import { AuthCard } from "@/components/features/usuarios/AuthCard";
+import { landingPage } from "@/lib/permissions";
 
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { useForm } from "react-hook-form";
@@ -12,7 +14,6 @@ import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
 import { Input } from "@/components/ui/Input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/use-toast";
 import { loginSchema } from "@/lib/zod";
 import { loginAction } from "@/actions/auth-actions";
@@ -48,27 +49,12 @@ export default function LoginPage() {
                description: "Has iniciado sesión correctamente.",
             });
 
-            router.push("/dashboard");
+            router.push(result.user?.requiere_cambio_contrasena ? "/cambiar-contrasena" : landingPage(result.user));
          }
       });
    }
 
-   return (
-      <div className="flex items-center justify-center min-h-screen">
-         <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-         >
-            <Card className="w-100">
-               <CardHeader className="text-center">
-                  <div className="flex justify-center items-center mb-4">
-                     <LogIn className="h-10 w-10 text-primary" />
-                  </div>
-                  <CardTitle>Iniciar Sesión</CardTitle>
-                  <CardDescription>Accede a tu cuenta para gestionar el sistema.</CardDescription>
-               </CardHeader>
-               <CardContent>
+   return <AuthCard title="Iniciar Sesión" description="Accede a tu cuenta para gestionar el sistema.">
                   <Form {...form}>
                      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                         <FormField
@@ -116,15 +102,11 @@ export default function LoginPage() {
                      </form>
                   </Form>
                   <div className="mt-4 text-center text-sm">
-                     <Link href="/reset-password" passHref>
+                     <Link href="/forgot-password">
                         <span className="text-muted-foreground hover:text-primary cursor-pointer">
                            ¿Olvidaste tu contraseña?
                         </span>
                      </Link>
                   </div>
-               </CardContent>
-            </Card>
-         </motion.div>
-      </div>
-   );
+   </AuthCard>;
 }

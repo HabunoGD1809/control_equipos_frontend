@@ -107,7 +107,7 @@ export function SoftwareCatalogoForm({ initialData, onSuccess }: SoftwareCatalog
    return (
       <Form {...form}>
          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                <FormField control={form.control} name="nombre" render={({ field }) => (
                   <FormItem>
                      <FormLabel>Nombre del Software <span className="text-destructive">*</span></FormLabel>
@@ -142,7 +142,7 @@ export function SoftwareCatalogoForm({ initialData, onSuccess }: SoftwareCatalog
                </FormItem>
             )} />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                <FormField control={form.control} name="tipo_licencia" render={({ field }) => (
                   <FormItem>
                      <FormLabel>Tipo de Licencia <span className="text-destructive">*</span></FormLabel>

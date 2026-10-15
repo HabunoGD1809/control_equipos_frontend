@@ -189,19 +189,17 @@ export function MantenimientoForm({ equipos, tiposMantenimiento, tecnicos, onSuc
                render={({ field }) => (
                   <FormItem>
                      <FormLabel>Costo Estimado <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
-                     <FormControl>
-                        <div className="relative">
-                           <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
-                           <Input
+                     <div className="relative">
+                           <span aria-hidden="true" className="absolute left-3 top-2.5 text-muted-foreground">$</span>
+                           <FormControl><Input
                               type="number"
                               step="0.01"
                               className="pl-7"
                               placeholder="0.00"
                               value={field.value ?? ""}
                               onChange={(e) => field.onChange(e.target.value === "" ? null : e.target.value)}
-                           />
-                        </div>
-                     </FormControl>
+                           /></FormControl>
+                           </div>
                      <FormMessage />
                   </FormItem>
                )}

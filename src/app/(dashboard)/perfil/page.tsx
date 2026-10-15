@@ -1,4 +1,4 @@
-import { cookies } from 'next/headers';
+import { getPageUser } from "@/lib/page-access";
 import { ShieldCheck, Calendar, Activity, Building2, UserCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -10,25 +10,8 @@ import { ChangePasswordForm } from '@/components/features/usuarios/ChangePasswor
 import { UpdateProfileForm } from '@/components/features/usuarios/UpdateProfileForm';
 import { Usuario } from '@/types/api';
 
-async function getCurrentUser(): Promise<Usuario | null> {
-   const accessToken = (await cookies()).get('access_token')?.value;
-   if (!accessToken) return null;
-
-   try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/usuarios/me`, {
-         headers: { 'Authorization': `Bearer ${accessToken}` },
-         cache: 'no-store',
-      });
-      if (!response.ok) return null;
-      return response.json();
-   } catch (error) {
-      console.error("[GET_CURRENT_USER_ERROR]", error);
-      return null;
-   }
-}
-
 export default async function PerfilPage() {
-   const user = await getCurrentUser();
+   const user = await getPageUser();
 
    if (!user) {
       return (

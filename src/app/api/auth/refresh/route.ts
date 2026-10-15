@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { refreshAccessToken } from "@/lib/token-refresh";
+import { isSameOrigin } from "@/lib/request-security";
 
-export async function POST() {
+export async function POST(request: Request) {
+   if (!isSameOrigin(request)) return NextResponse.json({ detail: "Origen no permitido." }, { status: 403 });
    try {
       const newToken = await refreshAccessToken();
 

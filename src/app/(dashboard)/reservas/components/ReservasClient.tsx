@@ -11,7 +11,7 @@ import { EstadoReservaEnum } from '@/types/api';
 import { useSession } from '@/contexts/SessionProvider';
 import { useHasPermission } from '@/hooks/useHasPermission';
 import { Button } from '@/components/ui/Button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
 import { useToast } from '@/components/ui/use-toast';
 import { reservasService } from '@/app/services/reservasService';
 import { ReservaForm } from '@/components/features/reservas/ReservaForm';
@@ -45,7 +45,7 @@ const CustomEvent = ({ event }: { event: ReservaEquipo }) => (
 );
 
 export function ReservasClient({ initialEvents, equipos }: { initialEvents: ReservaEquipo[]; equipos: EquipoSimple[]; }) {
-   const [events] = useState<ReservaEquipo[]>(initialEvents);
+   const events = initialEvents;
    const [selectedReserva, setSelectedReserva] = useState<ReservaEquipo | null>(null);
 
    const [isModalOpen, setIsModalOpen] = useState(false);
@@ -138,6 +138,7 @@ export function ReservasClient({ initialEvents, equipos }: { initialEvents: Rese
             <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                <DialogHeader>
                   <DialogTitle>{selectedReserva ? 'Detalles de la Reserva' : 'Solicitar Nueva Reserva'}</DialogTitle>
+                  <DialogDescription>Seleccione el equipo, las fechas y el propósito de la reserva.</DialogDescription>
                   {selectedReserva && (
                      <p className="text-sm text-muted-foreground bg-muted p-2 rounded-md inline-block">
                         Solicitado por: <strong className="text-foreground">{selectedReserva.solicitante.nombre_usuario}</strong>
@@ -178,7 +179,7 @@ export function ReservasClient({ initialEvents, equipos }: { initialEvents: Rese
             </DialogContent>
          </Dialog>
 
-         <div className="p-4 bg-card rounded-xl shadow-sm border border-muted h-[75vh]">
+         <div className="min-w-0 overflow-hidden p-2 sm:p-4 bg-card rounded-xl shadow-sm border border-muted h-[75dvh] min-h-112">
             <BigCalendar
                localizer={localizer}
                events={calendarEvents}
@@ -191,6 +192,7 @@ export function ReservasClient({ initialEvents, equipos }: { initialEvents: Rese
                   date: "Fecha", time: "Hora", event: "Evento",
                   noEventsInRange: "No hay reservas en este rango de fechas."
                }}
+               formats={{ weekdayFormat: 'dd' }}
                view={view}
                onView={onView}
                date={date}

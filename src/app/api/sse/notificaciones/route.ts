@@ -1,94 +1,43 @@
 import { NextRequest } from "next/server";
 import { getSession } from "@/lib/session";
-import * as http from "http";
-import * as https from "https";
+import { refreshAccessToken } from "@/lib/token-refresh";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
-   const { accessToken } = await getSession();
-
-   if (!accessToken) {
-      return new Response("No autenticado", { status: 401 });
-   }
-
-   const apiBase = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "";
-   if (!apiBase) {
-      return new Response("API_BASE_URL no configurada", { status: 500 });
-   }
-
-   const sseUrl = `${apiBase.replace(/\/$/, "")}/notificaciones/stream`;
-
-   // Usamos http/https nativo de Node — sin timeout por defecto, ideal para SSE
-   return new Promise<Response>((resolve) => {
-      const parsedUrl = new URL(sseUrl);
-      const transport = parsedUrl.protocol === "https:" ? https : http;
-
-      const req = transport.request(
-         {
-            hostname: parsedUrl.hostname,
-            port: parsedUrl.port,
-            path: parsedUrl.pathname + parsedUrl.search,
-            method: "GET",
-            headers: {
-               Authorization: `Bearer ${accessToken}`,
-               Accept: "text/event-stream",
-               "Cache-Control": "no-cache",
-               Connection: "keep-alive",
-            },
-            // Sin timeout — necesario para streams SSE indefinidos
-            timeout: 0,
+   let { accessToken } = await getSession();
+   const base = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
+   if (!base) return new Response("Servidor no configurado", { status: 503 });
+   const controller = new AbortController();
+   const abort = () => controller.abort();
+   request.signal.addEventListener("abort", abort, { once: true });
+   const connect = async () => {
+      const timer = setTimeout(abort, 10000);
+      try { return await fetch(`${base.replace(/\/$/, "")}/notificaciones/stream`, { headers: { Authorization: `Bearer ${accessToken}`, Accept: "text/event-stream" }, cache: "no-store", signal: controller.signal }); }
+      finally { clearTimeout(timer); }
+   };
+   try {
+      if (!accessToken) accessToken = (await refreshAccessToken()) ?? undefined;
+      if (!accessToken) { request.signal.removeEventListener("abort", abort); return new Response("Sesión requerida", { status: 401 }); }
+      let upstream = await connect();
+      if (upstream.status === 401) {
+         await upstream.body?.cancel();
+         accessToken = (await refreshAccessToken()) ?? undefined;
+         if (accessToken) upstream = await connect();
+      }
+      if (!upstream.ok || !upstream.body) { controller.abort(); request.signal.removeEventListener("abort", abort); return new Response("Conexión no disponible", { status: upstream.status }); }
+      const reader = upstream.body.getReader();
+      const cleanup = () => { request.signal.removeEventListener("abort", abort); controller.abort(); };
+      const stream = new ReadableStream<Uint8Array>({
+         async pull(output) {
+            try {
+               const { done, value } = await reader.read();
+               if (done) { cleanup(); output.close(); } else output.enqueue(value);
+            } catch { cleanup(); output.close(); }
          },
-         (backendRes) => {
-            if (backendRes.statusCode !== 200) {
-               resolve(new Response("Backend SSE no disponible", { status: backendRes.statusCode ?? 502 }));
-               return;
-            }
-
-            // Convertir el stream de Node a un ReadableStream web
-            const readable = new ReadableStream({
-               start(controller) {
-                  let closed = false;
-
-                  const close = () => {
-                     if (!closed) {
-                        closed = true;
-                        try { controller.close(); } catch { }
-                     }
-                  };
-
-                  backendRes.on("data", (chunk: Buffer) => {
-                     if (!closed) controller.enqueue(chunk);
-                  });
-                  backendRes.on("end", close);
-                  backendRes.on("error", close);
-
-                  request.signal.addEventListener("abort", () => {
-                     req.destroy();
-                     close();
-                  });
-               },
-            });
-
-            resolve(
-               new Response(readable, {
-                  headers: {
-                     "Content-Type": "text/event-stream",
-                     "Cache-Control": "no-cache",
-                     Connection: "keep-alive",
-                     "X-Accel-Buffering": "no",
-                  },
-               })
-            );
-         }
-      );
-
-      req.on("error", (err) => {
-         console.error("[SSE Proxy] Error conectando al backend:", err);
-         resolve(new Response("Error conectando al backend SSE", { status: 502 }));
+         async cancel() { cleanup(); await reader.cancel().catch(() => undefined); },
       });
-
-      req.end();
-   });
+      return new Response(stream, { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no", "X-Content-Type-Options": "nosniff" } });
+   } catch { controller.abort(); request.signal.removeEventListener("abort", abort); return new Response("Conexión no disponible", { status: 503 }); }
 }

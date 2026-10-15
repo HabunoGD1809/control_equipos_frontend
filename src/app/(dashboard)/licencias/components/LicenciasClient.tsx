@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
@@ -41,7 +41,6 @@ import { Badge } from "@/components/ui/Badge";
 import { useHasPermission } from "@/hooks/useHasPermission";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { licenciasService } from "@/app/services/licenciasService";
-import { api } from "@/lib/http";
 import type {
    LicenciaSoftware,
    SoftwareCatalogo,
@@ -90,26 +89,12 @@ export function LicenciasClient({
 
    const [localCatalogo, setLocalCatalogo] =
       useState<SoftwareCatalogo[]>(initialCatalogo);
-   const [hasFetchedAllCatalogo, setHasFetchedAllCatalogo] = useState(false);
 
-   useEffect(() => {
+   const [previousCatalogo, setPreviousCatalogo] = useState(initialCatalogo);
+   if (previousCatalogo !== initialCatalogo) {
+      setPreviousCatalogo(initialCatalogo);
       setLocalCatalogo(initialCatalogo);
-      setHasFetchedAllCatalogo(false);
-   }, [initialCatalogo]);
-
-   useEffect(() => {
-      if (showInactiveCatalogo && !hasFetchedAllCatalogo) {
-         api
-            .get<SoftwareCatalogo[]>("/licencias/software/", {
-               params: { include_inactive: true, limit: 200 },
-            })
-            .then((res) => {
-               setLocalCatalogo(res);
-               setHasFetchedAllCatalogo(true);
-            })
-            .catch(console.error);
-      }
-   }, [showInactiveCatalogo, hasFetchedAllCatalogo]);
+   }
 
    const licenciaDelete = useDeleteConfirmation({
       onDelete: (id) => licenciasService.delete(id as string),
@@ -408,14 +393,12 @@ export function LicenciasClient({
                   >
                      Asignaciones
                   </TabsTrigger>
-                  {canManageCatalogo && (
                      <TabsTrigger
                         value="catalogo"
                         className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
                      >
                         Catálogo
                      </TabsTrigger>
-                  )}
                </TabsList>
 
                <div className="flex gap-2 w-full sm:w-auto items-center">
@@ -481,7 +464,7 @@ export function LicenciasClient({
                      </div>
                   </div>
                   <DataTable
-                     columns={catalogoColumns}
+                     columns={canManageCatalogo ? catalogoColumns : catalogoColumns.filter(column => column.id !== "actions")}
                      data={filteredCatalogo}
                      filterColumn="nombre"
                      tableContainerClassName="shadow-sm border rounded-lg bg-card"

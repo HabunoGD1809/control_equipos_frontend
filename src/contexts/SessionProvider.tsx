@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
 import type { Usuario } from "@/types/api";
 
 interface SessionContextType {
@@ -21,6 +21,11 @@ export function SessionProvider({
    user: Usuario | null;
 }) {
    const [user, setUser] = useState<Usuario | null>(initialUser);
+   const [previousUser, setPreviousUser] = useState(initialUser);
+   if (previousUser !== initialUser) {
+      setPreviousUser(initialUser);
+      setUser(initialUser);
+   }
 
    return (
       <SessionContext.Provider value={{ user, setUser }}>

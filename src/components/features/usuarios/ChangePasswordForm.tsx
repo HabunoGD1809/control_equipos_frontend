@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { Loader2, Save, CheckCircle2, Circle } from "lucide-react";
 import type { z } from "zod";
@@ -31,7 +31,7 @@ export function ChangePasswordForm() {
    });
 
    // Obtenemos el valor en tiempo real
-   const newPass = form.watch("new_password") || "";
+   const newPass = useWatch({ control: form.control, name: 'new_password' }) || "";
 
    const validations = [
       { id: 'length', text: 'Mínimo 8 caracteres', isValid: newPass.length >= 8 },

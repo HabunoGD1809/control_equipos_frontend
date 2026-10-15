@@ -53,7 +53,6 @@ export function RegistrarMovimientoForm({
    const dynamicSchema = useMemo(() => createInventarioMovimientoSchema(stockData), [stockData]);
 
    const form = useForm<FormValues>({
-      // @ts-expect-error Zod schema dynamic resolution typing
       resolver: standardSchemaResolver(dynamicSchema),
       defaultValues: {
          tipo_item_id: initialTipoItemId || "",
@@ -63,6 +62,9 @@ export function RegistrarMovimientoForm({
          lote_destino: "N/A", // <-- Valor por defecto fuerte
          costo_unitario: null as any,
          notas: "",
+         procedencia: "",
+         entregado_por: "",
+         referencia_externa: "",
          ubicacion_origen_id: "",
          ubicacion_destino_id: "",
          motivo_ajuste: "",
@@ -102,6 +104,7 @@ export function RegistrarMovimientoForm({
 
    const reqDestino = ([
       TipoMovimientoInvEnum.EntradaCompra,
+      TipoMovimientoInvEnum.EntradaAbastecimiento,
       TipoMovimientoInvEnum.DevolucionInterna,
       TipoMovimientoInvEnum.AjustePositivo,
       TipoMovimientoInvEnum.TransferenciaSalida,
@@ -109,7 +112,7 @@ export function RegistrarMovimientoForm({
    ] as string[]).includes(tipoStr);
 
    const isAjuste = tipoStr.includes("Ajuste");
-   const showCosto = tipoStr === TipoMovimientoInvEnum.EntradaCompra;
+   const showCosto = tipoStr === TipoMovimientoInvEnum.EntradaCompra || tipoStr === TipoMovimientoInvEnum.EntradaAbastecimiento;
    const showEquipoAsociado = tipoStr === TipoMovimientoInvEnum.SalidaUso;
 
    const stockDisponibleDelItem = useMemo(() => {
@@ -189,6 +192,8 @@ export function RegistrarMovimientoForm({
       }
       if (!showCosto) {
          delete payload.costo_unitario;
+         delete payload.procedencia;
+         delete payload.entregado_por;
       }
       if (!showEquipoAsociado) {
          delete payload.equipo_asociado_id;
@@ -199,7 +204,7 @@ export function RegistrarMovimientoForm({
 
    return (
       <Form {...form}>
-         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 max-h-[80vh] overflow-y-auto px-1">
+         <form onSubmit={form.handleSubmit(onSubmit)} className="min-w-0 space-y-4 px-1">
             <FormField control={form.control} name="tipo_item_id" render={({ field }) => (
                <FormItem>
                   <FormLabel>Item de Inventario <span className="text-destructive">*</span></FormLabel>
@@ -247,7 +252,7 @@ export function RegistrarMovimientoForm({
             )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                <FormField control={form.control} name="cantidad" render={({ field }) => (
                   <FormItem>
                      <FormLabel>Cantidad <span className="text-destructive">*</span></FormLabel>
@@ -271,10 +276,9 @@ export function RegistrarMovimientoForm({
                   <FormField control={form.control} name="costo_unitario" render={({ field }) => (
                      <FormItem>
                         <FormLabel>Costo Unitario</FormLabel>
-                        <FormControl>
-                           <div className="relative">
-                              <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
-                              <Input
+                        <div className="relative">
+                              <span aria-hidden="true" className="absolute left-3 top-2.5 text-muted-foreground">$</span>
+                              <FormControl><Input
                                  type="number"
                                  min="0"
                                  step="0.01"
@@ -284,9 +288,8 @@ export function RegistrarMovimientoForm({
                                     const val = e.target.value;
                                     field.onChange(val === "" ? null : val);
                                  }}
-                              />
+                              /></FormControl>
                            </div>
-                        </FormControl>
                         <FormMessage />
                      </FormItem>
                   )}
@@ -362,33 +365,15 @@ export function RegistrarMovimientoForm({
                      )}
                      />
 
-                     {/* OCULTAMOS EL LOTE DESTINO PERO LO MANTENEMOS EN EL DOM PARA QUE ZOD NO FALLE */}
-                     <div className="hidden">
-                        <FormField control={form.control} name="lote_destino" render={({ field }) => (
-                           <FormItem>
-                              <FormControl><Input placeholder="N/A" {...field} /></FormControl>
-                           </FormItem>
-                        )}
-                        />
-                     </div>
-
-                     {/* Mostramos un badge informativo en lugar del input */}
-                     {reqOrigen && loteOrigenSel && (
-                        <div className="text-sm border rounded-md p-2 bg-muted/20 text-muted-foreground flex justify-between items-center">
-                           <span>Lote Destino:</span>
-                           <span className="font-mono bg-background px-2 py-0.5 rounded border">{loteOrigenSel}</span>
-                        </div>
-                     )}
-                     {!reqOrigen && (
                         <FormField control={form.control} name="lote_destino" render={({ field }) => (
                            <FormItem>
                               <FormLabel>Lote Destino (Opcional)</FormLabel>
-                              <FormControl><Input placeholder="N/A" {...field} /></FormControl>
+                              <FormControl><Input placeholder="N/A" maxLength={100} {...field} /></FormControl>
+                              {reqOrigen && <p className="text-xs text-muted-foreground">Conserve el lote para trasladar existencias. Para corregirlo, use la misma ubicación y el lote correcto; quedará registrado en el kardex.</p>}
                               <FormMessage />
                            </FormItem>
                         )}
                         />
-                     )}
                   </div>
                )}
             </div>
@@ -427,6 +412,17 @@ export function RegistrarMovimientoForm({
                />
             )}
 
+            <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+               {showCosto && <FormField control={form.control} name="procedencia" render={({ field }) => <FormItem>
+                  <FormLabel>Procedencia {tipoStr === TipoMovimientoInvEnum.EntradaAbastecimiento && "*"}</FormLabel><FormControl><Input placeholder="Ej: Departamento de Suministro" maxLength={150} {...field} value={field.value ?? ""} /></FormControl><FormMessage />
+               </FormItem>} />}
+               {showCosto && <FormField control={form.control} name="entregado_por" render={({ field }) => <FormItem>
+                  <FormLabel>Entregado por</FormLabel><FormControl><Input placeholder="Nombre de quien entrega" maxLength={150} {...field} value={field.value ?? ""} /></FormControl><FormMessage />
+               </FormItem>} />}
+               <FormField control={form.control} name="referencia_externa" render={({ field }) => <FormItem className="sm:col-span-2">
+                  <FormLabel>Acta, remisión, orden o factura {tipoStr === TipoMovimientoInvEnum.EntradaAbastecimiento && "*"}</FormLabel><FormControl><Input placeholder="Ej: SUM-2026-001" maxLength={255} {...field} value={field.value ?? ""} /></FormControl><FormDescription>La persona que registra esta recepción se guarda automáticamente.</FormDescription><FormMessage />
+               </FormItem>} />
+            </div>
             <FormField control={form.control} name="notas" render={({ field }) => (
                <FormItem>
                   <FormLabel>Notas Generales</FormLabel>

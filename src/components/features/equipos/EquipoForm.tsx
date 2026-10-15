@@ -8,9 +8,11 @@ import { useRouter } from "next/navigation";
 import { format, isBefore, startOfDay } from "date-fns";
 import { Loader2, Save, Eraser } from "lucide-react";
 import * as z from "zod";
+import { EQUIPMENT_TYPES } from "@/lib/technical-sheet";
+import { TechnicalSheetEditor } from "@/components/features/equipos/TechnicalSheet";
 
 import { Button } from "@/components/ui/Button";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/Form";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
@@ -75,6 +77,8 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
    const form = useForm<EquipoFormValues>({
       resolver: standardSchemaResolver(equipoSchema),
       defaultValues: {
+         tipo_activo: (initialData?.tipo_activo as typeof EQUIPMENT_TYPES[number]) ?? "Equipo",
+         especificaciones_tecnicas: initialData?.especificaciones_tecnicas ?? {},
          nombre: initialData?.nombre ?? "",
          numero_serie: initialData?.numero_serie ?? "",
          codigo_interno: initialData?.codigo_interno ?? "",
@@ -93,8 +97,9 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
       },
    });
 
+   const assetType = useWatch({ control: form.control, name: "tipo_activo" });
    const handleNumeroSerieChange = (e: React.ChangeEvent<HTMLInputElement>, fieldChange: (val: string) => void) => {
-      const value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "");
+      const value = e.target.value;
       fieldChange(value);
    };
 
@@ -177,7 +182,7 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
    return (
       <Form {...form}>
          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="rounded-xl border p-6 shadow-sm bg-card/50 transition-all">
+            <div className="min-w-0 rounded-xl border p-4 sm:p-6 shadow-sm bg-card/50 transition-all">
                <h3 className="mb-6 text-lg font-semibold tracking-tight border-b pb-2">Identificación del Equipo</h3>
                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                   <FormField control={form.control} name="nombre" render={({ field }) => (
@@ -191,7 +196,7 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
                      <FormItem>
                         <FormLabel>Número de Serie <span className="text-destructive">*</span></FormLabel>
                         <FormControl>
-                           <Input placeholder="EJ: AB-123-XYZ" {...field} className="font-mono uppercase" onChange={(e) => handleNumeroSerieChange(e, field.onChange)} />
+                           <Input placeholder="Ej: AB-123/XYZ" {...field} className="font-mono" onChange={(e) => handleNumeroSerieChange(e, field.onChange)} />
                         </FormControl>
                         <FormMessage />
                      </FormItem>
@@ -258,24 +263,39 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
 
                   <FormField control={form.control} name="empleado_asignado_id" render={({ field }) => (
                      <FormItem>
-                        <FormLabel>Custodio (RRHH) <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
+                        <FormLabel>Custodio actual</FormLabel>
                         <FormControl>
                            <AsyncCombobox
                               value={field.value}
                               onChange={field.onChange}
                               fetcher={fetchEmpleados}
                               defaultOptions={defaultEmpleadoOptions}
-                              placeholder="Buscar empleado..."
+                              disabled
+                              placeholder="Sin asignación"
                               emptyMessage="No se encontraron empleados."
                            />
                         </FormControl>
+                        <FormDescription>La entrega y el cambio de custodio se registran desde Movimientos.</FormDescription>
                         <FormMessage />
                      </FormItem>
                   )} />
                </div>
             </div>
 
-            <div className="rounded-xl border p-6 shadow-sm bg-card/50 transition-all">
+            <div className="min-w-0 rounded-xl border p-4 sm:p-6 shadow-sm bg-card/50 space-y-4">
+               <h3 className="text-lg font-semibold">Ficha técnica</h3>
+               <FormField control={form.control} name="tipo_activo" render={({ field }) => <FormItem>
+                  <FormLabel>Tipo de activo</FormLabel>
+                  <Select value={field.value ?? "Equipo"} onValueChange={field.onChange}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{EQUIPMENT_TYPES.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select>
+                  <FormMessage />
+               </FormItem>} />
+               <FormField control={form.control} name="especificaciones_tecnicas" render={({ field }) => <FormItem>
+                  <TechnicalSheetEditor value={field.value ?? {}} onChange={field.onChange} type={assetType ?? "Equipo"} disabled={isLoading} />
+                  <FormMessage />
+               </FormItem>} />
+            </div>
+
+            <div className="rounded-xl border p-4 sm:p-6 shadow-sm bg-card/50 transition-all">
                <h3 className="mb-6 text-lg font-semibold tracking-tight border-b pb-2">Detalles Financieros y Ciclo de Vida</h3>
                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
 
@@ -297,15 +317,13 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
                   <FormField control={form.control} name="valor_adquisicion" render={({ field }) => (
                      <FormItem>
                         <FormLabel>Valor Adquisición <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></FormLabel>
-                        <FormControl>
-                           <div className="relative">
-                              <span className="absolute left-3 top-2.5 text-muted-foreground font-medium">$</span>
-                              <Input type="number" step="0.01" className="pl-7" value={field.value ?? ""} onChange={(e) => {
+                        <div className="relative">
+                              <span aria-hidden="true" className="absolute left-3 top-2.5 text-muted-foreground font-medium">$</span>
+                              <FormControl><Input type="number" step="0.01" className="pl-7" value={field.value ?? ""} onChange={(e) => {
                                  const v = e.target.value;
                                  field.onChange(v === "" ? null : v);
-                              }} />
+                              }} /></FormControl>
                            </div>
-                        </FormControl>
                         <FormMessage />
                      </FormItem>
                   )} />
@@ -328,16 +346,16 @@ export function EquipoForm({ estados, proveedores, initialData, isEditing = fals
                </div>
             </div>
 
-            <div className="flex justify-between items-center pt-4 border-t mt-4">
+            <div className="flex flex-wrap justify-between items-center gap-3 pt-4 border-t mt-4">
                {!isEditing ? (
                   <Button type="button" variant="ghost" onClick={() => form.reset()} disabled={isLoading} className="text-muted-foreground hover:text-foreground">
                      <Eraser className="mr-2 h-4 w-4" /> Limpiar Formulario
                   </Button>
                ) : <div />}
 
-               <div className="flex gap-3">
-                  <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>Cancelar</Button>
-                  <Button type="submit" disabled={isLoading} className="min-w-37.5">
+               <div className="flex w-full flex-wrap gap-3 sm:w-auto">
+                  <Button type="button" variant="outline" onClick={() => onCancel ? onCancel() : router.back()} disabled={isLoading} className="w-full sm:w-auto">Cancelar</Button>
+                  <Button type="submit" disabled={isLoading} className="w-full sm:w-auto sm:min-w-37.5">
                      {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                      {isEditing ? "Guardar Cambios" : "Registrar Equipo"}
                   </Button>

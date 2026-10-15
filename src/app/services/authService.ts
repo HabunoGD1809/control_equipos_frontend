@@ -1,4 +1,5 @@
 import { api } from "@/lib/http";
+import { changePasswordAction } from "@/actions/auth-actions";
 import type { Token, Usuario, PasswordResetResponse, RefreshTokenPayload } from "@/types/api";
 import type { z } from "zod";
 import {
@@ -43,10 +44,9 @@ export const authService = {
    },
 
    async changePassword(data: z.infer<typeof ChangePasswordSchema>): Promise<void> {
-      await api.post("/auth/change-password/", {
-         current_password: data.current_password,
-         new_password: data.new_password,
-      });
+      const result = await changePasswordAction(data);
+      if (result.error) throw new Error(result.error);
+      if (result.loginRequired) window.location.assign(new URL("/login", window.location.origin).href);
    },
 
    async getMe(): Promise<Usuario> {

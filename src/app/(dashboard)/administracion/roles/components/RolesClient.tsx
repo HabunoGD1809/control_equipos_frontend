@@ -110,7 +110,7 @@ export function RolesClient({ initialRoles, initialPermisos }: RolesClientProps)
          <DataTable columns={columns} data={data} tableContainerClassName="shadow-sm border rounded-md" />
 
          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-            <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-3xl">
                <DialogHeader>
                   <DialogTitle>{selectedRole ? "Editar Rol" : "Crear Nuevo Rol"}</DialogTitle>
                   <DialogDescription>Configure los detalles y permisos granulares del rol.</DialogDescription>

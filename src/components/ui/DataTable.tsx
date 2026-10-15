@@ -68,7 +68,7 @@ export function DataTable<TData, TValue>({
       onSortingChange: setSorting,
       onColumnFiltersChange: setColumnFilters,
       getCoreRowModel: getCoreRowModel(),
-      getPaginationRowModel: getPaginationRowModel(),
+      getPaginationRowModel: showPagination ? getPaginationRowModel() : undefined,
       getSortedRowModel: getSortedRowModel(),
       getFilteredRowModel: getFilteredRowModel(),
       onColumnVisibilityChange: setColumnVisibility,
@@ -83,11 +83,13 @@ export function DataTable<TData, TValue>({
       filterColumn || table.getAllColumns().find((c) => c.getCanFilter())?.id;
 
    return (
-      <div className={cn("w-full space-y-4", className)}>
+      <div className={cn("min-w-0 w-full max-w-full space-y-4", className)}>
          {(showFilter || showColumnToggle) && (
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
                {showFilter && filterColumnName && (
                   <Input
+                     type="search"
+                     aria-label={searchPlaceholder ?? "Filtrar resultados de la tabla"}
                      placeholder={searchPlaceholder ?? `Filtrar por ${filterColumnName}...`}
                      value={(table.getColumn(filterColumnName)?.getFilterValue() as string) ?? ""}
                      onChange={(event) =>
@@ -114,7 +116,7 @@ export function DataTable<TData, TValue>({
                                  checked={column.getIsVisible()}
                                  onCheckedChange={(value) => column.toggleVisibility(!!value)}
                               >
-                                 {column.id}
+                                 {typeof column.columnDef.header === "string" ? column.columnDef.header : column.id.replaceAll("_", " ")}
                               </DropdownMenuCheckboxItem>
                            ))}
                      </DropdownMenuContent>
@@ -124,7 +126,7 @@ export function DataTable<TData, TValue>({
          )}
 
          {/* Contenedor centralizado para bordes y fondos delegados */}
-         <div className={cn(withBorder && "rounded-md border bg-card", tableContainerClassName)}>
+         <div className={cn("min-w-0 max-w-full", withBorder && "rounded-md border bg-card", tableContainerClassName)}>
             <Table>
                <TableHeader>
                   {table.getHeaderGroups().map((headerGroup) => (
@@ -168,7 +170,7 @@ export function DataTable<TData, TValue>({
          </div>
 
          {showPagination && (
-            <div className="flex items-center justify-end space-x-2 py-4">
+            <div className="flex flex-wrap items-center justify-end gap-3 py-4">
                <div className="flex-1 text-sm text-muted-foreground">
                   {table.getFilteredRowModel().rows.length} fila(s).
                </div>

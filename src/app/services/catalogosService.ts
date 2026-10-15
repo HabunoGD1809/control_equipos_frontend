@@ -1,4 +1,5 @@
 import { api } from "@/lib/http";
+import { collectPages } from "@/lib/collection-pages";
 import type {
    EstadoEquipo,
    TipoDocumento,
@@ -16,7 +17,7 @@ export interface CatalogoCreatePayload {
 export const catalogosService = {
    // --- Estados de Equipo ---
    async getEstadosEquipo(): Promise<EstadoEquipo[]> {
-      return api.get<EstadoEquipo[]>("/catalogos/estados-equipo/");
+      return collectPages((skip, limit) => api.get<EstadoEquipo[]>("/catalogos/estados-equipo/", { params: { skip, limit } }));
    },
 
    createEstadoEquipo(payload: CatalogoCreatePayload): Promise<EstadoEquipo> {

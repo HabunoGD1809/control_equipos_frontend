@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo } from "react";
+import { useHydrated } from "@/hooks/useHydrated";
 import { PieChart, Pie, ResponsiveContainer, Tooltip } from "recharts";
 import { HardDrive } from "lucide-react";
 
@@ -18,11 +19,7 @@ interface EquiposPorEstadoChartProps {
 const FALLBACK_COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#64748b"];
 
 export function EquiposPorEstadoChart({ data = [] }: EquiposPorEstadoChartProps) {
-   const [isMounted, setIsMounted] = useState(false);
-
-   useEffect(() => {
-      setIsMounted(true);
-   }, []);
+   const isMounted = useHydrated();
 
    const totalEquipos = useMemo(() => {
       return data.reduce((acc, item) => acc + (item.cantidad_equipos || 0), 0);

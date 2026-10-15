@@ -1,3 +1,4 @@
+import { guardPage } from "@/lib/page-access";
 import { UsuariosClient } from "./components/UsuariosClient";
 import { usuariosServerService } from "@/app/services/usuariosService.server";
 import { rolesServerService } from "@/app/services/rolesService.server";
@@ -5,6 +6,9 @@ import { catalogosServerService } from "@/app/services/catalogosService.server";
 import { empleadosServerService } from "@/app/services/empleadosService.server";
 
 export default async function UsuariosPage() {
+   const pageAccessDenied = await guardPage("/administracion/usuarios");
+   if (pageAccessDenied) return pageAccessDenied;
+
    const [users, roles, deptos, emps] = await Promise.all([
       usuariosServerService.getAll(),
       rolesServerService.getAll(),

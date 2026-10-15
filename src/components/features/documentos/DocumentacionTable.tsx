@@ -23,6 +23,7 @@ import { documentosService } from "@/app/services/documentosService";
 
 import { VerifyDocumentoForm } from "./VerifyDocumentoForm";
 import { UploadDocumentoForm } from "./UploadDocumentoForm";
+import { downloadReportBlob } from "@/lib/report-download";
 
 interface DocumentacionTableProps {
    documentos: Documentacion[];
@@ -54,6 +55,7 @@ export function DocumentacionTable({
    const { toast } = useToast();
    const canVerify = useHasPermission(["verificar_documentos"]);
    const canUpload = useHasPermission(["subir_documentos"]);
+   const canDelete = useHasPermission(["eliminar_documentos"]);
 
    const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } = useDeleteConfirmation({
       onDelete: (id) => api.delete(`/documentacion/${id}`),
@@ -72,14 +74,7 @@ export function DocumentacionTable({
          return { blob, filename: doc.nombre_archivo || `Documento_${doc.id}.pdf` };
       },
       onSuccess: ({ blob, filename }) => {
-         const url = window.URL.createObjectURL(blob);
-         const a = document.createElement("a");
-         a.href = url;
-         a.download = filename;
-         document.body.appendChild(a);
-         a.click();
-         window.URL.revokeObjectURL(url);
-         a.remove();
+         downloadReportBlob(blob, filename);
          toast({ title: "Descarga exitosa", description: `El archivo ${filename} se ha descargado.` });
       },
       onError: () => {
@@ -97,13 +92,13 @@ export function DocumentacionTable({
       ...(showEquipoColumn ? [{
          accessorFn: (row: Documentacion) => row.equipo?.nombre || "N/A",
          id: "equipo",
-         header: "Equipo Asociado",
+         header: "Vinculado a",
          cell: ({ row }: { row: { original: Documentacion } }) =>
             row.original.equipo ? (
                <Link href={`/equipos/${row.original.equipo.id}`} className="hover:underline text-primary font-medium">
                   {row.original.equipo.nombre}
                </Link>
-            ) : <span className="text-muted-foreground text-sm">N/A</span>,
+            ) : <span className="text-muted-foreground text-sm">{row.original.mantenimiento ? `Mantenimiento · ${row.original.mantenimiento.equipo_nombre || row.original.mantenimiento.tipo_mantenimiento_nombre || row.original.mantenimiento.id.slice(0, 8)}` : row.original.licencia ? `Licencia · ${row.original.licencia.software_info?.nombre || row.original.licencia.id.slice(0, 8)}` : "Sin vínculo histórico"}</span>,
       } as ColumnDef<Documentacion>] : []),
       {
          accessorKey: "fecha_subida",
@@ -141,9 +136,9 @@ export function DocumentacionTable({
                         <ShieldCheck className="h-4 w-4 text-emerald-600" />
                      </Button>
                   )}
-                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" title="Eliminar" onClick={() => openAlert(row.original.id)}>
+                  {canDelete && <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" title="Eliminar" onClick={() => openAlert(row.original.id)}>
                      <Trash2 className="h-4 w-4" />
-                  </Button>
+                  </Button>}
                </div>
             )
          },

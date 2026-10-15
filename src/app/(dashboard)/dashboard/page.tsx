@@ -1,4 +1,6 @@
-import { cookies } from 'next/headers';
+import { guardPage, getPageUser } from "@/lib/page-access";
+import { hasPermission } from "@/lib/permissions";
+import { serverApi } from "@/lib/http-server";
 import {
    HardDrive,
    Wrench,
@@ -32,26 +34,7 @@ interface DashboardData extends BaseDashboardData {
 }
 
 // 2. TIPADO ESTRICTO PARA LA API Y EL ADAPTADOR (Cero 'any')
-interface APIItemBajoStock {
-   id: string;
-   nombre: string;
-   unidad_medida: string;
-   stock_total_actual: number;
-}
-
-// Esta interfaz debe coincidir exactamente con lo que espera ItemsBajoStockList
-interface ItemBajoStockAdapter {
-   id: string;
-   tipo_item_id: string;
-   ubicacion: string;
-   cantidad_actual: number;
-   ultima_actualizacion: string;
-   tipo_item: {
-      id: string;
-      nombre: string;
-      unidad_medida: string;
-   };
-}
+type APIItemBajoStock = import("@/app/services/inventarioService").ItemBajoStock;
 
 const formatCurrency = (value: number) => {
    return new Intl.NumberFormat('es-DO', {
@@ -72,63 +55,19 @@ function unwrapItems<T>(data: unknown): T[] {
 }
 
 async function getDashboardPageData() {
-   const cookieStore = await cookies();
-   const accessToken = cookieStore.get('access_token')?.value;
-
-   if (!accessToken) return null;
-
-   const headers = { 'Authorization': `Bearer ${accessToken}` };
-   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-
-   // 4. CACHÉ INTELIGENTE (Revalida cada 60 segundos para no saturar la BD)
-   const fetchOptions: RequestInit = {
-      headers,
-      next: { revalidate: 60 }
-   };
-
-   try {
-      const [
-         dashboardRes,
-         mantenimientosRes,
-         bajoStockRes
-      ] = await Promise.all([
-         fetch(`${baseUrl}/dashboard/`, fetchOptions),
-         fetch(`${baseUrl}/mantenimientos/?estado=Programado&limit=5`, fetchOptions),
-         fetch(`${baseUrl}/inventario/tipos/bajo-stock/?limit=5`, fetchOptions)
-      ]);
-
-      if (!dashboardRes.ok) return null;
-
-      const bajoStockRaw = bajoStockRes.ok ? await bajoStockRes.json() : [];
-      const itemsBajoStockData = unwrapItems<APIItemBajoStock>(bajoStockRaw);
-
-      // Adaptador 100% tipado
-      const itemsBajoStockAdapter: ItemBajoStockAdapter[] = itemsBajoStockData.map(item => ({
-         id: item.id,
-         tipo_item_id: item.id,
-         ubicacion: "Global",
-         cantidad_actual: item.stock_total_actual,
-         ultima_actualizacion: new Date().toISOString(),
-         tipo_item: {
-            id: item.id,
-            nombre: item.nombre,
-            unidad_medida: item.unidad_medida
-         }
-      }));
-
-      return {
-         summary: await dashboardRes.json() as DashboardData,
-         proximosMantenimientos: mantenimientosRes.ok ? unwrapItems<Mantenimiento>(await mantenimientosRes.json()) : [],
-         itemsBajoStock: itemsBajoStockAdapter,
-      };
-
-   } catch (error) {
-      console.error("[GET_DASHBOARD_PAGE_DATA_ERROR]", error);
-      return null;
-   }
+   const user = await getPageUser();
+   const [summary, mantenimientos, bajoStock] = await Promise.all([
+      serverApi.get<DashboardData>('/dashboard/'),
+      hasPermission(user, ['ver_mantenimientos']) ? serverApi.get<Mantenimiento[]>('/mantenimientos/', { params: { estado: 'Programado', limit: 5 } }) : [],
+      hasPermission(user, ['ver_inventario']) ? serverApi.get<APIItemBajoStock[]>('/inventario/tipos/bajo-stock/', { params: { limit: 5 } }) : [],
+   ]);
+   return { summary, proximosMantenimientos: unwrapItems<Mantenimiento>(mantenimientos), itemsBajoStock: unwrapItems<APIItemBajoStock>(bajoStock) };
 }
 
 export default async function DashboardPage() {
+   const pageAccessDenied = await guardPage("/dashboard");
+   if (pageAccessDenied) return pageAccessDenied;
+
    const data = await getDashboardPageData();
 
    if (!data || !data.summary) {
@@ -172,7 +111,7 @@ export default async function DashboardPage() {
          </div>
 
          {/* KPIs */}
-         <div className="grid gap-4 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+         <div className="grid gap-4 grid-cols-1 min-[360px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
             <StatCard
                title="Valor de Activos"
                value={formatCurrency(summary.total_valor_activos || 0)}
@@ -186,7 +125,7 @@ export default async function DashboardPage() {
                className="bg-linear-to-br from-blue-500/10 via-background to-background border-blue-500/20"
             />
             <StatCard
-               title="Mantenimientos"
+               title="Mantenimiento próximo"
                value={summary.mantenimientos_proximos_count}
                icon={<Wrench className="h-5 w-5 text-amber-600" />}
                className="bg-linear-to-br from-amber-500/10 via-background to-background border-amber-500/20"
@@ -259,8 +198,7 @@ export default async function DashboardPage() {
                      </CardHeader>
                      <CardContent className="p-4 flex-1 bg-card">
                         {/* Se eliminó el 'as any' - Ahora está estrictamente tipado */}
-                        <ItemsBajoStockList items={itemsBajoStock as unknown as any} />
-                        {/* Nota: si tu componente ItemsBajoStockList sigue exigiendo un tipo viejo, puedes actualizar su interfaz o dejar el cast seguro (as unknown as any) solo ahí por ahora, pero la lógica de arriba ya está limpia. */}
+                        <ItemsBajoStockList items={itemsBajoStock} />
                      </CardContent>
                   </Card>
                </div>

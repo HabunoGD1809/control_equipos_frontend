@@ -1,6 +1,7 @@
 "use client";
 
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
+import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
@@ -27,20 +28,21 @@ export const TecnicoForm: React.FC<TecnicoFormProps> = ({ initialData, proveedor
    const { toast } = useToast();
    const [isLoading, setIsLoading] = useState(false);
 
-   const form = useForm<TecnicoCreate | TecnicoUpdate>({
+   const form = useForm<z.infer<typeof tecnicoSchema>>({
       resolver: zodResolver(tecnicoSchema),
-      defaultValues: initialData || {
-         nombre_completo: "",
-         es_externo: false,
-         proveedor_id: null,
-         telefono_contacto: "",
-         email_contacto: "",
-         is_active: true,
+      defaultValues: {
+         ...initialData,
+         nombre_completo: initialData?.nombre_completo ?? "",
+         es_externo: initialData?.es_externo ?? false,
+         proveedor_id: initialData?.proveedor_id ?? null,
+         telefono_contacto: initialData?.telefono_contacto ?? "",
+         email_contacto: initialData?.email_contacto ?? "",
+         is_active: initialData?.is_active ?? true,
       },
    });
 
    // Escuchar si el switch de "Externo" cambia
-   const esExterno = form.watch("es_externo");
+   const esExterno = useWatch({ control: form.control, name: 'es_externo' });
 
    const onSubmit = async (data: TecnicoCreate | TecnicoUpdate) => {
       setIsLoading(true);
@@ -82,7 +84,7 @@ export const TecnicoForm: React.FC<TecnicoFormProps> = ({ initialData, proveedor
                )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                <FormField
                   control={form.control}
                   name="telefono_contacto"

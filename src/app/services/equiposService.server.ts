@@ -39,8 +39,8 @@ export const equiposServerService = {
    getEquipoDetailBasics: async (id: string) => {
       const [equipo, compRes, padresRes] = await Promise.all([
          serverApi.get<EquipoRead>(`/equipos/${id}`),
-         serverApi.get<any>(`/equipos/${id}/componentes`).catch(() => []),
-         serverApi.get<any>(`/equipos/${id}/parte_de`).catch(() => []),
+         serverApi.get<any>(`/equipos/${id}/componentes`),
+         serverApi.get<any>(`/equipos/${id}/parte_de`),
       ]);
 
       return {

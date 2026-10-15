@@ -79,10 +79,13 @@ export function prepareFetchPayload(body: unknown, options?: RequestInit): { bod
       ? (body as BodyInit)
       : JSON.stringify(body);
 
-   const headers: HeadersInit = {
-      ...(!isNative ? { "Content-Type": "application/json" } : {}),
-      ...(options?.headers as Record<string, string> ?? {}),
-   };
+   const headers = new Headers(options?.headers);
+   if (body instanceof FormData) {
+      // fetch generates the boundary that matches the actual multipart body.
+      headers.delete("content-type");
+   } else if (!isNative && !headers.has("content-type")) {
+      headers.set("content-type", "application/json");
+   }
 
-   return { body: parsedBody, headers };
+   return { body: parsedBody, headers: Object.fromEntries(headers.entries()) };
 }

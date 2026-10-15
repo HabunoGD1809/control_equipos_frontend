@@ -14,7 +14,9 @@ export interface Option {
    label: string;
 }
 
-interface AsyncComboboxProps {
+interface AsyncComboboxProps extends React.AriaAttributes {
+   id?: string;
+   ref?: React.Ref<HTMLButtonElement>;
    value?: string | null;
    onChange: (value: string | null) => void;
    fetcher: (search: string) => Promise<Option[]>;
@@ -34,10 +36,13 @@ export function AsyncCombobox({
    emptyMessage = "No se encontraron resultados.",
    defaultOptions = EMPTY_OPTIONS,
    disabled = false,
+   ...controlProps
 }: AsyncComboboxProps) {
    const [open, setOpen] = React.useState(false);
    const [options, setOptions] = React.useState<Option[]>(defaultOptions);
    const [isLoading, setIsLoading] = React.useState(false);
+   const [loadError, setLoadError] = React.useState(false);
+   const [retry, setRetry] = React.useState(0);
 
    const [searchTerm, setSearchTerm] = React.useState("");
    const debouncedSearchTerm = useDebounce(searchTerm, 400);
@@ -62,16 +67,19 @@ export function AsyncCombobox({
                   return parsedDefaults;
                });
                setIsLoading(false);
+               setLoadError(false);
             }
             return;
          }
 
          setIsLoading(true);
+         setLoadError(false);
          try {
             const results = await fetcherRef.current(debouncedSearchTerm);
             if (isMounted) setOptions(results);
          } catch (error) {
             console.error("Error fetching options:", error);
+            if (isMounted) { setOptions([]); setLoadError(true); }
          } finally {
             if (isMounted) setIsLoading(false);
          }
@@ -79,7 +87,7 @@ export function AsyncCombobox({
 
       loadOptions();
       return () => { isMounted = false; };
-   }, [debouncedSearchTerm, defaultOptionsStr]);
+   }, [debouncedSearchTerm, defaultOptionsStr, retry]);
 
    const selectedOption = React.useMemo(
       () => options.find((opt) => opt.value === value) || defaultOptions.find(opt => opt.value === value),
@@ -93,6 +101,7 @@ export function AsyncCombobox({
       }}>
          <PopoverTrigger asChild>
             <Button
+               {...controlProps}
                variant="outline"
                role="combobox"
                aria-expanded={open}
@@ -110,7 +119,7 @@ export function AsyncCombobox({
             </Button>
          </PopoverTrigger>
 
-         <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+         <PopoverContent className="w-(--radix-popover-trigger-width) max-w-[calc(100vw_-_2rem)] p-0" align="start">
             <Command shouldFilter={false}>
                <div className="flex items-center border-b px-3" cmdk-input-wrapper="">
                   <Input
@@ -126,6 +135,8 @@ export function AsyncCombobox({
                      <div className="flex items-center justify-center p-4">
                         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                      </div>
+                  ) : loadError ? (
+                     <div role="alert" className="p-4 text-sm"><p>No se pudieron cargar las opciones.</p><Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => setRetry(value => value + 1)}>Reintentar</Button></div>
                   ) : options.length === 0 ? (
                      <CommandEmpty className="py-4 text-center text-sm text-muted-foreground">
                         {searchTerm.trim().length > 0 && searchTerm.trim().length < 3

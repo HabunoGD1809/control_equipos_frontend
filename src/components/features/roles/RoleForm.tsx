@@ -13,6 +13,7 @@ import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import type { Rol, Permiso } from "@/types/api";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
+import { useSession } from "@/contexts/SessionProvider";
 
 import { Button } from "@/components/ui/Button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form";
@@ -39,6 +40,8 @@ export function RoleForm({ initialData, permisosDisponibles: propsPermisos, onSu
    const [loadingPermisos, setLoadingPermisos] = useState(!propsPermisos || propsPermisos.length === 0);
 
    const isAdminRole = initialData?.nombre.toLowerCase() === "admin";
+   const { user } = useSession();
+   const protectedPermissions = isAdminRole || (!!initialData && initialData.id === user?.rol_id);
 
    const form = useForm<RoleFormValues>({
       resolver: standardSchemaResolver(rolSchema),
@@ -72,16 +75,16 @@ export function RoleForm({ initialData, permisosDisponibles: propsPermisos, onSu
       setIsLoading(true);
       try {
          const payload = {
-            nombre: data.nombre,
+            ...(protectedPermissions ? {} : { nombre: data.nombre }),
             descripcion: data.descripcion?.trim() ? data.descripcion : undefined,
-            permiso_ids: data.permiso_ids,
+            ...(protectedPermissions ? {} : { permiso_ids: data.permiso_ids }),
          };
 
          if (initialData) {
             await rolesService.update(initialData.id, payload);
             toast({ title: "Rol actualizado correctamente" });
          } else {
-            await rolesService.create(payload);
+            await rolesService.create({ ...payload, nombre: data.nombre });
             toast({ title: "Rol creado correctamente" });
          }
 
@@ -126,7 +129,7 @@ export function RoleForm({ initialData, permisosDisponibles: propsPermisos, onSu
 
    return (
       <Form {...form}>
-         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+         <form onSubmit={form.handleSubmit(onSubmit)} className="min-w-0 space-y-6">
             <div className="grid gap-6 md:grid-cols-2">
                <FormField
                   control={form.control}
@@ -135,7 +138,7 @@ export function RoleForm({ initialData, permisosDisponibles: propsPermisos, onSu
                      <FormItem>
                         <FormLabel>Nombre del Rol <span className="text-destructive">*</span></FormLabel>
                         <FormControl>
-                           <Input placeholder="Ej: supervisor_almacen" {...field} disabled={isAdminRole || isLoading} />
+                           <Input placeholder="Ej: supervisor_almacen" {...field} disabled={protectedPermissions || isLoading} />
                         </FormControl>
                         {isAdminRole && (
                            <FormDescription className="text-amber-600">
@@ -169,7 +172,7 @@ export function RoleForm({ initialData, permisosDisponibles: propsPermisos, onSu
 
             <Card>
                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between mb-4 border-b pb-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4 border-b pb-4">
                      <div className="flex items-center gap-2">
                         <Shield className="h-5 w-5 text-primary" />
                         <h3 className="font-medium text-lg">Permisos del Sistema</h3>
@@ -179,6 +182,7 @@ export function RoleForm({ initialData, permisosDisponibles: propsPermisos, onSu
                      </span>
                   </div>
 
+                  {protectedPermissions && <p className="mb-4 text-sm text-muted-foreground">Los permisos de tu propio rol y del rol administrador están protegidos. Otro administrador debe gestionar los cambios de acceso.</p>}
                   {loadingPermisos ? (
                      <div className="flex items-center justify-center py-8">
                         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -188,7 +192,7 @@ export function RoleForm({ initialData, permisosDisponibles: propsPermisos, onSu
                         No se encontraron permisos disponibles.
                      </p>
                   ) : (
-                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                     <div className="grid min-w-0 gap-4 sm:grid-cols-2">
                         {Object.entries(permisoGroups).map(([groupName, permisos]) => {
                            const groupSelectedCount = permisos.filter(p => selectedPermisos?.includes(p.id)).length;
                            const isAllSelected = groupSelectedCount === permisos.length;
@@ -197,11 +201,11 @@ export function RoleForm({ initialData, permisosDisponibles: propsPermisos, onSu
                               <div
                                  key={groupName}
                                  className={cn(
-                                    "space-y-3 border p-4 rounded-lg transition-colors",
+                                    "min-w-0 space-y-3 border p-3 rounded-lg transition-colors",
                                     isAllSelected ? "bg-primary/5 border-primary/20" : "bg-card"
                                  )}
                               >
-                                 <div className="flex items-center justify-between border-b pb-2 mb-3">
+                                 <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2 mb-3">
                                     <h4 className="font-semibold capitalize text-sm text-foreground">
                                        Módulo: {groupName}
                                     </h4>
@@ -211,6 +215,7 @@ export function RoleForm({ initialData, permisosDisponibles: propsPermisos, onSu
                                        size="sm"
                                        className="h-6 px-2 text-xs"
                                        onClick={() => handleToggleGroup(permisos, !isAllSelected)}
+                                       disabled={protectedPermissions || isLoading}
                                     >
                                        <CheckSquare className={cn("h-3 w-3 mr-1", isAllSelected ? "text-primary" : "text-muted-foreground")} />
                                        {isAllSelected ? "Deseleccionar" : "Todos"}
@@ -228,7 +233,8 @@ export function RoleForm({ initialData, permisosDisponibles: propsPermisos, onSu
                                                 <FormControl>
                                                    <Checkbox
                                                       checked={field.value?.includes(permiso.id)}
-                                                      disabled={isAdminRole || isLoading}
+                                                      disabled={protectedPermissions || isLoading}
+                                                      id={`permiso-${permiso.id}`}
                                                       onCheckedChange={(checked) =>
                                                          field.onChange(
                                                             checked
@@ -238,15 +244,15 @@ export function RoleForm({ initialData, permisosDisponibles: propsPermisos, onSu
                                                       }
                                                    />
                                                 </FormControl>
-                                                <div className="space-y-1 leading-none">
-                                                   <FormLabel className={cn(
+                                                <div className="min-w-0 space-y-1 leading-normal [overflow-wrap:anywhere]">
+                                                   <label htmlFor={`permiso-${permiso.id}`} className={cn(
                                                       "font-normal text-sm cursor-pointer",
                                                       field.value?.includes(permiso.id) ? "text-foreground font-medium" : "text-muted-foreground"
                                                    )}>
-                                                      {permiso.nombre}
-                                                   </FormLabel>
+                                                      {permiso.nombre.replaceAll("_", " ").replace(/^./, letter => letter.toUpperCase())}
+                                                   </label>
                                                    {permiso.descripcion && (
-                                                      <FormDescription className="text-xs">{permiso.descripcion}</FormDescription>
+                                                      <FormDescription className="text-xs">{permiso.nombre === "administrar_sistema" ? "Administrar respaldos y configuración del sistema. Los demás módulos requieren sus permisos específicos." : permiso.descripcion}</FormDescription>
                                                    )}
                                                 </div>
                                              </FormItem>
@@ -268,7 +274,7 @@ export function RoleForm({ initialData, permisosDisponibles: propsPermisos, onSu
                </CardContent>
             </Card>
 
-            <div className="flex justify-end gap-4 sticky bottom-0 bg-background/80 backdrop-blur-sm py-4 border-t">
+            <div className="flex flex-wrap justify-end gap-3 bg-background py-4 border-t">
                <Button type="button" variant="outline" onClick={handleCancel} disabled={isLoading}>
                   Cancelar
                </Button>

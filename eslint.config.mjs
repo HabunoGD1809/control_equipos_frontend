@@ -7,6 +7,7 @@ export default defineConfig([
   // Override / explicit ignores (incluye los defaults que menciona Next)
   globalIgnores([
     ".next/**",
+    ".next-*/**",
     "out/**",
     "build/**",
     "dist/**",

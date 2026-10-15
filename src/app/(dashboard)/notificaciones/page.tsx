@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Bell, Check, Loader2, Trash2, ArrowRight, Info, AlertTriangle } from 'lucide-react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Notificacion, TipoNotificacionEnum } from '@/types/api';
 import { notificacionesService } from '@/app/services/notificacionesService';
@@ -32,48 +32,30 @@ export default function NotificacionesPage() {
    const { toast } = useToast();
    const router = useRouter();
 
-   const [notifications, setNotifications] = useState<Notificacion[]>([]);
-   const [isLoading, setIsLoading] = useState(true);
-   const [page, setPage] = useState(0);
-   const [hasMore, setHasMore] = useState(true);
    const limit = 20;
-
-   const fetchNotifications = async (pageNum: number) => {
-      setIsLoading(true);
-      try {
-         const data = await notificacionesService.getAll({ limit, skip: pageNum * limit } as any);
-
-         if (data.length < limit) {
-            setHasMore(false);
-         } else {
-            setHasMore(true);
-         }
-
-         setNotifications(prev => pageNum === 0 ? data : [...prev, ...data]);
-      } catch (error) {
-         toast({ variant: "destructive", title: "Error", description: "No se pudieron cargar las notificaciones." });
-      } finally {
-         setIsLoading(false);
-      }
-   };
-
+   const notificationQuery = useInfiniteQuery({
+      queryKey: ['notificaciones', 'all'],
+      initialPageParam: 0,
+      queryFn: ({ pageParam }) => notificacionesService.getAll({ limit, skip: pageParam * limit }),
+      getNextPageParam: (last, pages) => last.length === limit ? pages.length : undefined,
+   });
+   const notifications = notificationQuery.data?.pages.flat() ?? [];
+   const isLoading = notificationQuery.isPending || notificationQuery.isFetchingNextPage;
+   const hasMore = notificationQuery.hasNextPage;
    useEffect(() => {
-      fetchNotifications(0);
-   }, []);
+      if (notificationQuery.error) toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron cargar las notificaciones. Intente actualizar la página.' });
+   }, [notificationQuery.error, toast]);
 
    const markAsReadMutation = useMutation({
       mutationFn: (id: string) => notificacionesService.marcarComoLeida(id),
       onSuccess: (_, id) => {
-         setNotifications(notifs => notifs.map(n => n.id === id ? { ...n, leido: true } : n));
-         qc.invalidateQueries({ queryKey: ["notificaciones", "unreadCount"] });
-         qc.invalidateQueries({ queryKey: ["notificaciones", "latest"] });
+         qc.invalidateQueries({ queryKey: ["notificaciones"] });
       }
    });
 
    const deleteMutation = useMutation({
       mutationFn: (id: string) => notificacionesService.delete(id),
       onSuccess: (_, id) => {
-         setNotifications(notifs => notifs.filter(n => n.id !== id));
          toast({ description: "Notificación eliminada." });
          qc.invalidateQueries({ queryKey: ["notificaciones"] });
       }
@@ -107,9 +89,8 @@ export default function NotificacionesPage() {
                      size="sm"
                      onClick={() => {
                         notificacionesService.marcarTodasComoLeidas().then(() => {
-                           setNotifications(n => n.map(x => ({ ...x, leido: true })));
                            qc.invalidateQueries({ queryKey: ["notificaciones"] });
-                        });
+                        }).catch(() => toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron marcar las notificaciones.' }));
                      }}
                   >
                      Marcar todas como leídas
@@ -183,7 +164,7 @@ export default function NotificacionesPage() {
                <CardFooter className="bg-muted/20 border-t p-4 flex justify-center">
                   <Button
                      variant="outline"
-                     onClick={() => { setPage(p => p + 1); fetchNotifications(page + 1); }}
+                     onClick={() => notificationQuery.fetchNextPage()}
                      disabled={isLoading}
                   >
                      {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

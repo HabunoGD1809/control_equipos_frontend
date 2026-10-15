@@ -1,10 +1,7 @@
 "use client"
 
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
-import { logoutAction } from "@/actions/auth-actions";
-import { useSession } from "@/contexts/SessionProvider";
+import { Loader2 } from "lucide-react";
 import {
    AlertDialog,
    AlertDialogAction,
@@ -22,31 +19,17 @@ interface LogoutModalProps {
 }
 
 export function LogoutModal({ isOpen, onOpenChange }: LogoutModalProps) {
-   const queryClient = useQueryClient();
-   const router = useRouter();
-   const { setUser } = useSession();
    const [isLoading, setIsLoading] = useState(false);
 
    const handleLogout = async () => {
-      try {
-         setIsLoading(true);
-
-         queryClient.clear();
-         setUser(null);
-
-         await logoutAction();
-
-         router.refresh();
-
-      } catch (error) {
-         console.error("Error al cerrar sesión:", error);
-         setIsLoading(false);
-         onOpenChange(false);
-      }
+      if (isLoading) return;
+      setIsLoading(true);
+      // A full navigation disposes the authenticated tree and its query cache together.
+      window.location.replace("/api/auth/logout?callbackUrl=/login");
    };
 
    return (
-      <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
+      <AlertDialog open={isOpen} onOpenChange={open => { if (!isLoading) onOpenChange(open); }}>
          <AlertDialogContent>
             <AlertDialogHeader>
                <AlertDialogTitle>¿Cerrar sesión?</AlertDialogTitle>
@@ -65,6 +48,7 @@ export function LogoutModal({ isOpen, onOpenChange }: LogoutModalProps) {
                   disabled={isLoading}
                   className="bg-red-600 text-white hover:bg-red-700"
                >
+                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {isLoading ? "Cerrando sesión..." : "Sí, cerrar sesión"}
                </AlertDialogAction>
             </AlertDialogFooter>

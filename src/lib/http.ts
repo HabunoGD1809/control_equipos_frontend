@@ -18,7 +18,7 @@ function onRefreshed(success: boolean) {
 
 function handleUnauthorizedClient() {
    if (typeof window !== "undefined") {
-      window.location.href = "/login";
+      window.location.assign(new URL("/login", window.location.origin).href);
    }
 }
 

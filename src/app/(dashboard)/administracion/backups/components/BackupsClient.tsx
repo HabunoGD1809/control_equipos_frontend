@@ -3,10 +3,8 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { useMutation } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { DatabaseBackup, Download, AlertCircle, CheckCircle2, Clock, Loader2, PlayCircle, RefreshCw } from "lucide-react";
-import { useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
@@ -15,16 +13,23 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/Alert";
 import { useToast } from "@/components/ui/use-toast";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { backupsService } from "@/app/services/backupsService";
+import { api } from "@/lib/http";
+import { downloadReportBlob } from "@/lib/report-download";
 import type { BackupLog } from "@/types/api";
 
 interface BackupsClientProps {
    initialData: BackupLog[];
 }
 
-export function BackupsClient({ initialData }: BackupsClientProps) {
+export function BackupsClient({ initialData: initialLogs }: BackupsClientProps) {
    const { toast } = useToast();
-   const router = useRouter();
-   const [isRefreshing, setIsRefreshing] = useState(false);
+   const { data: initialData, refetch, isFetching: isRefreshing, error } = useQuery({
+      queryKey: ["backup-logs"],
+      queryFn: () => backupsService.getLogs(),
+      initialData: initialLogs,
+      refetchInterval: (query) => query.state.data?.some(log => log.backup_status === "En Proceso") ? 3000 : 30000,
+   });
+   const hasPendingBackup = initialData.some(log => log.backup_status === "En Proceso");
 
    const backupMutation = useMutation({
       mutationFn: async () => backupsService.triggerBackup(),
@@ -45,9 +50,7 @@ export function BackupsClient({ initialData }: BackupsClientProps) {
    });
 
    const handleRefresh = () => {
-      setIsRefreshing(true);
-      router.refresh();
-      setTimeout(() => setIsRefreshing(false), 800);
+      void refetch();
    };
 
    const columns: ColumnDef<BackupLog>[] = [
@@ -125,7 +128,7 @@ export function BackupsClient({ initialData }: BackupsClientProps) {
                );
             }
 
-            const filename = path?.split("/").pop();
+            const filename = path?.replaceAll("\\", "/").split("/").pop();
             return (
                <span className="text-xs font-mono text-muted-foreground max-w-50 truncate block" title={path || ""}>
                   {filename || "--"}
@@ -144,7 +147,12 @@ export function BackupsClient({ initialData }: BackupsClientProps) {
                         variant="ghost"
                         size="sm"
                         title="Descargar Respaldo"
-                        onClick={() => window.open(`/api/proxy/system/backup/download/${row.original.id}`, "_blank")}
+                        onClick={async () => {
+                           try {
+                              const blob = await api.get<Blob>(`/backups/logs/${row.original.id}/download`, { responseType: "blob" });
+                              downloadReportBlob(blob, row.original.file_path!.replaceAll("\\", "/").split("/").pop() || "respaldo.zip");
+                           } catch { toast({ variant: "destructive", title: "No se pudo descargar", description: "Compruebe la disponibilidad del respaldo y su conexión." }); }
+                        }}
                      >
                         <Download className="h-4 w-4 text-primary" />
                      </Button>
@@ -160,7 +168,7 @@ export function BackupsClient({ initialData }: BackupsClientProps) {
       <div className="space-y-6 animate-in fade-in duration-300">
          <PageHeader
             title="Historial de Backups"
-            description="Consulte el registro de todas las operaciones de respaldo de la base de datos de manera centralizada."
+            description="Genere y descargue respaldos de la base de datos, logos, documentos y archivos locales."
          />
 
          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -186,7 +194,7 @@ export function BackupsClient({ initialData }: BackupsClientProps) {
                   <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                   Refrescar
                </Button>
-               <Button onClick={() => backupMutation.mutate()} disabled={backupMutation.isPending}>
+               <Button onClick={() => backupMutation.mutate()} disabled={backupMutation.isPending || hasPendingBackup}>
                   {backupMutation.isPending ? (
                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
@@ -195,6 +203,8 @@ export function BackupsClient({ initialData }: BackupsClientProps) {
                   Generar Backup Manual
                </Button>
             </div>
+
+            {error && <Alert variant="destructive"><AlertDescription>No se pudo actualizar el historial. Pulse Refrescar para reintentar.</AlertDescription></Alert>}
 
             {!initialData.length && (
                <Alert className="mb-4 shadow-sm border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-200">

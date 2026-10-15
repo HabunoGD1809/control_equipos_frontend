@@ -25,9 +25,11 @@ export const TecnicosTab: React.FC<TecnicosTabProps> = ({ initialData, proveedor
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [selectedItem, setSelectedItem] = useState<Tecnico | null>(null);
 
-   useEffect(() => {
+   const [previousData, setPreviousData] = useState(initialData);
+   if (previousData !== initialData) {
+      setPreviousData(initialData);
       setItems(initialData || []);
-   }, [initialData]);
+   }
 
    const handleEdit = (item: Tecnico) => {
       setSelectedItem(item);

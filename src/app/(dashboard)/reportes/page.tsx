@@ -1,20 +1,20 @@
+import { guardPage } from "@/lib/page-access";
 import { Metadata } from "next";
 import { ReportesClient } from "./components/ReportesClient";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 export const metadata: Metadata = {
    title: "Reportes y Exportación | Control de Equipos",
    description: "Generación y descarga de reportes del sistema.",
 };
 
-export default function ReportesPage() {
+export default async function ReportesPage() {
+   const pageAccessDenied = await guardPage("/reportes");
+   if (pageAccessDenied) return pageAccessDenied;
+
    return (
-      <div className="flex-1 space-y-4 p-8 pt-6">
-         <div className="flex items-center justify-between space-y-2">
-            <h2 className="text-3xl font-bold tracking-tight">Reportes y Exportación</h2>
-            <p className="text-muted-foreground">
-               Genera reportes operativos y de auditoría en formato PDF o Excel.
-            </p>
-         </div>
+      <div className="min-w-0 space-y-6">
+         <PageHeader title="Reportes y Exportación" description="Genera reportes operativos y de auditoría en formato PDF, Excel o CSV." />
          <ReportesClient />
       </div>
    );

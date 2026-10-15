@@ -1,14 +1,15 @@
 import "server-only";
 import { redirect } from "next/navigation";
-import { refreshAccessToken } from "@/lib/token-refresh";
+import { headers as requestHeaders } from "next/headers";
+import { safeReturnPath } from "@/lib/request-security";
 import { getSession } from "@/lib/session";
 import { BaseFetchOptions, buildQueryString, parseApiError, prepareFetchPayload } from "./http-utils";
 
-const BASE_URL: string = (() => {
+function getApiBaseUrl(): string {
    const v = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
    if (!v) throw new Error("API_BASE_URL no está definida");
    return v.replace(/\/$/, "");
-})();
+}
 
 interface ServerFetchOptions extends BaseFetchOptions {
    skipAuthRedirect?: boolean;
@@ -20,11 +21,10 @@ function redirectToLogout(): never {
 
 async function httpServer<T>(path: string, options: ServerFetchOptions = {}): Promise<T> {
    const { params, headers, _retry, skipAuthRedirect, ...rest } = options;
+   const { accessToken } = await getSession();
 
    const cleanPath = path.startsWith("/") ? path : `/${path}`;
-   const url = new URL(`${BASE_URL}${cleanPath}${buildQueryString(params)}`);
-
-   const { accessToken } = await getSession();
+   const url = new URL(`${getApiBaseUrl()}${cleanPath}${buildQueryString(params)}`);
 
    const defaultHeaders: HeadersInit = {
       Accept: "application/json",
@@ -36,17 +36,21 @@ async function httpServer<T>(path: string, options: ServerFetchOptions = {}): Pr
       headers: defaultHeaders,
       ...rest,
       cache: rest.cache ?? "no-store",
+      signal: rest.signal ?? AbortSignal.timeout(15000),
    });
+
+   // Older APIs may return 404 for the identity behind a stale session.
+   // Clear its cookies through a route handler before returning to the login.
+   if (response.status === 404 && cleanPath.replace(/\/+$/, "") === "/usuarios/me" && !skipAuthRedirect) {
+      redirectToLogout();
+   }
 
    if (response.status === 401 && !_retry) {
       if (skipAuthRedirect) {
          throw await parseApiError(response);
       }
-      const newAccessToken = await refreshAccessToken();
-      if (newAccessToken) {
-         return httpServer<T>(path, { ...options, _retry: true });
-      }
-      redirectToLogout();
+      const returnTo = safeReturnPath((await requestHeaders()).get("x-auth-return-to"), "/dashboard");
+      redirect(`/api/auth/renew?next=${encodeURIComponent(returnTo)}`);
    }
 
    if (!response.ok) {

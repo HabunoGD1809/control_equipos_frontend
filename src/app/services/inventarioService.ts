@@ -11,8 +11,12 @@ import type {
    InventarioStockTotal,
 } from "@/types/api";
 
-export interface ItemBajoStock extends Omit<InventarioStock, "tipo_item"> {
-   tipo_item: TipoItemInventarioSimple & { stock_minimo: number };
+export interface ItemBajoStock {
+   id: string;
+   nombre: string;
+   unidad_medida: string;
+   stock_total_actual: number;
+   stock_minimo: number;
 }
 
 export const inventarioService = {
@@ -46,7 +50,7 @@ export const inventarioService = {
    // --- Stock ---
    getStock(params?: {
       tipo_item_id?: string;
-      ubicacion?: string;
+      ubicacion_id?: string;
       lote?: string;
       skip?: number;
       limit?: number;

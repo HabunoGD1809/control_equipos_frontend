@@ -11,6 +11,8 @@ import { Input } from "@/components/ui/Input";
 import { Switch } from "@/components/ui/Switch";
 import { AsyncCombobox, type Option } from "@/components/ui/AsyncCombobox";
 import { useToast } from "@/components/ui/use-toast";
+import { isSystemState } from "@/lib/catalogs";
+import { collectPages } from "@/lib/collection-pages";
 import { api } from "@/lib/http";
 import { getFriendlyErrorMessage } from "@/lib/error-handling";
 
@@ -42,7 +44,7 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuc
    const router = useRouter();
    const { toast } = useToast();
    const [isLoading, setIsLoading] = useState(false);
-   const [isLoadingDeptos, setIsLoadingDeptos] = useState(false);
+   const [isLoadingDeptos, setIsLoadingDeptos] = useState(formFields.includes("departamento_id"));
    const isEditing = !!initialData;
 
    const [departamentos, setDepartamentos] = useState<Option[]>([]);
@@ -52,10 +54,10 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuc
 
    const defaultValues: Record<string, any> = {};
    formFields.forEach(field => {
-      if (field === "es_preventivo" || field === "requiere_documentacion") {
+      if (["es_preventivo", "requiere_documentacion", "requiere_verificacion"].includes(field)) {
          defaultValues[field] = initialData?.[field] ?? false;
       } else {
-         defaultValues[field] = initialData?.[field] ?? "";
+         defaultValues[field] = field === "formato_permitido" ? (initialData?.[field] ?? []).join(", ") : initialData?.[field] ?? "";
       }
    });
 
@@ -65,8 +67,7 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuc
    useEffect(() => {
       let isMounted = true;
       if (requiresDepartamento) {
-         setIsLoadingDeptos(true);
-         api.get('/catalogos/departamentos/', { params: { include_inactive: false } })
+         collectPages<any>((skip, limit) => api.get('/catalogos/departamentos/', { params: { include_inactive: false, skip, limit } }))
             .then(data => {
                if (!isMounted) return;
                // Protección contra objetos { data: [] }
@@ -109,7 +110,7 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuc
 
          // Limpiamos la data (si envían un string vacío, lo mandamos como null para no chocar con la BD)
          formFields.forEach((field) => {
-            const val = data[field];
+            const val = field === "formato_permitido" && typeof data[field] === "string" ? data[field].split(",").map((value: string) => value.trim()).filter(Boolean) : data[field];
             if (val === "" || val === undefined) {
                payload[field] = null;
             } else if (typeof val === "string") {
@@ -129,7 +130,6 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuc
             payload.periodicidad_dias = null;
          }
 
-         console.log("Enviando Payload:", payload); // Por si queremos auditar
 
          if (isEditing) {
             await api.put(`${apiEndpoint}/${initialData.id}`, payload);
@@ -155,6 +155,7 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuc
    return (
       <Form {...form}>
          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+            {isSystemState(apiEndpoint, initialData?.codigo) && <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">Este estado sostiene los flujos de asignación y mantenimiento. Puedes personalizar su nombre, descripción y color; sus reglas operativas están protegidas.</p>}
 
             {formFields.map((field) => {
                if (field === "color_hex") {
@@ -193,12 +194,12 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuc
                   );
                }
 
-               if (field === "es_preventivo" || field === "requiere_documentacion") {
+               if (["es_preventivo", "requiere_documentacion", "requiere_verificacion", "permite_movimientos", "requiere_autorizacion", "es_estado_final"].includes(field)) {
                   return (
                      <FormField key={field} control={form.control} name={field} render={({ field: formField }) => (
                         <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
                            <div className="space-y-0.5"><FormLabel className="text-base">{humanizeFieldName(field)}</FormLabel></div>
-                           <FormControl><Switch checked={formField.value ?? false} onCheckedChange={formField.onChange} /></FormControl>
+                           <FormControl><Switch checked={formField.value ?? false} onCheckedChange={formField.onChange} disabled={isSystemState(apiEndpoint, initialData?.codigo) && ["permite_movimientos", "es_estado_final"].includes(field)} /></FormControl>
                         </FormItem>
                      )} />
                   );
@@ -239,7 +240,7 @@ export function GenericCatalogForm({ initialData, apiEndpoint, formFields, onSuc
                            <Input
                               {...formField}
                               value={formField.value ?? ""}
-                              placeholder={isRequired ? `Ej: ${humanizeFieldName(field)}...` : ""}
+                              placeholder={field === "formato_permitido" ? "pdf, png, docx, xlsx, txt" : isRequired ? `Ej: ${humanizeFieldName(field)}...` : ""}
                            />
                         </FormControl>
                         <FormMessage />

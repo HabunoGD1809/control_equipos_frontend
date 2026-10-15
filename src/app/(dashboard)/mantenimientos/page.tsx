@@ -1,33 +1,19 @@
-import { cookies } from 'next/headers';
+import { guardPage, getPageUser } from "@/lib/page-access";
+import { hasPermission } from "@/lib/permissions";
+import { serverCollection } from "@/lib/server-collections";
 import { Mantenimiento, EquipoSimple, TipoMantenimiento, Tecnico } from "@/types/api";
 import { MantenimientosClient } from "./components/MantenimientosClient";
 
-async function fetchData(endpoint: string) {
-   const accessToken = (await cookies()).get('access_token')?.value;
-   if (!accessToken) return [];
-
-   try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}${endpoint}`, {
-         headers: { 'Authorization': `Bearer ${accessToken}` },
-         cache: 'no-store',
-      });
-      if (!res.ok) {
-         console.error(`Error fetching ${endpoint}: ${res.status} ${res.statusText}`);
-         return [];
-      }
-      return res.json();
-   } catch (error) {
-      console.error(`Error fetching ${endpoint}:`, error);
-      return [];
-   }
-}
-
 export default async function MantenimientosPage() {
+   const pageAccessDenied = await guardPage("/mantenimientos");
+   if (pageAccessDenied) return pageAccessDenied;
+   const user = await getPageUser();
+
    const [mantenimientos, equipos, tiposMantenimiento, tecnicos] = await Promise.all([
-      fetchData('/mantenimientos/?limit=200') as Promise<Mantenimiento[]>,
-      fetchData('/equipos/?limit=500') as Promise<EquipoSimple[]>,
-      fetchData('/catalogos/tipos-mantenimiento/') as Promise<TipoMantenimiento[]>,
-      fetchData('/tecnicos/?limit=500') as Promise<Tecnico[]>,
+      serverCollection<Mantenimiento>('/mantenimientos/'),
+      hasPermission(user, ['ver_equipos']) ? serverCollection<EquipoSimple>('/equipos/') : [],
+      serverCollection<TipoMantenimiento>('/catalogos/tipos-mantenimiento/'),
+      serverCollection<Tecnico>('/tecnicos/'),
    ]);
 
    return (

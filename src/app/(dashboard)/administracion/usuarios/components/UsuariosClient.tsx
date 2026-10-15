@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/use-toast";
 import { UsuarioForm } from "@/components/features/usuarios/UsuarioForm";
 import { usuariosService } from "@/app/services/usuariosService";
+import { useSession } from "@/contexts/SessionProvider";
 import { api } from "@/lib/http";
 import type { Usuario, Rol } from "@/types/api";
 
@@ -28,6 +29,7 @@ export interface UsuariosClientProps {
 
 export function UsuariosClient({ initialData, initialOptions }: UsuariosClientProps) {
    const { toast } = useToast();
+   const { user: currentUser } = useSession();
 
    // Inicializamos con la data que viene del servidor (SSR/RSC)
    const [data, setData] = useState<Usuario[]>(initialData);
@@ -60,6 +62,7 @@ export function UsuariosClient({ initialData, initialOptions }: UsuariosClientPr
    const handleCreate = () => { setSelectedUser(undefined); setIsModalOpen(true); };
 
    const handleToggleBloqueo = async (user: Usuario) => {
+      if (user.id === currentUser?.id) return;
       try {
          const nuevoEstado = !user.bloqueado;
          await usuariosService.update(user.id, { bloqueado: nuevoEstado });
@@ -78,6 +81,7 @@ export function UsuariosClient({ initialData, initialOptions }: UsuariosClientPr
    };
 
    const handleRequestReset = async (user: Usuario) => {
+      if (user.id === currentUser?.id) return;
       setIsResetting(user.id);
       try {
          const response = await api.post<{ username: string, reset_token: string }>("/auth/password-recovery/request-reset", {
@@ -174,7 +178,8 @@ export function UsuariosClient({ initialData, initialOptions }: UsuariosClientPr
                      variant="ghost"
                      size="sm"
                      onClick={() => handleRequestReset(user)}
-                     disabled={isGeneratingToken}
+                     disabled={isGeneratingToken || user.id === currentUser?.id}
+                     aria-label={user.id === currentUser?.id ? "Cambia tu contraseña desde tu perfil" : "Generar token de recuperación"}
                      title="Generar token de recuperación"
                      className="text-amber-600 hover:text-amber-700 hover:bg-amber-600/10"
                   >
@@ -189,6 +194,8 @@ export function UsuariosClient({ initialData, initialOptions }: UsuariosClientPr
                      variant="ghost"
                      size="sm"
                      onClick={() => handleToggleBloqueo(user)}
+                     disabled={user.id === currentUser?.id}
+                     aria-label={user.id === currentUser?.id ? "Tu cuenta no se puede bloquear desde esta sesión" : user.bloqueado ? "Desbloquear usuario" : "Bloquear usuario"}
                      title={user.bloqueado ? "Desbloquear" : "Bloquear"}
                      className={
                         user.bloqueado

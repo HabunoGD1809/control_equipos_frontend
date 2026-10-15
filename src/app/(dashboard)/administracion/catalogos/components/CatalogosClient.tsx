@@ -17,6 +17,8 @@ import { GenericCatalogTab } from "@/components/features/catalogos/GenericCatalo
 import { ProveedoresTab } from "@/components/features/proveedores/ProveedoresTab";
 import { TecnicosTab } from "@/components/features/catalogos/TecnicosTab";
 import { api } from "@/lib/http";
+import { collectPages } from "@/lib/collection-pages";
+import { useToast } from "@/components/ui/use-toast";
 
 // Qué tabs ya fueron activados (para montarlos solo una vez)
 type TabKey =
@@ -64,6 +66,7 @@ interface CatalogosClientProps {
 export const CatalogosClient: React.FC<CatalogosClientProps> = ({
    initialEmpleados,
 }) => {
+   const { toast } = useToast();
    // Tabs que ya han sido activados al menos una vez (para no desmontar su contenido)
    const [mountedTabs, setMountedTabs] = useState<Set<TabKey>>(
       new Set(["empleados"])
@@ -86,14 +89,12 @@ export const CatalogosClient: React.FC<CatalogosClientProps> = ({
 
          setLoadingTabs((prev) => new Set(prev).add(tab));
          try {
-            const data = await api.get<any[]>(config.endpoint, {
-               params: { limit: 500 },
-            });
+            const data = await collectPages<any>((skip, limit) => api.get(config.endpoint, { params: { skip, limit } }));
             setTabData((prev) => ({ ...prev, [config.dataKey]: data }));
          } catch (err) {
             console.error(`[CatalogosClient] Error fetching ${tab}:`, err);
             // Guardamos array vacío para no reintentar en loops
-            setTabData((prev) => ({ ...prev, [config.dataKey]: [] }));
+            toast({ variant: "destructive", title: "No se pudo cargar el catálogo", description: "Selecciona nuevamente la pestaña o pulsa Actualizar para reintentar." });
          } finally {
             setLoadingTabs((prev) => {
                const next = new Set(prev);
@@ -102,7 +103,7 @@ export const CatalogosClient: React.FC<CatalogosClientProps> = ({
             });
          }
       },
-      [tabData]
+      [tabData, toast]
    );
 
    const handleTabChange = useCallback(
@@ -112,6 +113,7 @@ export const CatalogosClient: React.FC<CatalogosClientProps> = ({
          setMountedTabs((prev) => new Set(prev).add(tab));
          // Disparar fetch lazy si es la primera activación
          fetchTabData(tab);
+         if (tab === "tecnicos") fetchTabData("proveedores");
       },
       [fetchTabData]
    );
@@ -124,7 +126,7 @@ export const CatalogosClient: React.FC<CatalogosClientProps> = ({
       const config = TAB_CONFIG[tab];
       if (!config) return;
       try {
-         const data = await api.get<any[]>(config.endpoint, { params: { limit: 500 } });
+         const data = await collectPages<any>((skip, limit) => api.get(config.endpoint, { params: { skip, limit } }));
          setTabData((prev) => ({ ...prev, [config.dataKey]: data }));
       } catch (err) {
          console.error(`[CatalogosClient] Error refreshing ${tab}:`, err);
@@ -208,7 +210,7 @@ export const CatalogosClient: React.FC<CatalogosClientProps> = ({
                   data={(tabData.tiposDocumento ?? []) as any[]}
                   title="Tipo de Documento"
                   apiEndpoint="/catalogos/tipos-documento"
-                  formFields={["nombre", "descripcion"]}
+                  formFields={["nombre", "descripcion", "requiere_verificacion", "formato_permitido"]}
                   isLoading={isLoading("tipos-documento")}
                />
             </TabsContent>
@@ -221,7 +223,7 @@ export const CatalogosClient: React.FC<CatalogosClientProps> = ({
                   data={(tabData.tiposMantenimiento ?? []) as any[]}
                   title="Tipo de Mantenimiento"
                   apiEndpoint="/catalogos/tipos-mantenimiento"
-                  formFields={["nombre", "descripcion", "es_preventivo", "periodicidad_dias"]}
+                  formFields={["nombre", "descripcion", "es_preventivo", "periodicidad_dias", "requiere_documentacion"]}
                   isLoading={isLoading("tipos-mantenimiento")}
                />
             </TabsContent>

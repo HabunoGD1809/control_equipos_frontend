@@ -21,16 +21,16 @@ export function StatCard({ title, value, icon, description, className }: StatCar
          className="h-full"
       >
          <Card className={cn("overflow-hidden h-full flex flex-col shadow-sm", className)}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-transparent">
-               <CardTitle className="text-sm font-semibold tracking-tight text-foreground/80">
+            <CardHeader className="flex flex-col-reverse items-start justify-between gap-2 space-y-0 bg-transparent p-4 pb-2">
+               <CardTitle className="min-w-0 break-words text-sm font-semibold leading-snug tracking-tight text-foreground/80">
                   {title}
                </CardTitle>
-               <div className="p-2 rounded-lg bg-background/50 shadow-sm border border-muted/50 backdrop-blur-sm">
+               <div className="shrink-0 p-2 rounded-lg bg-background/50 shadow-sm border border-muted/50 backdrop-blur-sm">
                   {icon}
                </div>
             </CardHeader>
-            <CardContent className="flex-1 flex flex-col justify-end pt-2">
-               <div className="text-3xl font-bold tracking-tight text-foreground">
+            <CardContent className="min-w-0 flex-1 flex flex-col justify-end p-4 pt-2">
+               <div className="break-words text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
                   {value}
                </div>
                {description && (

@@ -141,7 +141,7 @@ export function GlobalSearch() {
                )}
 
                {!isLoading && results.length === 0 && debouncedQuery.length >= 3 && (
-                  <CommandEmpty>No se encontraron resultados para "{debouncedQuery}".</CommandEmpty>
+                  <CommandEmpty>No se encontraron resultados para &quot;{debouncedQuery}&quot;.</CommandEmpty>
                )}
 
                {!isLoading && results.length > 0 && (

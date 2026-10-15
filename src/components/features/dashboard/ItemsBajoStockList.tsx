@@ -33,21 +33,21 @@ export function ItemsBajoStockList({ items }: ItemsBajoStockListProps) {
                   </div>
                   <div>
                      <p className="font-medium text-sm">
-                        {item.tipo_item.nombre}
+                        {item.nombre}
                      </p>
                      <p className="text-xs text-muted-foreground flex items-center gap-1">
                         Stock actual:{" "}
                         <span className="font-bold text-red-600">
-                           {item.cantidad_actual}
+                           {item.stock_total_actual}
                         </span>{" "}
-                        <span className="lowercase">{item.tipo_item.unidad_medida}</span>
+                        <span className="lowercase">{item.unidad_medida}</span>
                      </p>
                   </div>
                </div>
 
                {/* SOLUCIÓN: Agregamos parámetros a la URL (action=reponer e item_id) */}
                <Button variant="ghost" size="icon" asChild className="shrink-0 text-red-600 hover:text-red-700 hover:bg-red-500/10">
-                  <Link href={`/inventario?action=reponer&item_id=${item.tipo_item.id}`}>
+                  <Link href={`/inventario?action=reponer&item_id=${item.id}`}>
                      <ArrowRight className="h-4 w-4" />
                   </Link>
                </Button>

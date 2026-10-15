@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { LogOut, UserCircle, Settings } from "lucide-react"
+import { Menu, LogOut, Settings } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useSession } from "@/contexts/SessionProvider";
 import { Button } from "@/components/ui/Button"
@@ -18,28 +18,34 @@ import { Notifications } from "./Notifications"
 import { GlobalSearch } from "./GlobalSearch"
 import { LogoutModal } from "@/components/ui/LogoutModal"
 import { cn } from "@/lib/utils"
-
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace("/api/v1", "");
-
-const getAvatarSrc = (url?: string | null) => {
-   if (!url) return null;
-   if (url.startsWith("http")) return url;
-   return `${API_BASE_URL}${url}`;
-};
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/Dialog";
+import { SidebarNav } from "./SidebarNav";
+import { mainRoutes, adminRoutes } from "./Sidebar";
+import { CompanyBrand } from "@/components/features/empresa/CompanyBrand";
+import { UserAvatar } from "@/components/features/usuarios/UserAvatar";
 
 export function Header() {
    const { user } = useSession();
    const router = useRouter();
    const [isLogoutModalOpen, setLogoutModalOpen] = useState(false);
+   const [mobileOpen, setMobileOpen] = useState(false);
 
-   const avatarSrc = getAvatarSrc((user as any)?.avatar_url);
 
    return (
       <>
          <header className={cn(
             "flex-none flex items-center justify-between h-16 px-4 sm:px-6",
-            "bg-background/80 backdrop-blur-md border-b border-border/50 w-full gap-4 transition-all duration-300 ease-in-out z-10"
+            "bg-background/80 backdrop-blur-md border-b border-border/50 w-full gap-2 sm:gap-4 transition-all duration-300 ease-in-out z-10"
          )}>
+            <Dialog open={mobileOpen} onOpenChange={setMobileOpen}>
+               <DialogTrigger asChild><Button className="md:hidden shrink-0" variant="ghost" size="icon" aria-label="Abrir navegación"><Menu className="h-5 w-5" /></Button></DialogTrigger>
+               <DialogContent className="left-0 top-0 h-dvh max-h-dvh w-80 max-w-[85vw] translate-x-0 translate-y-0 rounded-l-none overflow-y-auto flex flex-col">
+                  <DialogHeader><DialogTitle className="sr-only">Navegación</DialogTitle><DialogDescription className="sr-only">Selecciona el módulo que quieres abrir.</DialogDescription><CompanyBrand compact /></DialogHeader>
+                  <div className="space-y-5 pt-4" onClick={event => { if ((event.target as HTMLElement).closest("a")) setMobileOpen(false); }}>
+                     <SidebarNav items={mainRoutes} isCollapsed={false} /><SidebarNav items={adminRoutes} isCollapsed={false} />
+                  </div>
+               </DialogContent>
+            </Dialog>
             <div className="flex-1 min-w-0 max-w-2xl">
                <GlobalSearch />
             </div>
@@ -58,13 +64,7 @@ export function Header() {
                         variant="ghost"
                         className="relative h-10 w-auto px-2 sm:px-3 flex items-center gap-3 hover:bg-accent/80 rounded-full sm:rounded-lg transition-colors"
                      >
-                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20 overflow-hidden">
-                           {avatarSrc ? (
-                              <img src={avatarSrc} alt="Avatar" className="h-full w-full object-cover" />
-                           ) : (
-                              <UserCircle className="h-5 w-5 text-primary" />
-                           )}
-                        </div>
+                        <UserAvatar user={user} />
                         <div className="text-left hidden sm:flex flex-col">
                            <span className="text-sm font-semibold leading-none text-foreground">{user?.nombre_usuario}</span>
                            <span className="text-xs text-muted-foreground mt-1 truncate max-w-30 font-medium">{user?.rol?.nombre}</span>
@@ -74,14 +74,8 @@ export function Header() {
                   <DropdownMenuContent className="w-64 rounded-xl shadow-lg border-border/50" align="end" forceMount>
                      <DropdownMenuLabel className="font-normal p-3 bg-muted/30 rounded-t-lg">
                         <div className="flex items-center gap-3">
-                           <div className="h-10 w-10 rounded-full border border-primary/20 overflow-hidden bg-background">
-                              {avatarSrc ? (
-                                 <img src={avatarSrc} alt="Avatar" className="h-full w-full object-cover" />
-                              ) : (
-                                 <UserCircle className="h-full w-full p-1 text-primary" />
-                              )}
-                           </div>
-                           <div className="flex flex-col space-y-1">
+                           <UserAvatar user={user} className="h-10 w-10" />
+                           <div className="min-w-0 flex flex-col space-y-1">
                               <p className="text-sm font-bold leading-none">{user?.nombre_usuario}</p>
                               <p className="text-xs leading-none text-muted-foreground truncate">
                                  {user?.email || "Sin email registrado"}

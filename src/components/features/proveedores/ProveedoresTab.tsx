@@ -33,9 +33,11 @@ export const ProveedoresTab: React.FC<ProveedoresTabProps> = ({ data, isLoading 
    const [localData, setLocalData] = useState<Proveedor[]>(data || []);
    const isInitialMount = useRef(true);
 
-   useEffect(() => {
+   const [previousData, setPreviousData] = useState(data);
+   if (previousData !== data) {
+      setPreviousData(data);
       setLocalData(data || []);
-   }, [data]);
+   }
 
    useEffect(() => {
       if (isInitialMount.current) {
@@ -47,8 +49,6 @@ export const ProveedoresTab: React.FC<ProveedoresTabProps> = ({ data, isLoading 
          api.get<Proveedor[]>("/proveedores/", { params: { include_inactive: true, limit: 200 } })
             .then(setLocalData)
             .catch(console.error);
-      } else {
-         setLocalData(data || []);
       }
    }, [showInactive, data]);
 

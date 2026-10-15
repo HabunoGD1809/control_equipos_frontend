@@ -22,7 +22,7 @@ export function PageHeader({
          )}
          {...props}
       >
-         <div className="space-y-1.5">
+         <div className="min-w-0 space-y-1.5 break-words">
             <h1 className="text-2xl font-bold tracking-tight md:text-3xl text-foreground">
                {title}
             </h1>
@@ -33,7 +33,7 @@ export function PageHeader({
             )}
          </div>
          {actions && (
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
                {actions}
             </div>
          )}

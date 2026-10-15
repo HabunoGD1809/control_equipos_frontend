@@ -46,11 +46,7 @@ export const equiposService = {
    bulkUpload: async (file: File): Promise<EquipoBulkResult> => {
       const formData = new FormData();
       formData.append("file", file);
-      return api.post<EquipoBulkResult>("/equipos/bulk-upload", formData, {
-         headers: {
-            "Content-Type": "multipart/form-data",
-         },
-      });
+      return api.post<EquipoBulkResult>("/equipos/bulk-upload", formData);
    },
 
    getTimeline: (id: string): Promise<TimelineEvent[]> =>
@@ -95,7 +91,7 @@ export const equiposService = {
             id: e.id,
             nombre: e.nombre,
             numero_serie: e.numero_serie,
-            marca: e.marca,
+            marca_id: e.marca_id,
             modelo: e.modelo,
          }));
       }
@@ -108,7 +104,7 @@ export const equiposService = {
          id: e.id,
          nombre: e.nombre,
          numero_serie: e.numero_serie,
-         marca: e.marca,
+         marca_id: e.marca_id,
          modelo: e.modelo,
       }));
    },

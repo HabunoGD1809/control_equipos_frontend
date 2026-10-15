@@ -22,7 +22,7 @@ interface AsignacionesClientProps {
 
 export function AsignacionesClient({ data }: AsignacionesClientProps) {
    const router = useRouter();
-   const canUnassign = useHasPermission(['desasignar_licencias']);
+   const canUnassign = useHasPermission(['asignar_licencias']);
 
    const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } = useDeleteConfirmation({
       onDelete: (id) => licenciasService.revocarAsignacion(id as string),

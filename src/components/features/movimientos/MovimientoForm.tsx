@@ -4,13 +4,14 @@ import { useEffect, useCallback, useMemo } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { z } from "zod";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { CalendarIcon, Loader2, Eraser } from "lucide-react";
 
 import { movimientoEquipoSchema } from "@/lib/zod";
 import { movimientosService } from "@/app/services/movimientosService";
+import { catalogosService } from "@/app/services/catalogosService";
 import { equiposService } from "@/app/services/equiposService";
 import { ubicacionesService } from "@/app/services/ubicacionesService";
 import { empleadosService } from "@/app/services/empleadosService";
@@ -46,6 +47,7 @@ interface MovimientoFormProps {
 export function MovimientoForm({ equipo, equipos, ubicaciones, onSuccess, onCancel }: MovimientoFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { data: estados = [] } = useQuery({ queryKey: ["catalogos", "estados-equipo"], queryFn: catalogosService.getEstadosEquipo, staleTime: 60000 });
 
   const form = useForm<MovimientoFormValues>({
     resolver: standardSchemaResolver(movimientoEquipoSchema),
@@ -221,7 +223,7 @@ export function MovimientoForm({ equipo, equipos, ubicaciones, onSuccess, onCanc
             </Select>
             {tipoSeleccionado && (
               <FormDescription className="text-xs text-primary font-medium bg-primary/5 p-2 rounded-md mt-2 inline-block">
-                Estado resultante del equipo: <strong>{movimientosService.predecirEstadoFinal(tipoSeleccionado, equipo?.estado?.nombre || "Actual")}</strong>
+                Estado resultante del equipo: <strong>{movimientosService.predecirEstadoFinal(tipoSeleccionado, equipo?.estado?.nombre || "Actual", estados)}</strong>
               </FormDescription>
             )}
             <FormMessage />

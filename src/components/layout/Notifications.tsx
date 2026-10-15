@@ -21,6 +21,7 @@ import { notificacionesService } from "@/app/services/notificacionesService";
 import { reportesService } from "@/app/services/reportesService";
 import { useSession } from "@/contexts/SessionProvider";
 import { Notificacion } from "@/types/api";
+import { downloadReportBlob } from "@/lib/report-download";
 
 export function Notifications() {
    const router = useRouter();
@@ -29,9 +30,7 @@ export function Notifications() {
    const { toast } = useToast();
    const enabled = !!user;
 
-   const [realtimeUnreadCount, setRealtimeUnreadCount] = useState<number | null>(null);
    const prevCountRef = useRef<number | null>(null);
-   const eventSourceRef = useRef<EventSource | null>(null);
 
    // ESTADO PARA CONTROLAR LA APERTURA DEL MENÚ
    const [isOpen, setIsOpen] = useState(false);
@@ -41,7 +40,7 @@ export function Notifications() {
       queryFn: () => notificacionesService.getUnreadCount(),
       enabled,
       staleTime: 0,
-      refetchInterval: false,
+      refetchInterval: 30000,
       refetchIntervalInBackground: false,
    });
 
@@ -53,28 +52,39 @@ export function Notifications() {
          qc.invalidateQueries({ queryKey: ["notificaciones", "latest"] });
       }
       prevCountRef.current = polledCount;
-      setRealtimeUnreadCount(polledCount);
    }, [polledCount, enabled, toast, qc]);
 
    useEffect(() => {
       if (!enabled) return;
-      eventSourceRef.current?.close();
-      const source = new EventSource("/api/sse/notificaciones");
-      eventSourceRef.current = source;
-
-      source.onmessage = () => {
-         qc.invalidateQueries({ queryKey: ["notificaciones", "unreadCount"] });
-         qc.invalidateQueries({ queryKey: ["notificaciones", "latest"] });
+      let stopped = false;
+      let source: EventSource | null = null;
+      let retry: ReturnType<typeof setTimeout> | undefined;
+      let attempts = 0;
+      const invalidate = () => {
+         void qc.invalidateQueries({ queryKey: ["notificaciones", "latest"] });
+         void qc.invalidateQueries({ queryKey: ["notificaciones", "all"] });
+         void qc.invalidateQueries({ queryKey: ["reportes_historial"] });
       };
-
-      source.addEventListener("update", () => {
-         qc.invalidateQueries({ queryKey: ["notificaciones", "unreadCount"] });
-         qc.invalidateQueries({ queryKey: ["notificaciones", "latest"] });
-      });
-
-      source.onerror = () => console.warn("[SSE] Conexión perdida, reintentando...");
-      return () => source.close();
-   }, [enabled, qc]);
+      const connect = () => {
+         if (stopped) return;
+         source = new EventSource("/api/sse/notificaciones");
+         source.onopen = () => { attempts = 0; };
+         source.addEventListener("update", event => {
+            const count = Number((event as MessageEvent).data);
+            if (Number.isInteger(count) && count >= 0) qc.setQueryData(["notificaciones", "unreadCount"], count);
+            invalidate();
+         });
+         source.addEventListener("session-expired", () => { source?.close(); window.location.assign(new URL("/api/auth/renew?next=" + encodeURIComponent(window.location.pathname), window.location.origin).href); });
+         source.onerror = () => {
+            source?.close();
+            retry = setTimeout(connect, Math.min(30000, 1000 * 2 ** Math.min(attempts++, 5)));
+         };
+      };
+      connect();
+      // Reopen periodically so that authentication is revalidated and cookies renewed.
+      const renewal = setInterval(() => { source?.close(); clearTimeout(retry); connect(); }, 5 * 60 * 1000);
+      return () => { stopped = true; source?.close(); clearTimeout(retry); clearInterval(renewal); };
+   }, [enabled, user?.id, qc]);
 
    const { data: notifications = [] } = useQuery({
       queryKey: ["notificaciones", "latest"],
@@ -86,7 +96,7 @@ export function Notifications() {
    const markAllMutation = useMutation({
       mutationFn: () => notificacionesService.marcarTodasComoLeidas(),
       onSuccess: async () => {
-         setRealtimeUnreadCount(0);
+         qc.setQueryData(["notificaciones", "unreadCount"], 0);
          prevCountRef.current = 0;
          await qc.invalidateQueries({ queryKey: ["notificaciones"] });
       },
@@ -95,14 +105,7 @@ export function Notifications() {
    const downloadReportMutation = useMutation({
       mutationFn: (reportId: string) => reportesService.descargarReporte(reportId),
       onSuccess: (blob) => {
-         const url = window.URL.createObjectURL(blob);
-         const a = document.createElement("a");
-         a.href = url;
-         a.download = `Reporte_Sistema_${new Date().getTime()}`;
-         document.body.appendChild(a);
-         a.click();
-         window.URL.revokeObjectURL(url);
-         a.remove();
+         downloadReportBlob(blob);
          toast({ title: "Descarga completada", description: "El reporte se ha descargado exitosamente." });
       },
       onError: () => toast({ variant: "destructive", title: "Error", description: "No se pudo descargar el reporte." }),
@@ -127,18 +130,18 @@ export function Notifications() {
 
    if (!enabled) {
       return (
-         <Button variant="outline" size="icon" className="relative opacity-50" disabled>
+         <Button variant="outline" size="icon" className="relative opacity-50" aria-label="Notificaciones" disabled>
             <Bell className="h-[1.2rem] w-[1.2rem]" />
          </Button>
       );
    }
 
-   const displayCount = realtimeUnreadCount !== null ? realtimeUnreadCount : polledCount;
+   const displayCount = polledCount;
 
    return (
       <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon" className="relative transition-all duration-300 hover:bg-accent">
+            <Button variant="outline" size="icon" className="relative transition-all duration-300 hover:bg-accent" aria-label={`Notificaciones (${displayCount} sin leer)`}>
                <Bell className="h-[1.2rem] w-[1.2rem]" />
                {displayCount > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-md animate-in zoom-in duration-300">
@@ -148,7 +151,7 @@ export function Notifications() {
             </Button>
          </DropdownMenuTrigger>
 
-         <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden shadow-xl border-muted/60">
+         <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-2rem)] p-0 overflow-hidden shadow-xl border-muted/60">
             <div className="bg-muted/30 px-4 py-3 border-b flex justify-between items-center">
                <span className="font-semibold text-sm">Notificaciones</span>
                {displayCount > 0 && (
@@ -181,6 +184,9 @@ export function Notifications() {
                            className={`group flex flex-col items-start gap-1 p-4 cursor-pointer border-b last:border-0 transition-colors ${!notif.leido ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-accent/50"}`}
                            onClick={(e) => {
                               e.preventDefault();
+                              if (!notif.leido) {
+                                 void notificacionesService.marcarComoLeida(notif.id).then(() => qc.invalidateQueries({ queryKey: ["notificaciones"] })).catch(() => toast({ variant: "destructive", title: "No se pudo marcar la alerta como leída" }));
+                              }
                               if (isReport && notif.referencia_id) {
                                  downloadReportMutation.mutate(notif.referencia_id);
                               } else if (url) {

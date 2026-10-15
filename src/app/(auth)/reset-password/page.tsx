@@ -1,16 +1,15 @@
-"use client"
+"use client";
+import { AuthCard } from "@/components/features/usuarios/AuthCard";
 
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { useState } from "react"
-import { motion } from "framer-motion"
-import { KeyRound, AlertCircle, CheckCircle, Loader2 } from "lucide-react"
+import { AlertCircle, CheckCircle, Loader2 } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/Form"
 import { Input } from "@/components/ui/Input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card"
 import { resetPasswordConfirmSchema } from "@/lib/zod"
 import { confirmPasswordResetAction } from "@/actions/auth-actions"
 import Link from "next/link"
@@ -43,6 +42,7 @@ export default function ResetPasswordPage() {
             setError(result.error);
          } else if (result.success) {
             setSuccess(true);
+            form.reset();
          }
       } catch (err) {
          setError("Ocurrió un error inesperado al procesar la solicitud.");
@@ -51,22 +51,7 @@ export default function ResetPasswordPage() {
       }
    }
 
-   return (
-      <div className="flex items-center justify-center min-h-screen bg-secondary/30 p-4">
-         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-            <Card className="w-full max-w-105 shadow-lg">
-               <CardHeader className="text-center space-y-2">
-                  <div className="flex justify-center items-center mb-2">
-                     <div className="p-3 bg-primary/10 rounded-full">
-                        <KeyRound className="h-8 w-8 text-primary" />
-                     </div>
-                  </div>
-                  <CardTitle className="text-2xl font-bold">Establecer Contraseña</CardTitle>
-                  <CardDescription>
-                     {success ? "Proceso completado" : "Ingrese los datos proporcionados por el administrador"}
-                  </CardDescription>
-               </CardHeader>
-               <CardContent>
+   return <AuthCard title="Restablecer contraseña" description={success ? "Proceso completado" : "Usa el token de recuperación que te proporcionó el administrador."} backHref="/login">
                   {success ? (
                      <div className="text-center space-y-6 py-4 animate-in fade-in zoom-in duration-300">
                         <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
@@ -87,7 +72,7 @@ export default function ResetPasswordPage() {
                            <FormField control={form.control} name="username_or_email" render={({ field }) => (
                               <FormItem>
                                  <FormLabel>Usuario o Correo Electrónico</FormLabel>
-                                 <FormControl><Input placeholder="ejemplo@correo.com o mi_usuario" {...field} /></FormControl>
+                                 <FormControl><Input autoComplete="username" disabled={isPending} placeholder="ejemplo@correo.com o mi_usuario" {...field} /></FormControl>
                                  <FormMessage />
                               </FormItem>
                            )} />
@@ -95,16 +80,16 @@ export default function ResetPasswordPage() {
                            <FormField control={form.control} name="token" render={({ field }) => (
                               <FormItem>
                                  <FormLabel>Token de Reseteo</FormLabel>
-                                 <FormControl><Input placeholder="Pegue el token aquí" {...field} /></FormControl>
+                                 <FormControl><Input type="password" autoComplete="one-time-code" disabled={isPending} placeholder="Pegue el token aquí" {...field} /></FormControl>
                                  <FormMessage />
                               </FormItem>
                            )} />
 
-                           <div className="grid gap-4 sm:grid-cols-2">
+                           <div className="space-y-4">
                               <FormField control={form.control} name="new_password" render={({ field }) => (
                                  <FormItem>
                                     <FormLabel>Nueva Clave</FormLabel>
-                                    <FormControl><Input type="password" {...field} /></FormControl>
+                                    <FormControl><Input type="password" autoComplete="new-password" disabled={isPending} {...field} /></FormControl>
                                     <FormMessage />
                                  </FormItem>
                               )} />
@@ -112,7 +97,7 @@ export default function ResetPasswordPage() {
                               <FormField control={form.control} name="confirm_password" render={({ field }) => (
                                  <FormItem>
                                     <FormLabel>Confirmar</FormLabel>
-                                    <FormControl><Input type="password" {...field} /></FormControl>
+                                    <FormControl><Input type="password" autoComplete="new-password" disabled={isPending} {...field} /></FormControl>
                                     <FormMessage />
                                  </FormItem>
                               )} />
@@ -128,17 +113,8 @@ export default function ResetPasswordPage() {
                               {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Cambiar Contraseña"}
                            </Button>
 
-                           <div className="text-center text-sm pt-2">
-                              <Link href="/login" className="text-muted-foreground hover:text-primary transition-colors">
-                                 Cancelar
-                              </Link>
-                           </div>
                         </form>
                      </Form>
                   )}
-               </CardContent>
-            </Card>
-         </motion.div>
-      </div>
-   )
+   </AuthCard>;
 }

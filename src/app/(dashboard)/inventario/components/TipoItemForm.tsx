@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
 import { AsyncCombobox, type Option } from "@/components/ui/AsyncCombobox";
+import { ConsumableColorPicker } from "@/components/features/inventario/ConsumableColorPicker";
 import { useToast } from "@/components/ui/use-toast";
 
 import { tipoItemSchema } from "@/lib/zod";
@@ -54,6 +55,12 @@ export function TipoItemForm({ initialData, proveedores, onSuccess }: TipoItemFo
          modelo: null,
          codigo_barras: null,
          descripcion: null,
+         color: null,
+         tecnologia: null,
+         rendimiento_paginas: null,
+         modelos_equipo_compatibles: [],
+         es_original: true,
+         perecedero: false,
       },
    });
 
@@ -124,7 +131,7 @@ export function TipoItemForm({ initialData, proveedores, onSuccess }: TipoItemFo
 
    return (
       <Form {...form}>
-         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4 max-h-[80vh] overflow-y-auto px-1">
+         <form onSubmit={form.handleSubmit(onSubmit)} className="min-w-0 space-y-4 pt-4 px-1">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                <FormField control={form.control} name="nombre" render={({ field }) => (
                   <FormItem className="md:col-span-2">
@@ -236,6 +243,18 @@ export function TipoItemForm({ initialData, proveedores, onSuccess }: TipoItemFo
                   </FormItem>
                )} />
             </div>
+
+            <fieldset className="min-w-0 rounded-lg border p-4 space-y-4">
+               <legend className="px-2 text-sm font-semibold">Consumibles de impresión</legend>
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField control={form.control} name="tecnologia" render={({ field }) => <FormItem><FormLabel>Tecnología</FormLabel><Select value={field.value ?? "none"} onValueChange={v => field.onChange(v === "none" ? null : v)}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">No aplica</SelectItem>{["Tóner", "Tinta", "Tambor", "Cinta", "Otro"].map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>} />
+                  <FormField control={form.control} name="color" render={({ field }) => <FormItem className="sm:col-span-2"><FormLabel>Color del consumible</FormLabel><FormControl><ConsumableColorPicker value={field.value} onChange={field.onChange} /></FormControl><p className="text-xs text-muted-foreground">Selecciona el color para distinguir cartuchos del mismo modelo.</p><FormMessage /></FormItem>} />
+                  <FormField control={form.control} name="rendimiento_paginas" render={({ field }) => <FormItem><FormLabel>Rendimiento en páginas</FormLabel><FormControl><Input type="number" min="1" step="1" value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : e.target.valueAsNumber)} /></FormControl><FormMessage /></FormItem>} />
+                  <FormField control={form.control} name="modelos_equipo_compatibles" render={({ field }) => <FormItem><FormLabel>Impresoras compatibles</FormLabel><FormControl><Input placeholder="LaserJet M404, M428" defaultValue={(field.value ?? []).join(", ")} onChange={e => field.onChange(e.target.value.split(",").map(v => v.trim()).filter(Boolean))} onBlur={field.onBlur} /></FormControl><FormMessage /></FormItem>} />
+                  <FormField control={form.control} name="es_original" render={({ field }) => <FormItem><FormLabel className="flex items-center gap-2"><FormControl><input type="checkbox" checked={field.value} onChange={e => field.onChange(e.target.checked)} /></FormControl>Consumible original del fabricante</FormLabel><FormMessage /></FormItem>} />
+                  <FormField control={form.control} name="perecedero" render={({ field }) => <FormItem><FormLabel className="flex items-center gap-2"><FormControl><input type="checkbox" checked={field.value} onChange={e => field.onChange(e.target.checked)} /></FormControl>Controlar fecha de caducidad por lote</FormLabel><FormMessage /></FormItem>} />
+               </div>
+            </fieldset>
 
             <FormField control={form.control} name="descripcion" render={({ field }) => (
                <FormItem>

@@ -1,93 +1,22 @@
-import { cookies } from "next/headers";
+import { guardPage } from "@/lib/page-access";
+import { serverApi } from "@/lib/http-server";
+import { auditDateRange } from "@/lib/audit";
 import { AuditoriaClient } from "./components/AuditoriaClient";
-import { AuditLog } from "@/types/api";
+import type { AuditLog } from "@/types/api";
 import { format, subDays } from "date-fns";
+import { PageHeader } from "@/components/layout/PageHeader";
 
-interface AuditoriaPageProps {
-   searchParams: Promise<{
-      table_name?: string;
-      operation?: string;
-      username?: string;
-      app_user_id?: string;
-      start_date?: string;
-      end_date?: string;
-      page?: string;
-   }>;
-}
-
-async function getAuditLogs(params: URLSearchParams): Promise<AuditLog[]> {
-   const cookieStore = await cookies();
-   const accessToken = cookieStore.get("access_token")?.value;
-
-   if (!accessToken) return [];
-
-   const url = `${process.env.NEXT_PUBLIC_API_BASE_URL}/auditoria/?${params.toString()}`;
-
-   try {
-      const response = await fetch(url, {
-         headers: { Authorization: `Bearer ${accessToken}` },
-         cache: "no-store",
-      });
-
-      if (!response.ok) {
-         console.error(`[GET_AUDIT_LOGS_ERROR] Status: ${response.status}`);
-         return [];
-      }
-
-      return response.json();
-   } catch (error) {
-      console.error("[GET_AUDIT_LOGS_ERROR]", error);
-      return [];
-   }
-}
-
-export default async function AuditoriaPage(props: AuditoriaPageProps) {
-   const searchParams = await props.searchParams;
-   const params = new URLSearchParams();
-
-   if (searchParams.table_name) params.append("table_name", searchParams.table_name);
-   if (searchParams.operation && searchParams.operation !== "none") params.append("operation", searchParams.operation);
-   if (searchParams.username) params.append("username", searchParams.username);
-   if (searchParams.app_user_id) params.append("app_user_id", searchParams.app_user_id);
-
-   // 1. Tomamos las fechas limpias de la URL o generamos las por defecto
-   const defaultStartDate = format(subDays(new Date(), 30), "yyyy-MM-dd");
-   const defaultEndDate = format(new Date(), "yyyy-MM-dd");
-
-   const startDateStr = searchParams.start_date || defaultStartDate;
-   const endDateStr = searchParams.end_date || defaultEndDate;
-
-   try {
-      // 2. Traducción para FastAPI: Convertimos "YYYY-MM-DD" a "YYYY-MM-DDTHH:mm:ss.sssZ" ($date-time)
-      const startTime = new Date(`${startDateStr}T00:00:00`).toISOString();
-      const endTime = new Date(`${endDateStr}T23:59:59.999`).toISOString();
-
-      // 3. Enviamos usando los nombres exactos que exige el contrato OpenAPI
-      params.append("start_time", startTime);
-      params.append("end_time", endTime);
-   } catch (error) {
-      console.error("Error parseando fechas a ISO:", error);
-   }
-
-   const limit = 100;
-   const page = Number(searchParams.page) || 1;
-   const skip = (page - 1) * limit;
-
-   params.append("limit", limit.toString());
-   params.append("skip", skip.toString());
-
-   const logs = await getAuditLogs(params);
-
-   return (
-      <div className="space-y-8">
-         <div>
-            <h1 className="text-3xl font-bold">Log de Auditoría</h1>
-            <p className="text-muted-foreground">
-               Rastree todos los cambios y operaciones realizadas en el sistema.
-            </p>
-         </div>
-
-         <AuditoriaClient initialData={logs} pageSize={limit} />
-      </div>
-   );
+export default async function AuditoriaPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+   const pageAccessDenied = await guardPage("/administracion/auditoria");
+   if (pageAccessDenied) return pageAccessDenied;
+   const values = await searchParams;
+   const start = values.start_date || format(subDays(new Date(), 30), "yyyy-MM-dd");
+   const end = values.end_date || format(new Date(), "yyyy-MM-dd");
+   let range;
+   try { range = auditDateRange(start, end, values.tz_offset === undefined ? new Date().getTimezoneOffset() : Number(values.tz_offset)); }
+   catch { return <p role="alert" className="rounded-lg border p-4">El rango de fechas no es válido. Vuelve a Auditoría para seleccionar otro rango.</p>; }
+   const page = Math.max(1, Math.floor(Number(values.page) || 1));
+   const limit = 25;
+   const rows = await serverApi.get<AuditLog[]>("/auditoria/", { params: { ...range, table_name: values.table_name || undefined, operation: values.operation && values.operation !== "none" ? values.operation : undefined, username: values.username || undefined, app_user_id: values.app_user_id || undefined, skip: (page - 1) * limit, limit: limit + 1 } });
+   return <div className="min-w-0 space-y-6"><PageHeader title="Auditoría" description="Consulta quién cambió cada registro y revisa los valores anteriores y nuevos." /><AuditoriaClient initialData={rows.slice(0, limit)} hasNextPage={rows.length > limit} /></div>;
 }

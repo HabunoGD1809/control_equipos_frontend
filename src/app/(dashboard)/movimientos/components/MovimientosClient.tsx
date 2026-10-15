@@ -8,6 +8,7 @@ import {
    CheckCircle,
    Ban,
    PackageCheck,
+   Printer,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -32,11 +33,13 @@ import {
    DropdownMenuTrigger,
 } from "@/components/ui/DropdownMenu";
 import { useToast } from "@/components/ui/use-toast";
+import { useHasPermission } from "@/hooks/useHasPermission";
+import { useSession } from "@/contexts/SessionProvider";
+import { collectPages } from "@/lib/collection-pages";
 
 import type {
    Movimiento,
    EquipoRead,
-   UsuarioSimple,
    Ubicacion,
 } from "@/types/api";
 import { EstadoMovimientoEquipoEnum } from "@/types/api";
@@ -48,14 +51,12 @@ import { RecibirMovimientoModal } from "@/components/features/movimientos/Recibi
 interface MovimientosClientProps {
    initialData: Movimiento[];
    equipos: EquipoRead[];
-   usuarios: UsuarioSimple[];
    ubicaciones: Ubicacion[];
 }
 
 export const MovimientosClient: React.FC<MovimientosClientProps> = ({
    initialData,
    equipos,
-   usuarios,
    ubicaciones,
 }) => {
    const [movimientos, setMovimientos] = useState<Movimiento[]>(initialData);
@@ -66,10 +67,14 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
 
    const { toast } = useToast();
    const router = useRouter();
+   const canRegister = useHasPermission(["registrar_movimientos"]);
+   const canAuthorize = useHasPermission(["autorizar_movimientos"]);
+   const { user } = useSession();
+   const canCancel = useHasPermission(["cancelar_movimientos"]);
 
    const refreshData = async () => {
       try {
-         const data = await movimientosService.getAll({ limit: 200 });
+         const data = await collectPages((skip, limit) => movimientosService.getAll({ skip, limit }));
          setMovimientos(data);
       } catch (error) {
          console.error("Error al refrescar los movimientos", error);
@@ -95,7 +100,7 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
    };
 
    const columns: ColumnDef<Movimiento>[] = [
-      { accessorFn: (row) => row.equipo.nombre, header: "Equipo" },
+      { accessorFn: (row) => row.equipo.nombre, header: "Equipo", cell: ({ row }) => <div>{row.original.equipo.nombre}{row.original.equipos_incluidos > 1 && <p className="text-xs text-muted-foreground">Conjunto: {row.original.equipos_incluidos} activos</p>}</div> },
       { accessorKey: "tipo_movimiento", header: "Tipo" },
       {
          accessorKey: "ubicacion_destino_nombre",
@@ -103,6 +108,11 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
          cell: ({ row }) => row.original.ubicacion_destino_nombre || <span className="text-muted-foreground">N/A</span>,
       },
       { accessorKey: "proposito", header: "Propósito" },
+      { id: "custodio", accessorFn: row => row.empleado_destino?.nombre_completo || "Sin asignación", header: "Custodio" },
+      { id: "registrador", accessorFn: row => row.usuario_registrador?.nombre_usuario || "Sistema", header: "Registrado por" },
+      { id: "autorizador", accessorFn: row => row.usuario_autorizador?.nombre_usuario || "—", header: "Autorizado por" },
+      { id: "receptor", accessorFn: row => row.recibido_por || "Sin confirmar", header: "Receptor registrado" },
+      { id: "confirmador", accessorFn: row => row.usuario_confirmador?.nombre_usuario || "—", header: "Registró acuse" },
       {
          accessorKey: "fecha_hora",
          header: "Fecha",
@@ -127,8 +137,9 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
          cell: ({ row }) => {
             const mov = row.original;
             const isPendiente = mov.estado === EstadoMovimientoEquipoEnum.Pendiente;
-            const isEnProceso = mov.estado === EstadoMovimientoEquipoEnum.EnProceso;
-            const isCancelable = isPendiente || mov.estado === EstadoMovimientoEquipoEnum.Autorizado;
+            const isEnProceso = mov.estado === EstadoMovimientoEquipoEnum.EnProceso || mov.estado === EstadoMovimientoEquipoEnum.Autorizado;
+            const canReceive = canRegister || (!!user?.empleado_id && user.empleado_id === mov.empleado_destino_id);
+            const isCancelable = isPendiente || isEnProceso;
 
             return (
                <DropdownMenu>
@@ -140,27 +151,23 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
                   <DropdownMenuContent align="end">
                      <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                      <DropdownMenuSeparator />
-                     {isPendiente && (
+                     <DropdownMenuItem asChild><a href={`/api/proxy/movimientos/${mov.id}/acuse`} target="_blank" rel="noopener noreferrer"><Printer className="mr-2 h-4 w-4" />{mov.estado === EstadoMovimientoEquipoEnum.Completado ? "Imprimir acuse" : "Imprimir constancia"}</a></DropdownMenuItem>
+                     {isPendiente && canAuthorize && (
                         <DropdownMenuItem onClick={() => setMovimientoToAuthorize(mov)} className="cursor-pointer">
                            <CheckCircle className="mr-2 h-4 w-4 text-emerald-600" />
                            <span>Validar Movimiento</span>
                         </DropdownMenuItem>
                      )}
-                     {isEnProceso && (
+                     {isEnProceso && canReceive && (
                         <DropdownMenuItem onClick={() => setMovimientoToRecibir(mov)} className="cursor-pointer">
                            <PackageCheck className="mr-2 h-4 w-4 text-blue-600" />
                            <span className="font-semibold text-blue-600">Recibir Equipo</span>
                         </DropdownMenuItem>
                      )}
-                     {isCancelable && (
+                     {isCancelable && canCancel && (
                         <DropdownMenuItem onClick={() => handleCancelar(mov.id)} className="cursor-pointer text-destructive focus:text-destructive">
                            <Ban className="mr-2 h-4 w-4" />
                            <span>Cancelar Movimiento</span>
-                        </DropdownMenuItem>
-                     )}
-                     {!isPendiente && !isEnProceso && !isCancelable && (
-                        <DropdownMenuItem disabled className="text-muted-foreground italic">
-                           Sin acciones disponibles
                         </DropdownMenuItem>
                      )}
                   </DropdownMenuContent>
@@ -182,7 +189,6 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
                </DialogHeader>
                <MovimientoForm
                   equipos={equipos}
-                  usuarios={usuarios}
                   ubicaciones={ubicaciones}
                   onSuccess={handleSuccessCreate}
                   onCancel={() => setIsCreateModalOpen(false)}
@@ -203,9 +209,9 @@ export const MovimientosClient: React.FC<MovimientosClientProps> = ({
          />
 
          <div className="flex justify-end">
-            <Button onClick={() => setIsCreateModalOpen(true)} className="shadow-sm">
+            {canRegister && <Button onClick={() => setIsCreateModalOpen(true)} className="shadow-sm">
                <PlusCircle className="mr-2 h-4 w-4" /> Registrar Movimiento
-            </Button>
+            </Button>}
          </div>
 
          <DataTable

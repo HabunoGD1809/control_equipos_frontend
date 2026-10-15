@@ -33,9 +33,11 @@ export function useDebouncedSearch(
    }, [debouncedTerm]);
 
    // Opcional: Si la URL cambia externamente (ej: navegación atrás), sincronizamos el input
-   useEffect(() => {
+   const [previousValue, setPreviousValue] = useState(initialValue);
+   if (previousValue !== initialValue) {
+      setPreviousValue(initialValue);
       setSearchTerm(initialValue);
-   }, [initialValue]);
+   }
 
    return {
       searchTerm,

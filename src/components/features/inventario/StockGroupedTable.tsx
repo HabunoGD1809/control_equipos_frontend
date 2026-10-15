@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import type { InventarioStock, TipoItemInventario } from "@/types/api";
 import { EditStockDetailsModal } from "./EditStockDetailsModal";
+import { ColorSwatch } from "./ConsumableColorPicker";
 
 interface StockGroupedTableProps {
   data: InventarioStock[];
@@ -111,7 +112,7 @@ export function StockGroupedTable({ data }: StockGroupedTableProps) {
                     onClick={() => toggleRow(group.tipo_item.id)}
                   >
                     <TableCell className="text-center">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full pointer-events-none">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" aria-label={`${isExpanded ? "Ocultar" : "Ver"} lotes de ${group.tipo_item.nombre}`} aria-expanded={isExpanded} onClick={event => { event.stopPropagation(); toggleRow(group.tipo_item.id); }}>
                         {isExpanded
                           ? <ChevronDown className="h-4 w-4 text-primary" />
                           : <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -122,6 +123,7 @@ export function StockGroupedTable({ data }: StockGroupedTableProps) {
                       <div className="flex flex-col">
                         <span className="font-semibold text-foreground">{group.tipo_item.nombre}</span>
                         <span className="text-xs text-muted-foreground font-mono">SKU: {group.tipo_item.sku || "N/A"}</span>
+                        {(group.tipo_item.tecnologia || group.tipo_item.color) && <span className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"><ColorSwatch color={group.tipo_item.color} />{[group.tipo_item.tecnologia, group.tipo_item.color].filter(Boolean).join(" · ")}</span>}
                       </div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell">

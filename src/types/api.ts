@@ -137,6 +137,7 @@ export type UnidadMedida = ValuesOf<typeof UnidadMedidaEnum>;
 
 export const TipoMovimientoInvEnum = {
   EntradaCompra: "Entrada Compra",
+  EntradaAbastecimiento: "Entrada Abastecimiento",
   SalidaUso: "Salida Uso",
   SalidaDescarte: "Salida Descarte",
   AjustePositivo: "Ajuste Positivo",
@@ -280,6 +281,7 @@ export interface UsuarioSimple {
 }
 
 export interface RolResumen {
+  permisos?: Permiso[];
   id: string;
   nombre: string;
   descripcion?: string | null;
@@ -398,6 +400,10 @@ export interface TimelineEvent {
 export interface EstadoEquipoSimple {
   id: string;
   nombre: string;
+   codigo?: string | null;
+   permite_movimientos?: boolean;
+   requiere_autorizacion?: boolean;
+   es_estado_final?: boolean;
   color_hex?: string | null;
   icono?: string | null;
 }
@@ -419,6 +425,8 @@ export interface EquipoSimple {
 }
 
 export interface EquipoRead {
+  tipo_activo?: string;
+  especificaciones_tecnicas?: Record<string, string>;
   id: string;
   nombre: string;
   numero_serie: string;
@@ -489,11 +497,11 @@ export interface PasswordChange {
 }
 
 export interface PasswordResetRequest {
-  username: string;
+  username_or_email: string;
 }
 
 export interface PasswordResetConfirm {
-  username: string;
+  username_or_email: string;
   token: string;
   new_password: string;
 }
@@ -599,12 +607,16 @@ export interface Documentacion {
 // ─── DTOs PARA HANDOFFS (Aprobar/Rechazar/Recibir) ────────────────────
 export interface MovimientoAccion {
   observaciones?: string | null;
+  empleado_receptor_id?: string | null;
+  recibido_por?: string | null;
+  entidad_receptora?: string | null;
 }
 
 // ─── MOVIMIENTOS ─────────────────────────────────────────────────────────────
 
 export interface Movimiento {
   id: string;
+  equipos_incluidos: number;
   equipo_id: string;
   tipo_movimiento: TipoMovimientoEquipo;
   fecha_prevista_retorno?: string | null;
@@ -628,6 +640,12 @@ export interface Movimiento {
   usuario_registrador?: UsuarioSimple | null;
   usuario_autorizador?: UsuarioSimple | null;
   empleado_destino?: EmpleadoSimple | null;
+  empleado_receptor_id?: string | null;
+  empleado_receptor?: EmpleadoSimple | null;
+  confirmado_por_id?: string | null;
+  usuario_confirmador?: UsuarioSimple | null;
+  fecha_recepcion?: string | null;
+  entidad_receptora?: string | null;
 }
 
 export interface MovimientoReciente {
@@ -722,7 +740,16 @@ export interface ReservaEquipo {
 
 // ─── INVENTARIO ──────────────────────────────────────────────────────────────
 
-export interface TipoItemInventarioSimple {
+export interface ConsumibleImpresion {
+  color?: "Negro" | "Cian" | "Magenta" | "Amarillo" | "Tricolor" | "Otro" | null;
+  tecnologia?: "Tóner" | "Tinta" | "Tambor" | "Cinta" | "Otro" | null;
+  rendimiento_paginas?: number | null;
+  modelos_equipo_compatibles?: string[] | null;
+  es_original?: boolean;
+  perecedero?: boolean;
+}
+
+export interface TipoItemInventarioSimple extends ConsumibleImpresion {
   id: string;
   nombre: string;
   unidad_medida: UnidadMedida;
@@ -765,6 +792,8 @@ export interface InventarioStockTotal {
 }
 
 export interface InventarioMovimiento {
+  procedencia?: string | null;
+  entregado_por?: string | null;
   id: string;
   tipo_item_id: string;
   tipo_movimiento: TipoMovimientoInv;
@@ -807,7 +836,7 @@ export interface NotificacionUpdate {
 }
 
 // Interfaz de BD para Reportes (Habilita el Background Processing y SSE)
-export type EstadoReporte = "Pendiente" | "En Proceso" | "Completado" | "Error";
+export type EstadoReporte = "pendiente" | "procesando" | "completado" | "error" | "expirado";
 
 export interface Reporte {
   id: string;
@@ -831,6 +860,7 @@ export interface AuditLog {
   table_name: string;
   operation: "INSERT" | "UPDATE" | "DELETE";
   username?: string | null;
+  app_username?: string | null;
   app_user_id?: string | null;
   old_data?: Record<string, unknown> | null;
   new_data?: Record<string, unknown> | null;
@@ -936,6 +966,8 @@ export type SoftwareCatalogoUpdate = Partial<SoftwareCatalogoCreate> & {
 };
 
 export interface EquipoCreate {
+  tipo_activo?: string;
+  especificaciones_tecnicas?: Record<string, string>;
   nombre: string;
   numero_serie: string;
   codigo_interno?: string | null;
@@ -1010,7 +1042,6 @@ export interface MovimientoUpdate {
   fecha_retorno?: string | null;
   recibido_por?: string | null;
   observaciones?: string | null;
-  estado?: EstadoMovimientoEquipo;
 }
 
 export interface ReservaEquipoCreate {
@@ -1070,6 +1101,8 @@ export type TipoItemInventarioUpdate = Partial<TipoItemInventarioCreate> & {
 };
 
 export interface InventarioMovimientoCreate {
+  procedencia?: string | null;
+  entregado_por?: string | null;
   tipo_item_id: string;
   tipo_movimiento: TipoMovimientoInv;
   cantidad: number;
@@ -1134,7 +1167,9 @@ export type ReporteParams = {
   | "mantenimientos"
   | "kardex"
   | "movimientos"
-  | "auditoria";
+  | "auditoria"
+  | "inventario"
+  | "licencias";
   formato: "pdf" | "excel" | "csv";
   fecha_inicio: string;
   fecha_fin: string;

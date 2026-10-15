@@ -83,7 +83,7 @@ export function LicenciaSoftwareForm({ initialData, catalogo, proveedores, onSuc
 
    return (
       <Form {...form}>
-         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-2 max-h-[70vh] overflow-y-auto pr-4">
+         <form onSubmit={form.handleSubmit(onSubmit)} className="min-w-0 space-y-4 pt-2">
             <FormField
                control={form.control}
                name="software_catalogo_id"

@@ -60,7 +60,7 @@ export function EditComponenteForm({ componente, onSuccess }: EditComponenteForm
    return (
       <Form {...form}>
          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pt-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                <FormField
                   control={form.control}
                   name="cantidad"
@@ -70,6 +70,9 @@ export function EditComponenteForm({ componente, onSuccess }: EditComponenteForm
                         <FormControl>
                            <Input
                               type="number"
+                              min={1}
+                              max={1}
+                              readOnly
                               value={field.value ?? 0}
                               onChange={(e) => {
                                  const n = e.target.valueAsNumber;
@@ -88,7 +91,8 @@ export function EditComponenteForm({ componente, onSuccess }: EditComponenteForm
                   render={({ field }) => (
                      <FormItem>
                         <FormLabel>Tipo de Relación</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <p className="text-xs text-muted-foreground">Para cambiar el vínculo, desvincule el componente y agréguelo con la nueva relación.</p>
+                        <Select onValueChange={field.onChange} defaultValue={field.value} disabled>
                            <FormControl>
                               <SelectTrigger><SelectValue /></SelectTrigger>
                            </FormControl>

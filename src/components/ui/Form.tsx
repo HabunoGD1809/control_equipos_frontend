@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Slot } from "@radix-ui/react-slot";
 import {
   Controller,
   type ControllerProps,
@@ -15,14 +16,14 @@ import { Label } from "@/components/ui/Label";
 // ✅ IMPORTANTE:
 // No lo dejes como `const Form = FormProvider` sin tipos,
 // porque se “pierde” el genérico y todo cae en FieldValues/unknown.
-type FormProps<TFieldValues extends FieldValues> = {
+type FormProps<TFieldValues extends FieldValues, TTransformedValues extends FieldValues> = {
   children: React.ReactNode;
-} & UseFormReturn<TFieldValues>;
+} & UseFormReturn<TFieldValues, unknown, TTransformedValues>;
 
-const Form = <TFieldValues extends FieldValues>({
+const Form = <TFieldValues extends FieldValues, TTransformedValues extends FieldValues = TFieldValues>({
   children,
   ...form
-}: FormProps<TFieldValues>) => {
+}: FormProps<TFieldValues, TTransformedValues>) => {
   return <FormProvider {...form}>{children}</FormProvider>;
 };
 
@@ -39,10 +40,11 @@ const FormFieldContext = React.createContext<FormFieldContextValue>(
 
 const FormField = <
   TFieldValues extends FieldValues = FieldValues,
-  TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>
+  TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
+  TTransformedValues extends FieldValues = TFieldValues
 >({
   ...props
-}: ControllerProps<TFieldValues, TName>) => {
+}: ControllerProps<TFieldValues, TName, TTransformedValues>) => {
   return (
     <FormFieldContext.Provider value={{ name: props.name }}>
       <Controller {...props} />
@@ -93,7 +95,7 @@ const FormItem = React.forwardRef<
 
   return (
     <FormItemContext.Provider value={{ id }}>
-      <div ref={ref} className={cn("space-y-2", className)} {...props} />
+      <div ref={ref} className={cn("min-w-0 space-y-2", className)} {...props} />
     </FormItemContext.Provider>
   );
 });
@@ -117,13 +119,13 @@ const FormLabel = React.forwardRef<
 FormLabel.displayName = "FormLabel";
 
 const FormControl = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
+  React.ComponentRef<typeof Slot>,
+  React.ComponentPropsWithoutRef<typeof Slot>
 >(({ ...props }, ref) => {
   const { error, formItemId, formDescriptionId, formMessageId } = useFormField();
 
   return (
-    <div
+    <Slot
       ref={ref}
       id={formItemId}
       aria-describedby={

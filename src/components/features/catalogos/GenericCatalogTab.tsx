@@ -15,6 +15,8 @@ import { Label } from "@/components/ui/Label";
 
 import { GenericCatalogForm } from "./GenericCatalogForm";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
+import { collectPages } from "@/lib/collection-pages";
+import { isSystemState } from "@/lib/catalogs";
 import { api } from "@/lib/http";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -59,41 +61,27 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
    const [isRefreshing, setIsRefreshing] = useState(false);
 
    // Sincronizar cuando el padre entrega nuevos datos
-   useEffect(() => {
+   const [previousData, setPreviousData] = useState(data);
+   if (previousData !== data) {
+      setPreviousData(data);
       setItems(data);
-   }, [data]);
+   }
 
    // ─── fetchItems estabilizado con useRef ──────────────────────────────────
-   const showInactiveRef = useRef(showInactive);
-   showInactiveRef.current = showInactive;
-
-   const fetchItems = useCallback(async () => {
+   const fetchItems = useCallback(async (includeInactive = showInactive) => {
       setIsRefreshing(true);
       try {
-         const freshData = await api.get<GenericItem[]>(apiEndpoint, {
-            params: { include_inactive: showInactiveRef.current },
-         });
+         const freshData = await collectPages<GenericItem>((skip, limit) => api.get(apiEndpoint, { params: { include_inactive: includeInactive, skip, limit } }));
          setItems(freshData);
       } catch {
          toast({ variant: "destructive", title: "Error", description: "No se pudieron actualizar los datos." });
-      } finally {
-         setIsRefreshing(false);
-      }
-   }, [apiEndpoint, toast]);
-
-   const isFirstRender = useRef(true);
-   useEffect(() => {
-      if (isFirstRender.current) {
-         isFirstRender.current = false;
-         return;
-      }
-      fetchItems();
-   }, [showInactive]);
+      } finally { setIsRefreshing(false); }
+   }, [apiEndpoint, showInactive, toast]);
 
    const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } =
       useDeleteConfirmation({
          onDelete: (id) => api.delete(`${apiEndpoint}/${id}`),
-         onSuccess: fetchItems,
+         onSuccess: () => fetchItems(),
          successMessage: `El ítem ha sido eliminado correctamente del catálogo.`,
       });
 
@@ -126,7 +114,7 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
          };
       }
 
-      if (field === "es_preventivo" || field === "requiere_documentacion") {
+      if (["es_preventivo", "requiere_documentacion", "requiere_verificacion"].includes(field)) {
          return {
             accessorKey: field,
             header: humanizeFieldName(field),
@@ -172,7 +160,7 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
             return (
                <div className="flex items-center gap-2">
                   <span className={isNombre ? "font-semibold text-foreground" : "text-muted-foreground"}>
-                     {val || "-"}
+                     {Array.isArray(val) ? val.join(", ") : val || "-"}
                   </span>
                   {isNombre && row.original.is_active === false && (
                      <Badge variant="outline" className="text-[10px] text-destructive border-destructive px-1 py-0 h-4">
@@ -193,7 +181,7 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
             <DropdownMenu>
                <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="h-8 w-8 p-0">
-                     <MoreHorizontal className="h-4 w-4" />
+                     <MoreHorizontal className="h-4 w-4" /><span className="sr-only">Acciones de {row.original.nombre || row.original.nombre_completo}</span>
                   </Button>
                </DropdownMenuTrigger>
                <DropdownMenuContent align="end">
@@ -203,6 +191,7 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
                   </DropdownMenuItem>
                   <DropdownMenuItem
                      className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                     disabled={isSystemState(apiEndpoint, row.original.codigo)}
                      onClick={() => openAlert(row.original.id)}
                   >
                      <Trash2 className="mr-2 h-4 w-4" /> Eliminar
@@ -256,12 +245,12 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
             </DialogContent>
          </Dialog>
 
-         <div className="flex justify-between items-center mb-4">
+         <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
             <div className="flex items-center space-x-2">
                <Switch
                   id={`show-inactive-${title}`}
                   checked={showInactive}
-                  onCheckedChange={setShowInactive}
+                  onCheckedChange={(value) => { setShowInactive(value); void fetchItems(value); }}
                />
                <Label htmlFor={`show-inactive-${title}`} className="text-sm text-muted-foreground cursor-pointer">
                   Mostrar inactivos
@@ -269,10 +258,10 @@ export const GenericCatalogTab: React.FC<GenericCatalogTabProps> = ({
             </div>
 
             <div className="flex gap-2">
-               <Button variant="outline" onClick={fetchItems} disabled={isRefreshing} title="Actualizar lista">
+               <Button variant="outline" onClick={() => fetchItems()} disabled={isRefreshing} title="Actualizar lista">
                   <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
                </Button>
-               <Button onClick={handleNew} className="shadow-sm">
+               <Button onClick={handleNew} className="shadow-sm whitespace-normal text-left">
                   <PlusCircle className="mr-2 h-4 w-4" /> Crear Nuevo {title}
                </Button>
             </div>

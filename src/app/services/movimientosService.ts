@@ -5,6 +5,7 @@ import type {
    MovimientoUpdate,
    TipoMovimientoEquipo,
    MovimientoAccion,
+   EstadoEquipoSimple,
 } from "@/types/api";
 import { TipoMovimientoEquipoEnum } from "@/types/api";
 
@@ -32,28 +33,30 @@ export const movimientosService = {
       api.post<Movimiento>(`/movimientos/${id}/cancelar`, {}),
 
    aprobar: (id: string, payload: MovimientoAccion = {}): Promise<Movimiento> =>
-      api.post<Movimiento>(`/movimientos/${id}/aprobar`, payload),
+      api.patch<Movimiento>(`/movimientos/${id}/estado`, { ...payload, estado: "Autorizado" }),
 
    rechazar: (id: string, payload: MovimientoAccion): Promise<Movimiento> =>
-      api.post<Movimiento>(`/movimientos/${id}/rechazar`, payload),
+      api.patch<Movimiento>(`/movimientos/${id}/estado`, { ...payload, estado: "Rechazado" }),
 
    recibir: (id: string, payload: MovimientoAccion = {}): Promise<Movimiento> =>
-      api.post<Movimiento>(`/movimientos/${id}/recibir`, payload),
+      api.patch<Movimiento>(`/movimientos/${id}/estado`, { ...payload, estado: "Completado" }),
 
-   predecirEstadoFinal: (tipo: TipoMovimientoEquipo, estadoNombreActual: string): string => {
+   predecirEstadoFinal: (tipo: TipoMovimientoEquipo, estadoNombreActual: string, catalogo: EstadoEquipoSimple[]): string => {
+      let code: string;
       switch (tipo) {
          case TipoMovimientoEquipoEnum.SalidaTemporal:
-            return "Prestado";
+            code = "prestado"; break;
          case TipoMovimientoEquipoEnum.SalidaDefinitiva:
-            return "Dado de Baja";
+            code = "dado_de_baja"; break;
          case TipoMovimientoEquipoEnum.Entrada:
-            return "Disponible";
+            code = "disponible"; break;
          case TipoMovimientoEquipoEnum.AsignacionInterna:
-            return "En Uso";
+            code = "en_uso"; break;
          case TipoMovimientoEquipoEnum.TransferenciaBodega:
             return estadoNombreActual;
          default:
             return estadoNombreActual;
       }
+      return catalogo.find(state => state.codigo === code)?.nombre ?? "Pendiente de confirmar";
    },
 };

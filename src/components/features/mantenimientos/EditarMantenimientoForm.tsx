@@ -1,6 +1,6 @@
 "use client";
 
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -68,7 +68,7 @@ export function EditarMantenimientoForm({
       },
    });
 
-   const watchEstado = form.watch("estado");
+   const watchEstado = useWatch({ control: form.control, name: 'estado' });
    const reqDocs = mantenimiento.tipo_mantenimiento.requiere_documentacion;
    const isCierreBloqueado = watchEstado === EstadoMantenimientoEnum.Completado && reqDocs && !tieneDocumentosAdjuntos;
 
@@ -196,12 +196,10 @@ export function EditarMantenimientoForm({
                   render={({ field }) => (
                      <FormItem>
                         <FormLabel>Costo Estimado</FormLabel>
-                        <FormControl>
-                           <div className="relative">
-                              <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
-                              <Input type="number" step="0.01" className="pl-7" value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : e.target.value)} />
+                        <div className="relative">
+                              <span aria-hidden="true" className="absolute left-3 top-2.5 text-muted-foreground">$</span>
+                              <FormControl><Input type="number" step="0.01" className="pl-7" value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : e.target.value)} /></FormControl>
                            </div>
-                        </FormControl>
                         <FormMessage />
                      </FormItem>
                   )}
@@ -213,12 +211,10 @@ export function EditarMantenimientoForm({
                   render={({ field }) => (
                      <FormItem>
                         <FormLabel>Costo Real (Final) {watchEstado === EstadoMantenimientoEnum.Completado && <span className="text-destructive">*</span>}</FormLabel>
-                        <FormControl>
-                           <div className="relative">
-                              <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
-                              <Input type="number" step="0.01" className="pl-7" value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : e.target.value)} />
+                        <div className="relative">
+                              <span aria-hidden="true" className="absolute left-3 top-2.5 text-muted-foreground">$</span>
+                              <FormControl><Input type="number" step="0.01" className="pl-7" value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : e.target.value)} /></FormControl>
                            </div>
-                        </FormControl>
                         <FormDescription>Requerido para completar.</FormDescription>
                         <FormMessage />
                      </FormItem>

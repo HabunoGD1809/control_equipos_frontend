@@ -29,7 +29,7 @@ export const columns: ColumnDef<InventarioMovimiento>[] = [
       header: "Cantidad",
       cell: ({ row }) => {
          const movimiento = row.original;
-         const isSalida = movimiento.tipo_movimiento.toLowerCase().includes('salida') || movimiento.tipo_movimiento.toLowerCase().includes('negativo');
+         const isSalida = movimiento.tipo_movimiento.toLowerCase().includes('salida') || movimiento.tipo_movimiento.toLowerCase().includes('negativo') || movimiento.tipo_movimiento === 'Devolucion Proveedor';
          const color = isSalida ? 'text-red-500' : 'text-green-500';
          const prefix = isSalida ? '-' : '+';
          return <span className={`font-bold ${color}`}>{prefix}{movimiento.cantidad}</span>
@@ -40,12 +40,12 @@ export const columns: ColumnDef<InventarioMovimiento>[] = [
       header: "Ubicación (Origen → Destino)",
       cell: ({ row }) => {
          const mov = row.original;
-         const isEntradaCompra = mov.tipo_movimiento.includes("Entrada Compra");
+         const isEntradaCompra = mov.tipo_movimiento === "Entrada Compra" || mov.tipo_movimiento === "Entrada Abastecimiento";
          const isSalida = mov.tipo_movimiento.toLowerCase().includes('salida') || mov.tipo_movimiento.toLowerCase().includes('descarte');
 
          // Lógica visual para reemplazar los "N/A" por algo amigable
          const origen = isEntradaCompra ? (
-            <span className="text-muted-foreground flex items-center gap-1 italic"><ExternalLink className="h-3 w-3" /> Exterior (Proveedor)</span>
+            <span className="text-muted-foreground flex items-center gap-1 italic"><ExternalLink className="h-3 w-3" /> {mov.procedencia || "Exterior (Proveedor)"}</span>
          ) : (
             <span className="text-muted-foreground truncate max-w-30" title={mov.ubicacion_origen_nombre || 'N/A'}>
                {mov.ubicacion_origen_nombre || 'N/A'}
@@ -73,6 +73,16 @@ export const columns: ColumnDef<InventarioMovimiento>[] = [
       accessorKey: "fecha_hora",
       header: "Fecha",
       cell: ({ row }) => format(new Date(row.original.fecha_hora), "PPp", { locale: es })
+   },
+   {
+      accessorKey: "referencia_externa",
+      header: "Documento",
+      cell: ({ row }) => row.original.referencia_externa || "—"
+   },
+   {
+      accessorKey: "entregado_por",
+      header: "Entregado por",
+      cell: ({ row }) => row.original.entregado_por || "—"
    },
    {
       accessorFn: (row) => row.usuario_registrador?.nombre_usuario || 'Sistema',

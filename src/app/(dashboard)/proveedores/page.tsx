@@ -1,8 +1,12 @@
+import { guardPage } from "@/lib/page-access";
 import { serverApi } from "@/lib/http-server";
 import { Proveedor } from "@/types/api";
 import { ProveedoresClient } from "./components/ProveedoresClient";
 
 export default async function ProveedoresPage() {
+   const pageAccessDenied = await guardPage("/proveedores");
+   if (pageAccessDenied) return pageAccessDenied;
+
    const proveedores = await serverApi.get<Proveedor[]>("/proveedores", { params: { limit: 500 } });
 
    return (

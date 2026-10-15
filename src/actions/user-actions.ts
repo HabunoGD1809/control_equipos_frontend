@@ -4,6 +4,7 @@ import { serverApi } from '@/lib/http-server';
 import { revalidatePath } from 'next/cache';
 import { updateProfileSchema } from '@/lib/zod';
 import { z } from 'zod';
+import type { Usuario } from '@/types/api';
 
 type FormValues = z.infer<typeof updateProfileSchema>;
 
@@ -15,12 +16,12 @@ export async function updateProfileAction(data: FormValues) {
    }
 
    try {
-      await serverApi.put('/usuarios/me', parsed.data);
+      const user = await serverApi.put<Usuario>('/usuarios/me', parsed.data);
 
       revalidatePath('/dashboard');
       revalidatePath('/perfil');
 
-      return { success: true };
+      return { success: true, user };
    } catch (error: any) {
       console.error("Error updating profile:", error);
       return { error: error.detail || error.message || "No se pudo actualizar el perfil." };

@@ -34,7 +34,7 @@ export function AsignarLicenciaForm({ licenciaId, equipos, usuarios, onSuccess }
    const queryClient = useQueryClient();
    const [activeTab, setActiveTab] = useState<"equipo" | "usuario">("equipo");
 
-   const form = useForm<FormInput>({
+   const form = useForm<FormInput, unknown, FormOutput>({
       resolver: standardSchemaResolver(asignarLicenciaSchema),
       defaultValues: {
          asignar_a: "equipo",
@@ -81,7 +81,7 @@ export function AsignarLicenciaForm({ licenciaId, equipos, usuarios, onSuccess }
       }
    });
 
-   const onSubmit = (values: any) => {
+   const onSubmit = (values: FormOutput) => {
       const payload = values as FormOutput;
 
       mutation.mutate({

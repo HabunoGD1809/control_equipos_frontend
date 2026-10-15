@@ -31,7 +31,7 @@ export function ProximosMantenimientosList({ mantenimientos }: ProximosMantenimi
                </div>
                <div className="text-right">
                   <p className="text-sm font-medium">
-                     {m.fecha_programada ? format(new Date(m.fecha_programada), "P", { locale: es }) : 'N/A'}
+                     {m.fecha_programada ? format(new Date(m.fecha_programada), "P", { locale: es }) : 'Sin fecha definida'}
                   </p>
                   <Button
                      variant="link"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useCallback, useState, useEffect } from "react";
+import { useMemo } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import * as z from "zod";
@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { useToast } from "@/components/ui/use-toast";
-import { AsyncCombobox, type Option } from "@/components/ui/AsyncCombobox";
+import { DocumentAssociationField } from "./DocumentAssociationField";
 
 import { TipoDocumento } from "@/types/api";
 import { createDocumentoSchema, MIME_TYPE_MAP } from "@/lib/zod";
@@ -43,7 +43,7 @@ interface UploadDocumentoFormProps {
    onSuccess: () => void;
 }
 
-type UploadDocumentoValues = z.infer<ReturnType<typeof createDocumentoSchema>>;
+export type UploadDocumentoValues = z.infer<ReturnType<typeof createDocumentoSchema>>;
 
 const cleanString = (str?: string | null) => (str && str.trim() !== "" ? str.trim() : null);
 
@@ -58,10 +58,6 @@ export function UploadDocumentoForm({
    const queryClient = useQueryClient();
 
    const isStandalone = !equipoId && !mantenimientoId && !licenciaId;
-
-   // ESTADO PARA PRECARGAR EQUIPOS (Evita el "No se encontraron equipos" al hacer clic vacío)
-   const [defaultEquipos, setDefaultEquipos] = useState<Option[]>([]);
-   const [isLoadingEquipos, setIsLoadingEquipos] = useState(isStandalone);
 
    const dynamicSchema = useMemo(
       () => createDocumentoSchema(tiposDocumento),
@@ -100,38 +96,6 @@ export function UploadDocumentoForm({
 
       return [...mimes, ...exts].join(",");
    }, [selectedTipoId, tiposDocumento]);
-
-   // PRECARGA INICIAL DE EQUIPOS (Solo si es un documento suelto "Standalone")
-   useEffect(() => {
-      let isMounted = true;
-      if (isStandalone) {
-         api.get('/equipos/', { params: { skip: 0, limit: 50 } })
-            .then((data) => {
-               if (!isMounted) return;
-               const arr = Array.isArray(data) ? data : (data as any)?.data || [];
-               setDefaultEquipos(arr.map((eq: any) => ({
-                  value: eq.id,
-                  label: `${eq.nombre} (${eq.numero_serie})`
-               })));
-            })
-            .catch(console.error)
-            .finally(() => {
-               if (isMounted) setIsLoadingEquipos(false);
-            });
-      } else {
-         setIsLoadingEquipos(false);
-      }
-      return () => { isMounted = false; };
-   }, [isStandalone]);
-
-   // FETCHER PARA CUANDO EL USUARIO ESCRIBE
-   const fetchEquiposAsync = useCallback(async (query: string) => {
-      const resultados = await equiposService.search(query);
-      return resultados.map((eq) => ({
-         value: eq.id,
-         label: `${eq.nombre} (${eq.numero_serie})`
-      }));
-   }, []);
 
    const uploadMutation = useMutation({
       mutationFn: (values: UploadDocumentoValues) => {
@@ -199,29 +163,7 @@ export function UploadDocumentoForm({
                )}
             />
 
-            {isStandalone && (
-               <FormField
-                  control={form.control}
-                  name="equipo_id"
-                  render={({ field }) => (
-                     <FormItem>
-                        <FormLabel>Vincular a un Equipo <span className="text-destructive">*</span></FormLabel>
-                        <FormControl>
-                           <AsyncCombobox
-                              value={field.value}
-                              onChange={field.onChange}
-                              placeholder={isLoadingEquipos ? "Cargando equipos..." : "Buscar equipo por nombre o serie..."}
-                              emptyMessage="No se encontraron equipos."
-                              defaultOptions={defaultEquipos} // INYECCIÓN DE LA LISTA PRECARGADA
-                              fetcher={fetchEquiposAsync}
-                              disabled={isLoadingEquipos}
-                           />
-                        </FormControl>
-                        <FormMessage />
-                     </FormItem>
-                  )}
-               />
-            )}
+            {isStandalone && <DocumentAssociationField form={form} />}
 
             <FormField
                control={form.control}
@@ -263,6 +205,7 @@ export function UploadDocumentoForm({
                      <FormLabel>Archivo <span className="text-destructive">*</span></FormLabel>
                      <FormControl>
                         <Input
+                           key={selectedTipoId}
                            {...fieldProps}
                            type="file"
                            accept={acceptedExtensions}

@@ -1,3 +1,4 @@
+import { guardPage } from "@/lib/page-access";
 import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import type { Metadata } from "next";
@@ -16,9 +17,13 @@ interface PageProps {
 }
 
 export default async function EquiposPage({ searchParams }: PageProps) {
+   const pageAccessDenied = await guardPage("/equipos");
+   if (pageAccessDenied) return pageAccessDenied;
+
    const params = await searchParams;
 
-   const page = Number(params?.page) || 1;
+   const requestedPage = Number(params?.page);
+   const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
    const limit = 10;
    const skip = (page - 1) * limit;
 

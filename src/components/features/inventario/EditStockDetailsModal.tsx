@@ -68,7 +68,7 @@ export function EditStockDetailsModal({ stock, isOpen, onClose }: EditStockDetai
 
       mutation.mutate({
          lote: values.lote || undefined,
-         fecha_caducidad: values.fecha_caducidad ? format(values.fecha_caducidad, "yyyy-MM-dd") : undefined,
+         fecha_caducidad: values.fecha_caducidad ? format(values.fecha_caducidad, "yyyy-MM-dd") : null,
       });
    };
 
@@ -78,7 +78,7 @@ export function EditStockDetailsModal({ stock, isOpen, onClose }: EditStockDetai
             <DialogHeader>
                <DialogTitle>Editar Detalles de Lote</DialogTitle>
                <DialogDescription>
-                  Corrija el número de lote o la fecha de vencimiento.
+                  Actualice la fecha de vencimiento. Para corregir el lote, registre una transferencia al lote correcto en la misma ubicación.
                   <br />
                   <span className="text-amber-600 font-medium text-xs">Nota: Esto no modifica la cantidad de inventario.</span>
                </DialogDescription>
@@ -88,8 +88,8 @@ export function EditStockDetailsModal({ stock, isOpen, onClose }: EditStockDetai
                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <FormField control={form.control} name="lote" render={({ field }) => (
                      <FormItem>
-                        <FormLabel>Código de Lote / Serie (Opcional)</FormLabel>
-                        <FormControl><Input {...field} value={field.value ?? ""} placeholder="Ej: LOTE-2026-X" /></FormControl>
+                        <FormLabel>Código de Lote / Serie</FormLabel>
+                        <FormControl><Input {...field} value={field.value ?? ""} readOnly /></FormControl>
                         <FormMessage />
                      </FormItem>
                   )} />

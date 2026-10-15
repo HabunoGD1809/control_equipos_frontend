@@ -189,7 +189,7 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
                </FormItem>
             )} />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                <FormField control={form.control} name="fecha_inicio" render={({ field }) => (
                   <FormItem className="flex flex-col">
                      <FormLabel>Fecha de Inicio <span className="text-destructive">*</span></FormLabel>
@@ -224,7 +224,7 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
                )} />
             </div>
 
-            <div className="grid grid-cols-2 gap-4 border-l-2 border-primary/20 pl-4 bg-muted/20 p-4 rounded-r-lg">
+            <div className="grid grid-cols-1 gap-4 border-l-2 border-primary/20 pl-4 bg-muted/20 p-4 rounded-r-lg sm:grid-cols-2">
                <FormField control={form.control} name="fecha_fin" render={({ field }) => (
                   <FormItem className="flex flex-col">
                      <FormLabel>Fecha de Fin <span className="text-destructive">*</span></FormLabel>
@@ -275,7 +275,7 @@ export function ReservaForm({ equipos, initialData, onSuccess }: ReservaFormProp
                </FormItem>
             )} />
 
-            <div className="flex justify-between items-center pt-4 border-t mt-4">
+            <div className="flex flex-wrap justify-between items-center gap-3 pt-4 border-t mt-4">
                {!initialData ? (
                   <Button type="button" variant="ghost" onClick={() => form.reset()} disabled={isSubmitting} className="text-muted-foreground hover:text-foreground">
                      <Eraser className="mr-2 h-4 w-4" /> Limpiar

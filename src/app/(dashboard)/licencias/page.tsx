@@ -1,45 +1,22 @@
-import { cookies } from 'next/headers';
+import { guardPage, getPageUser } from "@/lib/page-access";
+import { hasPermission } from "@/lib/permissions";
+import { serverCollection } from "@/lib/server-collections";
 import { LicenciasClient } from "./components/LicenciasClient";
 import { LicenciaSoftware, SoftwareCatalogo, Proveedor, EquipoSimple, UsuarioSimple, AsignacionLicencia } from "@/types/api";
 
-async function fetchData(endpoint: string, options: RequestInit = { cache: 'no-store' }) {
-   const cookieStore = await cookies();
-   const accessToken = cookieStore.get('access_token')?.value;
-
-   if (!accessToken) return [];
-
-   try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}${endpoint}`, {
-         headers: { 'Authorization': `Bearer ${accessToken}` },
-         ...options
-      });
-
-      if (!res.ok) {
-         console.error(`Error fetching ${endpoint}: ${res.status} ${res.statusText}`);
-         return [];
-      }
-      return res.json();
-   } catch (error) {
-      console.error(`Error fetching ${endpoint}:`, error);
-      return [];
-   }
-}
-
 export default async function LicenciasPage() {
-   // 2. Separamos las estrategias de caché
-   // Estas opciones mantendrán los datos pesados en memoria por 5 minutos (300 segundos)
-   const cachedOptions: RequestInit = { next: { revalidate: 300 } };
+   const pageAccessDenied = await guardPage("/licencias");
+   if (pageAccessDenied) return pageAccessDenied;
+
+   const user = await getPageUser();
 
    const [licencias, catalogo, asignaciones, proveedores, equipos, usuarios] = await Promise.all([
-      // --- DATOS DINÁMICOS (no-store por defecto): Siempre frescos al hacer router.refresh() ---
-      fetchData('/licencias/?limit=200') as Promise<LicenciaSoftware[]>,
-      fetchData('/licencias/catalogo/?limit=200') as Promise<SoftwareCatalogo[]>,
-      fetchData('/licencias/asignaciones/?limit=200') as Promise<AsignacionLicencia[]>,
-
-      // --- DATOS DE REFERENCIA (Cacheados): No saturan la BD en cada recarga ---
-      fetchData('/proveedores/?limit=500', cachedOptions) as Promise<Proveedor[]>,
-      fetchData('/equipos/?limit=500', cachedOptions) as Promise<EquipoSimple[]>,
-      fetchData('/usuarios/?limit=200', cachedOptions) as Promise<UsuarioSimple[]>,
+      serverCollection<LicenciaSoftware>('/licencias/'),
+      serverCollection<SoftwareCatalogo>('/licencias/catalogo'),
+      serverCollection<AsignacionLicencia>('/licencias/asignaciones'),
+      hasPermission(user, ['ver_proveedores']) ? serverCollection<Proveedor>('/proveedores/') : [],
+      hasPermission(user, ['ver_equipos']) ? serverCollection<EquipoSimple>('/equipos/') : [],
+      hasPermission(user, ['asignar_licencias']) ? serverCollection<UsuarioSimple>('/licencias/destinatarios') : [],
    ]);
 
    // 3. Validación segura de arrays

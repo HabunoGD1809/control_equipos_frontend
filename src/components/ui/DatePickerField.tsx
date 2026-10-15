@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { format } from "date-fns";
+import { es } from "date-fns/locale";
 import { CalendarIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
@@ -41,13 +42,14 @@ export function DatePickerField({
                         !value && "text-muted-foreground"
                      )}
                   >
-                     {value ? format(value, "PPP") : <span>Seleccione fecha</span>}
+                     {value ? format(value, "PPP", { locale: es }) : <span>Seleccione fecha</span>}
                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                   </Button>
                </FormControl>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
                <Calendar
+                  locale={es}
                   mode="single"
                   selected={value ?? undefined}
                   onSelect={(d) => {

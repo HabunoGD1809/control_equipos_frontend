@@ -1,33 +1,21 @@
+import { guardPage, getPageUser } from "@/lib/page-access";
+import { hasPermission } from "@/lib/permissions";
+import { serverCollection } from "@/lib/server-collections";
 import { MovimientosClient } from "./components/MovimientosClient";
-import { movimientosServerService } from "@/app/services/movimientosService.server";
-import { equiposServerService } from "@/app/services/equiposService.server";
-import { usuariosServerService } from "@/app/services/usuariosService.server";
-import { ubicacionesServerService } from "@/app/services/ubicacionesService.server";
+import type { Movimiento, EquipoRead, Ubicacion } from "@/types/api";
 import { PageHeader } from "@/components/layout/PageHeader";
 
-async function getMovimientosPageData() {
-   try {
-      const [movimientos, equiposData, usuarios, ubicaciones] = await Promise.all([
-         movimientosServerService.getAll({ limit: 200 }),
-         equiposServerService.getAll({ limit: 500 }),
-         usuariosServerService.getAll({ limit: 200 }),
-         ubicacionesServerService.getAll({ limit: 200 }),
-      ]);
-
-      return {
-         movimientos,
-         equipos: equiposData,
-         usuarios,
-         ubicaciones,
-      };
-   } catch (error) {
-      console.error("[GET_MOVIMIENTOS_PAGE_DATA_ERROR]", error);
-      return { movimientos: [], equipos: [], usuarios: [], ubicaciones: [] };
-   }
-}
-
 export default async function MovimientosPage() {
-   const { movimientos, equipos, usuarios, ubicaciones } = await getMovimientosPageData();
+   const pageAccessDenied = await guardPage("/movimientos");
+   if (pageAccessDenied) return pageAccessDenied;
+
+   const user = await getPageUser();
+   const canRegister = hasPermission(user, ['registrar_movimientos']);
+   const [movimientos, equipos, ubicaciones] = await Promise.all([
+      serverCollection<Movimiento>('/movimientos/'),
+      canRegister && hasPermission(user, ['ver_equipos']) ? serverCollection<EquipoRead>('/equipos/') : [],
+      canRegister ? serverCollection<Ubicacion>('/ubicaciones/') : [],
+   ]);
 
    return (
       <div className="flex-1 space-y-6">
@@ -38,7 +26,6 @@ export default async function MovimientosPage() {
          <MovimientosClient
             initialData={movimientos}
             equipos={equipos}
-            usuarios={usuarios}
             ubicaciones={ubicaciones}
          />
       </div>

@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { deleteSession } from '@/lib/session';
+import { isSameOrigin, safeReturnPath, requestOrigin } from '@/lib/request-security';
 
-export async function POST() {
+export async function POST(request: Request) {
+   if (!isSameOrigin(request)) return new NextResponse("Origen no permitido", { status: 403 });
    try {
       await deleteSession();
       return NextResponse.json({ success: true, message: 'Logged out successfully' });
@@ -12,14 +14,15 @@ export async function POST() {
 }
 
 export async function GET(request: Request) {
+   if (!isSameOrigin(request)) return new NextResponse("Origen no permitido", { status: 403 });
    try {
-      await deleteSession();
+      await deleteSession({ deferRevocation: true });
    } catch (e) {
       console.error('[API_LOGOUT] Error borrando sesión:', e);
    }
 
    const { searchParams } = new URL(request.url);
-   const callbackUrl = searchParams.get('callbackUrl') || '/login';
+   const callbackUrl = safeReturnPath(searchParams.get('callbackUrl'), '/login');
 
-   return NextResponse.redirect(new URL(callbackUrl, request.url));
+   return NextResponse.redirect(new URL(callbackUrl, requestOrigin(request)));
 }

@@ -76,7 +76,7 @@ export function AvatarCropModal({ imageSrc, open, onClose, onConfirm }: AvatarCr
 
    return (
       <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-         <DialogContent className="sm:max-w-md p-0 overflow-hidden">
+         <DialogContent className="sm:max-w-md p-0">
             <DialogHeader className="px-6 pt-6 pb-2">
                <DialogTitle>Ajustar foto de perfil</DialogTitle>
                <DialogDescription>
@@ -85,7 +85,7 @@ export function AvatarCropModal({ imageSrc, open, onClose, onConfirm }: AvatarCr
             </DialogHeader>
 
             {/* Área de crop */}
-            <div className="relative w-full h-80 bg-black">
+            <div className="relative w-full h-[min(20rem,45dvh)] bg-black">
                <Cropper
                   image={imageSrc}
                   crop={crop}
@@ -118,7 +118,7 @@ export function AvatarCropModal({ imageSrc, open, onClose, onConfirm }: AvatarCr
                   <Button variant="outline" onClick={onClose} disabled={isConfirming}>
                      <X className="mr-2 h-4 w-4" /> Cancelar
                   </Button>
-                  <Button onClick={handleConfirm} disabled={isConfirming}>
+                  <Button onClick={handleConfirm} disabled={isConfirming || !croppedAreaPixels}>
                      {isConfirming
                         ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         : <Check className="mr-2 h-4 w-4" />

@@ -1,30 +1,18 @@
-import { cookies } from 'next/headers';
+import { guardPage } from "@/lib/page-access";
+import { serverApi } from "@/lib/http-server";
+import { collectPages } from "@/lib/collection-pages";
 import { CatalogosClient } from "./components/CatalogosClient";
 import { Empleado } from "@/types/api";
 
 async function getInitialTabData() {
-   const accessToken = (await cookies()).get('access_token')?.value;
-   if (!accessToken) return null;
-
-   const headers = { 'Authorization': `Bearer ${accessToken}` };
-   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-
-   try {
-      const res = await fetch(`${baseUrl}/empleados/`, {
-         headers,
-         cache: 'no-store',
-      });
-
-      return {
-         empleados: res.ok ? (await res.json() as Empleado[]) : [],
-      };
-   } catch (error) {
-      console.error("[GET_CATALOGOS_DATA_ERROR]", error);
-      return null;
-   }
+   const empleados = await collectPages<Empleado>((skip, limit) => serverApi.get('/empleados/', { params: { skip, limit } }));
+   return { empleados };
 }
 
 export default async function CatalogosPage() {
+   const pageAccessDenied = await guardPage("/administracion/catalogos");
+   if (pageAccessDenied) return pageAccessDenied;
+
    const data = await getInitialTabData();
 
    if (!data) {

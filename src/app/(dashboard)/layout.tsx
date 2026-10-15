@@ -1,22 +1,13 @@
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { SessionProvider } from "@/contexts/SessionProvider";
 import { ReactQueryProvider } from "@/contexts/ReactQueryProvider";
-import { serverApi } from "@/lib/http-server";
+import { getPageUser } from "@/lib/page-access";
 import type { Usuario } from "@/types/api";
+import { CompanyBrand } from "@/components/features/empresa/CompanyBrand";
 
 import { ForceChangePasswordModal } from "@/components/features/usuarios/ForceChangePasswordModal";
-
-function isNextRedirect(err: unknown) {
-   return (
-      typeof err === "object" &&
-      err !== null &&
-      "digest" in err &&
-      typeof (err as any).digest === "string" &&
-      (err as any).digest.startsWith("NEXT_REDIRECT")
-   );
-}
 
 export default async function DashboardLayout({
    children,
@@ -26,14 +17,24 @@ export default async function DashboardLayout({
    let user: Usuario | null = null;
 
    try {
-      user = await serverApi.get<Usuario>("/usuarios/me");
+      user = await getPageUser();
    } catch (error) {
-      if (isNextRedirect(error)) throw error;
+      unstable_rethrow(error);
 
       console.error("Error validando sesión en servidor:", error);
-      redirect("/login");
+      redirect("/api/auth/logout?callbackUrl=/login");
    }
 
+   if (user.requiere_cambio_contrasena) {
+      return (
+         <ReactQueryProvider>
+            <SessionProvider user={user}>
+               <main className="flex min-h-dvh items-center justify-center p-4"><CompanyBrand /></main>
+               <ForceChangePasswordModal />
+            </SessionProvider>
+         </ReactQueryProvider>
+      );
+   }
    return (
       <ReactQueryProvider>
          <SessionProvider user={user}>
@@ -43,7 +44,7 @@ export default async function DashboardLayout({
 
             {/* Contenedor principal: Ocupa toda la pantalla, sin scroll global. 
                 Usamos bg-muted/20 o bg-background para dar un contraste limpio a las tarjetas */}
-            <div className="flex h-screen w-full overflow-hidden bg-muted/20 dark:bg-background">
+            <div className="flex h-dvh w-full overflow-hidden bg-muted/20 dark:bg-background">
 
                {/* Sidebar */}
                <Sidebar />
@@ -56,7 +57,7 @@ export default async function DashboardLayout({
 
                   {/* Área de contenido: Esta es la ÚNICA parte que hace scroll */}
                   <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 lg:p-8 scroll-smooth">
-                     <div className="max-w-7xl mx-auto">
+                     <div className="min-w-0 w-full max-w-7xl mx-auto">
                         {children}
                      </div>
                   </div>

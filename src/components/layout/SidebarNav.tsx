@@ -42,9 +42,11 @@ function CollapsibleNavItem({ item, isCollapsed }: { item: NavItemProps; isColla
    const isAnySubRouteActive = item.subRoutes?.some(sub => sub.href && pathname.startsWith(sub.href)) || false;
    const [isOpen, setIsOpen] = useState(isAnySubRouteActive);
 
-   useEffect(() => {
+   const [previousCollapsed, setPreviousCollapsed] = useState(isCollapsed);
+   if (previousCollapsed !== isCollapsed) {
+      setPreviousCollapsed(isCollapsed);
       if (isCollapsed) setIsOpen(false);
-   }, [isCollapsed]);
+   }
 
    if (!hasPermissionForAnySubRoute) return null;
 

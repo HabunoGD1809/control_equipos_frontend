@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import * as z from "zod";
@@ -22,17 +22,30 @@ import { useToast } from "@/components/ui/use-toast";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 import { reporteSchema } from "@/lib/zod";
+import { reportExtension, downloadReportBlob } from "@/lib/report-download";
 import { reportesService } from "@/app/services/reportesService";
 import type { ReporteParams, Reporte, EstadoReporte } from "@/types/api";
+import { useSession } from "@/contexts/SessionProvider";
+
+const modules = [
+   { value: "equipos", label: "Catálogo de Equipos", permission: "ver_equipos" },
+   { value: "movimientos", label: "Registro de Movimientos", permission: "ver_movimientos" },
+   { value: "mantenimientos", label: "Historial de Mantenimientos", permission: "ver_mantenimientos" },
+   { value: "inventario", label: "Estado de Inventario", permission: "ver_inventario" },
+   { value: "licencias", label: "Asignaciones de Software", permission: "ver_licencias" },
+   { value: "auditoria", label: "Logs de Auditoría", permission: "ver_auditoria" },
+   { value: "kardex", label: "Kardex de Inventario", permission: "ver_inventario" },
+] as const;
 
 type FormValues = z.infer<typeof reporteSchema>;
 
 const EstadoBadge = ({ estado }: { estado: EstadoReporte }) => {
    const config: Record<EstadoReporte, { label: string; icon: React.ElementType; className: string }> = {
-      Completado: { label: "Disponible", icon: CheckCircle2, className: "bg-green-100 text-green-700 border-green-200" },
-      Pendiente: { label: "En Cola", icon: Clock, className: "bg-yellow-100 text-yellow-700 border-yellow-200" },
-      "En Proceso": { label: "Procesando", icon: Loader2, className: "bg-blue-100 text-blue-700 border-blue-200" },
-      Error: { label: "Error", icon: XCircle, className: "bg-red-100 text-red-700 border-red-200" },
+      completado: { label: "Disponible", icon: CheckCircle2, className: "bg-green-100 text-green-700 border-green-200" },
+      pendiente: { label: "En Cola", icon: Clock, className: "bg-yellow-100 text-yellow-700 border-yellow-200" },
+      "procesando": { label: "Procesando", icon: Loader2, className: "bg-blue-100 text-blue-700 border-blue-200" },
+      expirado: { label: "Expirado", icon: Clock, className: "bg-muted text-muted-foreground border-muted" },
+      error: { label: "Error", icon: XCircle, className: "bg-red-100 text-red-700 border-red-200" },
    };
 
    const defaultCfg = { label: estado, icon: AlertTriangle, className: "bg-muted text-muted-foreground border-muted" };
@@ -41,7 +54,7 @@ const EstadoBadge = ({ estado }: { estado: EstadoReporte }) => {
 
    return (
       <span className={cn("inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border", currentConfig.className)}>
-         <Icon className={cn("h-3 w-3", estado === "En Proceso" && "animate-spin")} />
+         <Icon className={cn("h-3 w-3", estado === "procesando" && "animate-spin")} />
          {currentConfig.label}
       </span>
    );
@@ -57,13 +70,16 @@ const FormatoIcon = ({ formato }: { formato: string }) => {
 
 export const ReportesClient = () => {
    const { toast } = useToast();
+   const { user } = useSession();
+   const allowedModules = modules.filter(module => user?.rol?.nombre === "admin" || user?.rol?.permisos?.some(permission => permission.nombre === module.permission));
+   const defaultModule = allowedModules[0]?.value;
    const queryClient = useQueryClient();
    const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
    const form = useForm<FormValues>({
       resolver: standardSchemaResolver(reporteSchema),
       defaultValues: {
-         tipo_reporte: "equipos",
+         tipo_reporte: defaultModule,
          formato: "pdf",
          fecha_inicio: subDays(new Date(), 30),
          fecha_fin: new Date(),
@@ -75,45 +91,10 @@ export const ReportesClient = () => {
       queryKey: ["reportes_historial"],
       queryFn: reportesService.getHistorial,
       staleTime: 30_000,
+      refetchInterval: query => query.state.data?.some(r => ["pendiente", "procesando"].includes(r.estado)) ? 3000 : 30000,
    });
 
    // ─── CONEXIÓN SSE PARA TIEMPO REAL ───
-   useEffect(() => {
-      const eventSource = new EventSource("/api/sse/notificaciones");
-
-      eventSource.onmessage = (event) => {
-         try {
-            const data = JSON.parse(event.data);
-
-            // Si la notificación es un sistema/reporte, actualizamos la tabla dinámicamente
-            if (data.tipo === "sistema" || data.referencia_tabla === "reportes" || data.mensaje?.toLowerCase().includes("reporte")) {
-               queryClient.invalidateQueries({ queryKey: ["reportes_historial"] });
-
-               // Mostrar toast si el reporte terminó exitosamente o falló
-               if (data.mensaje) {
-                  toast({
-                     title: "Actualización de Reporte",
-                     description: data.mensaje,
-                  });
-               }
-            }
-         } catch (error) {
-            // Si el backend manda un ping plano, igual invalidamos por precaución
-            queryClient.invalidateQueries({ queryKey: ["reportes_historial"] });
-         }
-      };
-
-      eventSource.onerror = (err) => {
-         console.error("[SSE] Error en la conexión de notificaciones:", err);
-         // El navegador intentará reconectar automáticamente
-      };
-
-      return () => {
-         eventSource.close();
-      };
-   }, [queryClient, toast]);
-   // ─────────────────────────────────────
-
    const generarReporteMutation = useMutation({
       mutationFn: async (data: FormValues) => {
          const apiPayload: ReporteParams = {
@@ -129,7 +110,7 @@ export const ReportesClient = () => {
             title: "Reporte Solicitado",
             description: "La generación ha comenzado en segundo plano. Recibirás una notificación cuando esté listo.",
          });
-         // Refrescar el historial inmediatamente para ver el estado "Pendiente"
+         // Refrescar el historial inmediatamente para ver el estado "pendiente"
          refetchHistorial();
       },
       onError: (err: any) => {
@@ -142,19 +123,11 @@ export const ReportesClient = () => {
    });
 
    const handleDescargar = async (reporte: Reporte) => {
-      if (reporte.estado !== "Completado") return;
+      if (reporte.estado !== "completado" || downloadingId) return;
       setDownloadingId(reporte.id);
       try {
          const blob = await reportesService.descargarReporte(reporte.id);
-         const ext = reporte.formato.toLowerCase();
-         const url = window.URL.createObjectURL(blob);
-         const a = document.createElement("a");
-         a.href = url;
-         a.download = `Reporte_${reporte.tipo_reporte}_${format(new Date(reporte.fecha_solicitud), "yyyy-MM-dd")}.${ext}`;
-         document.body.appendChild(a);
-         a.click();
-         window.URL.revokeObjectURL(url);
-         a.remove();
+         downloadReportBlob(blob, `Reporte_${reporte.tipo_reporte}_${format(new Date(reporte.fecha_solicitud), "yyyy-MM-dd")}.${reportExtension(reporte.formato)}`);
          toast({ title: "Descarga completada", description: `El reporte se descargó exitosamente.` });
       } catch {
          toast({ variant: "destructive", title: "Error de descarga", description: "El reporte no se pudo descargar o expiró." });
@@ -167,7 +140,7 @@ export const ReportesClient = () => {
 
    const handleClear = () => {
       form.reset({
-         tipo_reporte: "equipos",
+         tipo_reporte: defaultModule,
          formato: "pdf",
          fecha_inicio: subDays(new Date(), 30),
          fecha_fin: new Date(),
@@ -175,17 +148,17 @@ export const ReportesClient = () => {
    };
 
    return (
-      <div className="grid lg:grid-cols-12 gap-8 animate-in fade-in duration-300">
+      <div className="min-w-0 grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in duration-300">
 
          {/* COLUMNA IZQUIERDA: GENERADOR */}
-         <div className="lg:col-span-7 space-y-6">
+         <div className="min-w-0 lg:col-span-7 space-y-6">
             <Card className="border shadow-sm">
-               <CardHeader className="bg-muted/30 border-b pb-6">
+               <CardHeader className="bg-muted/30 border-b p-4 sm:p-6">
                   <div className="flex items-center gap-3">
-                     <div className="p-2.5 bg-primary/10 rounded-lg">
+                     <div className="shrink-0 p-2.5 bg-primary/10 rounded-lg">
                         <Filter className="h-5 w-5 text-primary" />
                      </div>
-                     <div>
+                     <div className="min-w-0 break-words">
                         <CardTitle className="text-xl">Generador Analítico</CardTitle>
                         <CardDescription className="mt-1.5">
                            Configure los parámetros para extraer un consolidado de datos del sistema.
@@ -194,7 +167,7 @@ export const ReportesClient = () => {
                   </div>
                </CardHeader>
 
-               <CardContent className="pt-6">
+               <CardContent className="p-4 sm:p-6">
                   <Form {...form}>
                      <form id="report-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -210,13 +183,7 @@ export const ReportesClient = () => {
                                        </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
-                                       <SelectItem value="equipos">Catálogo de Equipos</SelectItem>
-                                       <SelectItem value="movimientos">Registro de Movimientos</SelectItem>
-                                       <SelectItem value="mantenimientos">Historial de Mantenimientos</SelectItem>
-                                       <SelectItem value="inventario">Estado de Inventario</SelectItem>
-                                       <SelectItem value="licencias">Asignaciones de Software</SelectItem>
-                                       <SelectItem value="auditoria">Logs de Auditoría</SelectItem>
-                                       <SelectItem value="kardex">Kardex de Inventario</SelectItem>
+                                       {allowedModules.map(module => <SelectItem key={module.value} value={module.value}>{module.label}</SelectItem>)}
                                     </SelectContent>
                                  </Select>
                                  <FormMessage />
@@ -251,7 +218,7 @@ export const ReportesClient = () => {
                            )} />
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-muted/10 p-5 rounded-xl border border-muted/50">
+                        <div className="min-w-0 grid grid-cols-1 md:grid-cols-2 gap-6 bg-muted/10 p-3 sm:p-5 rounded-xl border border-muted/50">
                            <FormField control={form.control} name="fecha_inicio" render={({ field }) => (
                               <FormItem className="flex flex-col">
                                  <FormLabel>Desde la Fecha</FormLabel>
@@ -259,7 +226,7 @@ export const ReportesClient = () => {
                                     <PopoverTrigger asChild>
                                        <FormControl>
                                           <Button type="button" variant={"outline"} className={cn("w-full pl-3 text-left font-normal bg-background h-11", !field.value && "text-muted-foreground")}>
-                                             {field.value ? format(field.value, "PPP", { locale: es }) : <span>Seleccione fecha</span>}
+                                             {field.value ? format(field.value, "PP", { locale: es }) : <span>Seleccione fecha</span>}
                                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                                           </Button>
                                        </FormControl>
@@ -279,7 +246,7 @@ export const ReportesClient = () => {
                                     <PopoverTrigger asChild>
                                        <FormControl>
                                           <Button type="button" variant={"outline"} className={cn("w-full pl-3 text-left font-normal bg-background h-11", !field.value && "text-muted-foreground")}>
-                                             {field.value ? format(field.value, "PPP", { locale: es }) : <span>Seleccione fecha</span>}
+                                             {field.value ? format(field.value, "PP", { locale: es }) : <span>Seleccione fecha</span>}
                                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                                           </Button>
                                        </FormControl>
@@ -302,11 +269,11 @@ export const ReportesClient = () => {
                   </Form>
                </CardContent>
 
-               <CardFooter className="bg-muted/20 border-t px-6 py-4 flex items-center justify-between">
+               <CardFooter className="bg-muted/20 border-t px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
                   <Button type="button" variant="ghost" onClick={handleClear} disabled={generarReporteMutation.isPending} className="text-muted-foreground hover:text-foreground">
                      <RefreshCw className="mr-2 h-4 w-4" /> Restaurar Filtros
                   </Button>
-                  <Button type="submit" form="report-form" disabled={generarReporteMutation.isPending} className="min-w-40 shadow-md">
+                  <Button type="submit" form="report-form" disabled={generarReporteMutation.isPending || allowedModules.length === 0} className="min-w-40 shadow-md">
                      {generarReporteMutation.isPending ? (
                         <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Procesando...</>
                      ) : (
@@ -318,13 +285,13 @@ export const ReportesClient = () => {
          </div>
 
          {/* COLUMNA DERECHA: HISTORIAL */}
-         <div className="lg:col-span-5">
+         <div className="min-w-0 lg:col-span-5">
             <Card className="h-full border shadow-sm flex flex-col">
-               <CardHeader className="pb-4 border-b bg-muted/30">
-                  <div className="flex items-center justify-between">
+               <CardHeader className="p-4 sm:p-6 border-b bg-muted/30">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                      <CardTitle className="text-lg">Historial Reciente</CardTitle>
                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className="font-normal text-xs">Últimos 10</Badge>
+                        <Badge variant="secondary" className="font-normal text-xs">{historialReportes.length} reportes</Badge>
                         <Button
                            variant="ghost"
                            size="icon"
@@ -358,13 +325,16 @@ export const ReportesClient = () => {
                      <div className="divide-y overflow-y-auto max-h-125">
                         {historialReportes.map((reporte) => {
                            const isDownloading = downloadingId === reporte.id;
-                           const isDescargable = reporte.estado === "Completado";
+                           const isDescargable = reporte.estado === "completado";
 
                            return (
-                              <div
+                              <button
                                  key={reporte.id}
+                                 type="button"
+                                 disabled={!isDescargable || Boolean(downloadingId)}
+                                 aria-label={`${isDescargable ? "Descargar" : "Estado del"} reporte de ${reporte.tipo_reporte.replaceAll('_', ' ')} en ${reporte.formato.toUpperCase()}`}
                                  className={cn(
-                                    "flex items-start gap-3 px-4 py-3.5 transition-colors",
+                                    "grid w-full grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 px-4 py-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:flex sm:items-start",
                                     isDescargable && "hover:bg-muted/30 cursor-pointer group",
                                     !isDescargable && "opacity-80"
                                  )}
@@ -386,7 +356,7 @@ export const ReportesClient = () => {
                                  </div>
 
                                  {/* Estado + acción */}
-                                 <div className="shrink-0 flex flex-col items-end gap-1.5">
+                                 <div className="col-start-2 shrink-0 flex items-center justify-between gap-1.5 sm:flex-col sm:items-end">
                                     <EstadoBadge estado={reporte.estado} />
                                     {isDescargable && (
                                        <span className="text-[10px] text-primary font-medium flex items-center gap-1 group-hover:underline">
@@ -397,7 +367,7 @@ export const ReportesClient = () => {
                                        </span>
                                     )}
                                  </div>
-                              </div>
+                              </button>
                            );
                         })}
                      </div>

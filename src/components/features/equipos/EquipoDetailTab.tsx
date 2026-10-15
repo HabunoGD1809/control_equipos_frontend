@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Separator } from "@/components/ui/Separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/Alert";
 import type { EquipoRead } from "@/types/api";
+import { TechnicalSheetSummary } from "@/components/features/equipos/TechnicalSheet";
 
 interface EquipoDetailTabProps {
    equipo: EquipoRead;
@@ -28,10 +29,8 @@ export function EquipoDetailTab({ equipo }: EquipoDetailTabProps) {
    };
 
    const estadoNombre = equipo.estado?.nombre || "Desconocido";
-   const estadoMetadatos = equipo.estado as Record<string, any> | undefined | null;
-
-   const permiteMovimientos = estadoMetadatos?.permite_movimientos ?? ["Disponible", "En Uso"].includes(estadoNombre);
-   const requiereAutorizacion = estadoMetadatos?.requiere_autorizacion ?? ["Averiado", "En Cuarentena", "Reservado", "Extraviado", "Dado de Baja"].includes(estadoNombre);
+   const permiteMovimientos = equipo.estado?.permite_movimientos ?? false;
+   const requiereAutorizacion = equipo.estado?.requiere_autorizacion ?? false;
    const movimientosBloqueados = !permiteMovimientos;
 
    return (
@@ -114,6 +113,7 @@ export function EquipoDetailTab({ equipo }: EquipoDetailTabProps) {
          </div>
 
          {/* ── Detalles Técnicos y Financieros ── */}
+         <Card><CardHeader><CardTitle>Ficha técnica · {equipo.tipo_activo ?? "Equipo"}</CardTitle></CardHeader><CardContent><TechnicalSheetSummary value={equipo.especificaciones_tecnicas} /></CardContent></Card>
          <div className="grid gap-6 md:grid-cols-2">
             <Card className="shadow-sm">
                <CardHeader className="border-b bg-muted/10 pb-4">

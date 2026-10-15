@@ -6,7 +6,7 @@ import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { z } from "zod";
 import { ShieldAlert, Loader2, KeyRound } from "lucide-react";
 import { changePasswordSchema } from "@/lib/zod";
-import { api } from "@/lib/http";
+import { changePasswordAction } from "@/actions/auth-actions";
 import { useToast } from "@/components/ui/use-toast";
 import { getFriendlyErrorMessage } from "@/lib/error-handling";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/Dialog";
@@ -28,13 +28,12 @@ export function ForceChangePasswordModal() {
    const onSubmit = async (data: FormValues) => {
       try {
          setIsSubmitting(true);
-         await api.post("/auth/change-password/", {
-            current_password: data.current_password,
-            new_password: data.new_password
-         });
+         const result = await changePasswordAction(data);
+         if (result.error) throw new Error(result.error);
+         if (result.loginRequired) { window.location.assign(new URL("/login", window.location.origin).href); return; }
          toast({ title: "Contraseña Actualizada", description: "Tu sesión ha sido asegurada. Redirigiendo..." });
 
-         setTimeout(() => window.location.reload(), 1500);
+         window.location.assign(new URL("/dashboard", window.location.origin).href);
       } catch (error: unknown) {
          const { message } = getFriendlyErrorMessage(error);
          toast({ variant: "destructive", title: "Error de Seguridad", description: message });

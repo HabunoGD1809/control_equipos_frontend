@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
 import { PlusCircle, MoreHorizontal, Pencil, Trash2, RefreshCw, Loader2 } from "lucide-react";
 
@@ -18,6 +19,7 @@ import { Badge } from "@/components/ui/Badge";
 import { useHasPermission } from "@/hooks/useHasPermission";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { api } from "@/lib/http";
+import { collectPages } from "@/lib/collection-pages";
 
 import type {
    InventarioStock,
@@ -32,6 +34,7 @@ import { RegistrarMovimientoForm } from "@/components/features/inventario/Regist
 import { TipoItemForm } from "./TipoItemForm";
 import { MovimientosInventarioClient } from "./MovimientosInventarioClient";
 import { StockGroupedTable } from "@/components/features/inventario/StockGroupedTable";
+import { ColorSwatch } from "@/components/features/inventario/ConsumableColorPicker";
 
 interface InventarioClientProps {
    initialStockData: InventarioStock[];
@@ -56,20 +59,26 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
 }) => {
    const router = useRouter();
    const searchParams = useSearchParams();
+   const queryClient = useQueryClient();
 
    // ── Stock (viene del servidor) ───────────────────────────────────────────
    const [stockData, setStockData] = useState<InventarioStock[]>(initialStockData);
+   const [previousStock, setPreviousStock] = useState(initialStockData);
+   if (previousStock !== initialStockData) { setPreviousStock(initialStockData); setStockData(initialStockData); }
 
    // ── Lazy tab data ────────────────────────────────────────────────────────
    const [tabData, setTabData] = useState<LazyTabData>({});
    const [mountedTabs, setMountedTabs] = useState<Set<string>>(new Set(["stock"]));
    const [loadingTab, setLoadingTab] = useState<string | null>(null);
+   const [activeTab, setActiveTab] = useState("stock");
+   const [catalogError, setCatalogError] = useState<string | null>(null);
+   const [hasOlderMovements, setHasOlderMovements] = useState(false);
+   const [loadingOlderMovements, setLoadingOlderMovements] = useState(false);
+   const [historyError, setHistoryError] = useState<string | null>(null);
 
    // ── Modal de movimiento ──────────────────────────────────────────────────
-   const [isMovimientoModalOpen, setIsMovimientoModalOpen] = useState(false);
+   const [manualMovimientoOpen, setIsMovimientoModalOpen] = useState(false);
    const [preselectedItemId, setPreselectedItemId] = useState<string | undefined>(undefined);
-   const [modalData, setModalData] = useState<ModalData | null>(null);
-   const [isLoadingModalData, setIsLoadingModalData] = useState(false);
 
    // ── Modal de tipo ítem ───────────────────────────────────────────────────
    const [isTipoItemModalOpen, setIsTipoItemModalOpen] = useState(false);
@@ -78,127 +87,118 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
    // ── Tipos inactivos ──────────────────────────────────────────────────────
    const [isRefreshing, setIsRefreshing] = useState(false);
    const [showInactiveTipos, setShowInactiveTipos] = useState(false);
-   const [hasFetchedAllTipos, setHasFetchedAllTipos] = useState(false);
 
    const canManageTipos = useHasPermission(["administrar_inventario_tipos"]);
    const canRegisterMoves = useHasPermission(["administrar_inventario_stock"]);
+   const canReadEquipos = useHasPermission(["ver_equipos"]);
+   const canReadProveedores = useHasPermission(["ver_proveedores"]);
 
-   // ── Leer URL params (acción desde notificaciones) ────────────────────────
-   useEffect(() => {
-      const action = searchParams.get("action");
-      const itemId = searchParams.get("item_id");
-
-      if (action === "reponer" && itemId && canRegisterMoves) {
-         setPreselectedItemId(itemId);
-         openMovimientoModal(itemId);
-
-         const currentUrl = new URL(window.location.href);
-         currentUrl.searchParams.delete("action");
-         currentUrl.searchParams.delete("item_id");
-         window.history.replaceState({}, "", currentUrl.toString());
+   const urlItemId = canRegisterMoves && searchParams.get("action") === "reponer" ? searchParams.get("item_id") : null;
+   const isMovimientoModalOpen = manualMovimientoOpen || Boolean(urlItemId);
+   const closeMovimientoModal = (open: boolean) => {
+      setIsMovimientoModalOpen(open);
+      if (!open && urlItemId) {
+         const next = new URLSearchParams(searchParams);
+         next.delete("action"); next.delete("item_id");
+         router.replace(`/inventario${next.size ? `?${next}` : ""}`);
       }
-   }, [searchParams, canRegisterMoves]);
+   };
 
    // ── Fetch lazy por tab ───────────────────────────────────────────────────
-   const fetchTabData = useCallback(async (tab: string) => {
-      if (tab === "movimientos" && !tabData.movimientos) {
+   const fetchTabData = useCallback(async (tab: string, force = false, includeInactive = showInactiveTipos) => {
+      if (tab === "movimientos" && (force || !tabData.movimientos)) {
          setLoadingTab("movimientos");
+         setHistoryError(null);
          try {
             const data = await api.get<InventarioMovimiento[]>("/inventario/movimientos", {
                params: { limit: 200 },
             });
             setTabData((prev) => ({ ...prev, movimientos: data }));
+            setHasOlderMovements(data.length === 200);
          } catch (err) {
             console.error("[InventarioClient] Error fetching movimientos:", err);
-            setTabData((prev) => ({ ...prev, movimientos: [] }));
+            setHistoryError("No se pudo cargar el historial. Vuelva a intentarlo.");
          } finally {
             setLoadingTab(null);
          }
       }
 
-      if (tab === "tipos" && !tabData.tipos) {
+      if (tab === "tipos" && (force || !tabData.tipos)) {
          setLoadingTab("tipos");
+         setCatalogError(null);
          try {
-            const data = await api.get<TipoItemInventario[]>("/inventario/tipos", {
-               params: { limit: 200 },
-            });
+            const data = await collectPages((skip, limit) => api.get<TipoItemInventario[]>("/inventario/tipos", { params: { skip, limit, include_inactive: includeInactive } }));
             setTabData((prev) => ({ ...prev, tipos: data }));
          } catch (err) {
             console.error("[InventarioClient] Error fetching tipos:", err);
-            setTabData((prev) => ({ ...prev, tipos: [] }));
+            setCatalogError("No se pudo cargar el catálogo. Puede volver a intentarlo.");
          } finally {
             setLoadingTab(null);
          }
       }
-   }, [tabData]);
+   }, [tabData, showInactiveTipos]);
 
    const handleTabChange = useCallback((value: string) => {
+      setActiveTab(value);
       setMountedTabs((prev) => new Set(prev).add(value));
       fetchTabData(value);
    }, [fetchTabData]);
 
-   // ── Fetch inactivos en tab tipos ─────────────────────────────────────────
-   const isFirstInactivosRender = useRef(true);
-   useEffect(() => {
-      if (isFirstInactivosRender.current) {
-         isFirstInactivosRender.current = false;
-         return;
-      }
-      if (showInactiveTipos && !hasFetchedAllTipos) {
-         api.get<TipoItemInventario[]>("/inventario/tipos/", { params: { include_inactive: true, limit: 200 } })
-            .then((res) => {
-               setTabData((prev) => ({ ...prev, tipos: res }));
-               setHasFetchedAllTipos(true);
-            })
-            .catch(console.error);
-      }
-   }, [showInactiveTipos, hasFetchedAllTipos]);
+   const loadOlderMovements = async () => {
+      if (loadingOlderMovements) return;
+      setLoadingOlderMovements(true);
+      setHistoryError(null);
+      try {
+         const page = await api.get<InventarioMovimiento[]>("/inventario/movimientos", { params: { skip: tabData.movimientos?.length ?? 0, limit: 200 } });
+         setTabData(previous => ({ ...previous, movimientos: Array.from(new Map([...(previous.movimientos ?? []), ...page].map(movement => [movement.id, movement])).values()) }));
+         setHasOlderMovements(page.length === 200);
+      } catch { setHistoryError("No se pudo cargar la siguiente página. Puede volver a intentarlo."); }
+      finally { setLoadingOlderMovements(false); }
+   };
 
    // ── Fetch lazy de datos del modal de movimiento ──────────────────────────
-   const fetchModalData = useCallback(async () => {
-      if (modalData) return; // ya cargados, no repetir
-      setIsLoadingModalData(true);
-      try {
+   const { data: modalData, isPending: isLoadingModalData, error: modalError, refetch: refetchModalData } = useQuery<ModalData>({
+      queryKey: ["inventario", "opciones-movimiento", { canReadEquipos, canReadProveedores }],
+      enabled: isMovimientoModalOpen || isTipoItemModalOpen,
+      queryFn: async () => {
          const [equipos, proveedores, ubicaciones, tipos] = await Promise.all([
-            api.get<EquipoSimple[]>("/equipos", { params: { limit: 500 } }),
-            api.get<Proveedor[]>("/proveedores", { params: { limit: 500 } }),
-            api.get<Ubicacion[]>("/ubicaciones", { params: { limit: 200 } }),
-            api.get<TipoItemInventario[]>("/inventario/tipos", { params: { limit: 200 } }),
+            canReadEquipos ? collectPages((skip, limit) => api.get<EquipoSimple[]>("/equipos", { params: { skip, limit } })) : Promise.resolve([] as EquipoSimple[]),
+            canReadProveedores ? collectPages((skip, limit) => api.get<Proveedor[]>("/proveedores", { params: { skip, limit } })) : Promise.resolve([] as Proveedor[]),
+            collectPages((skip, limit) => api.get<Ubicacion[]>("/ubicaciones", { params: { skip, limit } })),
+            collectPages((skip, limit) => api.get<TipoItemInventario[]>("/inventario/tipos", { params: { skip, limit } })),
          ]);
-         setModalData({ equipos, proveedores, ubicaciones, tipos });
-      } catch (err) {
-         console.error("[InventarioClient] Error fetching modal data:", err);
-      } finally {
-         setIsLoadingModalData(false);
-      }
-   }, [modalData]);
+         return { equipos, proveedores, ubicaciones, tipos: tipos.filter(item => item.is_active !== false) };
+      },
+      staleTime: 30000,
+   });
 
    const openMovimientoModal = useCallback((itemId?: string) => {
       setPreselectedItemId(itemId);
       setIsMovimientoModalOpen(true);
-      fetchModalData();
-   }, [fetchModalData]);
+   }, []);
 
    const handleOpenMovimientoModal = () => openMovimientoModal(undefined);
 
    // ── Refresh general ──────────────────────────────────────────────────────
-   const handleRefresh = () => {
+   const handleRefresh = async () => {
       setIsRefreshing(true);
-      // Invalidamos cache lazy para que recarguen al volver a los tabs
       setTabData({});
-      setHasFetchedAllTipos(false);
+      try {
+         await Promise.all([fetchTabData(activeTab, true), queryClient.invalidateQueries({ queryKey: ["inventario", "opciones-movimiento"] })]);
+         router.refresh();
+      } finally { setIsRefreshing(false); }
+   };
+
+   const refreshCatalog = () => {
+      void fetchTabData("tipos", true);
+      void queryClient.invalidateQueries({ queryKey: ["inventario", "opciones-movimiento"] });
       router.refresh();
-      setTimeout(() => setIsRefreshing(false), 800);
    };
 
    // ── Delete tipo ítem ─────────────────────────────────────────────────────
    const { isAlertOpen, isDeleting, openAlert, closeAlert, confirmDelete } = useDeleteConfirmation({
       onDelete: (id) => api.delete(`/inventario/tipos/${id}`),
-      onSuccess: () => {
-         setTabData((prev) => ({ ...prev, tipos: undefined })); // forzar re-fetch
-         setHasFetchedAllTipos(false);
-         router.refresh();
-      },
+      onSuccess: refreshCatalog,
       successMessage: "El tipo de ítem ha sido eliminado (ocultado) del catálogo.",
    });
 
@@ -218,11 +218,19 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
          accessorKey: "nombre",
          header: "Nombre",
          cell: ({ row }) => (
-            <div className="flex items-center gap-2">
-               <span className="font-semibold">{row.original.nombre}</span>
+            <div className="min-w-48 max-w-80">
+               <span className="font-semibold break-words">{row.original.nombre}</span>
                {row.original.is_active === false && (
                   <Badge variant="outline" className="text-destructive border-destructive text-[10px]">Inactivo</Badge>
                )}
+               {(row.original.tecnologia || row.original.color) && (
+                  <div className="flex flex-wrap gap-1 mt-1 text-xs text-muted-foreground">
+                     <Badge variant="outline" className="gap-1.5"><ColorSwatch color={row.original.color} />{[row.original.tecnologia, row.original.color].filter(Boolean).join(" · ")}</Badge>
+                     {row.original.rendimiento_paginas && <span>{row.original.rendimiento_paginas.toLocaleString()} páginas</span>}
+                     <span>{row.original.es_original ? "Original" : "Compatible"}</span>
+                  </div>
+               )}
+               {!!row.original.modelos_equipo_compatibles?.length && <p className="text-xs text-muted-foreground mt-1 break-words">Compatible con: {row.original.modelos_equipo_compatibles.join(", ")}</p>}
             </div>
          ),
       },
@@ -285,7 +293,7 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
          <Dialog
             open={isMovimientoModalOpen}
             onOpenChange={(open) => {
-               setIsMovimientoModalOpen(open);
+               closeMovimientoModal(open);
                if (!open) setPreselectedItemId(undefined);
             }}
          >
@@ -303,18 +311,21 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
                      <Loader2 className="h-6 w-6 animate-spin mr-2" />
                      <span className="text-sm">Cargando datos del formulario...</span>
                   </div>
+               ) : modalError ? (
+                  <div role="alert" className="space-y-3 py-6 text-sm"><p>No se pudieron cargar los datos. Compruebe su conexión y sus permisos.</p><Button variant="outline" onClick={() => refetchModalData()}>Reintentar</Button></div>
                ) : modalData && isMovimientoModalOpen ? (
                   <RegistrarMovimientoForm
                      tiposItem={modalData.tipos.filter((t) => t.is_active !== false)}
                      equipos={modalData.equipos}
                      stockData={stockData}
                      ubicaciones={modalData.ubicaciones}
-                     initialTipoItemId={preselectedItemId}
+                     initialTipoItemId={urlItemId ?? preselectedItemId}
                      onSuccess={() => {
-                        setIsMovimientoModalOpen(false);
+                        closeMovimientoModal(false);
                         setPreselectedItemId(undefined);
                         // Invalidar stock y movimientos para re-fetch lazy
                         setTabData((prev) => ({ ...prev, movimientos: undefined }));
+                        if (activeTab === "movimientos") void fetchTabData("movimientos", true);
                         router.refresh();
                      }}
                   />
@@ -331,15 +342,13 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
                      Complete los detalles técnicos del consumible, repuesto o accesorio.
                   </DialogDescription>
                </DialogHeader>
-               {isTipoItemModalOpen && (
+               {isLoadingModalData ? <Loader2 className="mx-auto h-6 w-6 animate-spin my-8" /> : modalError ? <div role="alert" className="space-y-3 py-6 text-sm"><p>No se pudieron cargar los datos del catálogo.</p><Button variant="outline" onClick={() => refetchModalData()}>Reintentar</Button></div> : isTipoItemModalOpen && (
                   <TipoItemForm
                      initialData={selectedTipoItem}
                      proveedores={modalData?.proveedores ?? []}
                      onSuccess={() => {
                         setIsTipoItemModalOpen(false);
-                        setTabData((prev) => ({ ...prev, tipos: undefined }));
-                        setHasFetchedAllTipos(false);
-                        router.refresh();
+                        refreshCatalog();
                      }}
                   />
                )}
@@ -355,7 +364,7 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
             description="Esta acción eliminará lógicamente el tipo de ítem del catálogo."
          />
 
-         <Tabs defaultValue="stock" className="w-full" onValueChange={handleTabChange}>
+         <Tabs value={activeTab} className="w-full" onValueChange={handleTabChange}>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                <TabsList className="bg-card border shadow-sm">
                   <TabsTrigger value="stock" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
@@ -371,7 +380,7 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
                   )}
                </TabsList>
 
-               <div className="flex items-center gap-2 w-full sm:w-auto">
+               <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                   <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing} title="Sincronizar datos" className="shadow-sm">
                      <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
                   </Button>
@@ -402,7 +411,14 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
                         <span className="text-sm">Cargando historial...</span>
                      </div>
                   ) : (
-                     <MovimientosInventarioClient data={tabData.movimientos ?? []} />
+                     <div className="space-y-4">
+                        {historyError && <p role="alert" className="text-sm text-destructive">{historyError}</p>}
+                        <MovimientosInventarioClient data={tabData.movimientos ?? []} />
+                        <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+                           <span>{tabData.movimientos?.length ?? 0} movimientos cargados</span>
+                           {(hasOlderMovements || historyError) && <Button variant="outline" disabled={loadingOlderMovements} onClick={() => tabData.movimientos ? loadOlderMovements() : fetchTabData("movimientos")}>{loadingOlderMovements ? "Cargando…" : tabData.movimientos ? "Cargar movimientos anteriores" : "Reintentar"}</Button>}
+                        </div>
+                     </div>
                   )}
                </TabsContent>
             )}
@@ -417,12 +433,13 @@ export const InventarioClient: React.FC<InventarioClientProps> = ({
                      </div>
                   ) : (
                      <>
+                        {catalogError && <div role="alert" className="mb-3 flex flex-wrap items-center gap-3 text-sm text-destructive"><p>{catalogError}</p><Button variant="outline" onClick={() => fetchTabData("tipos", true)}>Reintentar</Button></div>}
                         <div className="flex justify-end mb-3">
                            <div className="flex items-center space-x-2">
                               <Switch
                                  id="show-inactive-tipos"
                                  checked={showInactiveTipos}
-                                 onCheckedChange={setShowInactiveTipos}
+                                 onCheckedChange={value => { setShowInactiveTipos(value); void fetchTabData("tipos", true, value); }}
                               />
                               <Label htmlFor="show-inactive-tipos" className="text-sm text-muted-foreground cursor-pointer">
                                  Mostrar inactivos
